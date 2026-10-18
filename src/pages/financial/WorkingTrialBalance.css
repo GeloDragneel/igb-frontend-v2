@@ -1,0 +1,79 @@
+/* Financial Reports → Working Trial Balance: Print ▾ menu and PDF preview */
+.wtbp-print {
+    position: relative;
+    display: inline-block;
+}
+
+.wtbp-print-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
+    min-width: 170px;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+}
+
+.wtbp-print-menu button {
+    display: block;
+    width: 100%;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.wtbp-print-menu button:hover,
+.wtbp-print-menu button:focus-visible {
+    background: var(--brand-soft, rgba(37, 99, 235, .08));
+    outline: none;
+}
+
+.wtbp-pdf {
+    display: block;
+    width: 100%;
+    height: 75vh;
+    border: 0;
+    border-radius: 8px;
+    background: #525659;
+}
+
+/* ADJUSTING ENTRIES = General Journal → Adjusting Entry (click to open) */
+.wtb-adj-head {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: inherit;
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.wtb-adj-head:hover {
+    color: var(--brand);
+}
+
+.wtb-adj-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--brand);
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.wtb-adj-link:hover {
+    color: var(--brand-ink);
+}

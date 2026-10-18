@@ -1,0 +1,79 @@
+/* Reports → Expanded Withholding Tax
+   Uses the VAT Summary look (VATSummary.css, same folder) + these extras. */
+.vs.is-ewt .vs-table thead .is-head th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.vs.is-ewt .vs-table thead .is-head .vs-f0,
+.vs.is-ewt .vs-table thead .is-head .vs-f1,
+.vs.is-ewt .vs-table thead .is-head .vs-f2 {
+    z-index: 4;
+}
+
+.vs.is-ewt .vs-table {
+    min-width: 0;
+    width: 100%;
+}
+
+.vs.is-ewt .vs-w2 {
+    width: auto;
+}
+
+.vs.is-ewt .is-wn {
+    width: 200px;
+}
+
+/* ATC popup */
+.ewt-atc .vs-mini td.is-toggle {
+    width: 34px;
+    text-align: center;
+}
+
+.ewt-atc .vs-mini tr.is-open td {
+    background: var(--brand-soft);
+    font-weight: 600;
+}
+
+.ewt-docs-cell {
+    padding: 0 !important;
+    background: var(--card-2) !important;
+}
+
+.ewt-docs {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.ewt-docs th,
+.ewt-docs td {
+    padding: 5px 10px 5px 14px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    white-space: nowrap;
+    background: transparent;
+}
+
+.ewt-docs th {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.ewt-docs .vs-num {
+    text-align: right;
+}
+
+.ewt-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.ewt-head b {
+    color: var(--ink);
+}

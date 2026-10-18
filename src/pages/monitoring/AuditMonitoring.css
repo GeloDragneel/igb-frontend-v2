@@ -1,0 +1,461 @@
+/* Monitoring → Audit Monitoring (scoped to .aum)
+   The page never scrolls, only the grid does. Tune --aum-top if there is a page scrollbar (bigger) or a gap (smaller). */
+.aum {
+    --aum-top: 164px;
+    --aum-w0: 44px;
+    --aum-w1: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: calc(100vh - var(--aum-top));
+    height: calc(100dvh - var(--aum-top));
+    overflow: hidden;
+}
+
+html:has(.aum),
+body:has(.aum) {
+    overflow: hidden;
+}
+
+.aum-bar {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 12px;
+    padding: 14px 16px;
+}
+
+.aum-title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-right: auto;
+}
+
+.aum-title h4 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.aum-title span {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.aum-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.aum-field .field-label {
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.aum-field select {
+    min-width: 170px;
+}
+
+.aum-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.aum-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.aum-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.aum-table th,
+.aum-table td {
+    padding: 6px 8px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    white-space: nowrap;
+    vertical-align: top;
+    text-align: left;
+}
+
+.aum-table th {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    background: var(--card-2);
+}
+
+.aum-table .c {
+    text-align: center;
+}
+
+.aum-table .strong {
+    color: var(--ink);
+    font-weight: 700;
+}
+
+.aum-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.aum-table tfoot th {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    color: var(--ink);
+    border-top: 1px solid var(--line);
+}
+
+.aum-table td.c,
+.aum-table th.c {
+    min-width: 34px;
+}
+
+/* frozen # + Client */
+.aum-f0,
+.aum-f1 {
+    position: sticky;
+    z-index: 2;
+}
+
+.aum-f0 {
+    left: 0;
+    width: var(--aum-w0);
+    min-width: var(--aum-w0);
+    max-width: var(--aum-w0);
+    text-align: center !important;
+}
+
+.aum-f1 {
+    left: var(--aum-w0);
+    width: var(--aum-w1);
+    min-width: var(--aum-w1);
+    max-width: var(--aum-w1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 1px 0 0 var(--line), 6px 0 8px -6px rgba(16, 24, 40, .18);
+}
+
+.aum-table thead tr th.aum-f0,
+.aum-table thead tr th.aum-f1,
+.aum-table tfoot tr th.aum-f0,
+.aum-table tfoot tr th.aum-f1 {
+    z-index: 5;
+}
+
+.aum-table tbody .aum-f1 {
+    color: var(--ink);
+    font-weight: 500;
+}
+
+.aum-table tbody tr:hover td {
+    background: var(--card-2);
+}
+
+.aum-count {
+    min-width: 26px;
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.aum-count:hover {
+    background: var(--brand);
+    color: #fff;
+}
+
+.aum-count:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+}
+
+.aum-names {
+    margin: 0;
+    padding-left: 14px;
+    color: var(--ink);
+}
+
+.aum-names li {
+    line-height: 1.5;
+}
+
+.aum-empty {
+    padding: 40px 12px !important;
+    color: var(--muted);
+}
+
+/* skeleton */
+.aum-sk td {
+    padding-top: 11px;
+    padding-bottom: 11px;
+}
+
+.aum-sk .sk {
+    display: block;
+    height: 10px;
+    min-width: 18px;
+    border-radius: 5px;
+}
+
+.aum .sk:not([style*="background"]) {
+    background: linear-gradient(90deg, rgba(148, 163, 184, .16) 25%, rgba(148, 163, 184, .32) 37%, rgba(148, 163, 184, .16) 63%);
+    background-size: 400% 100%;
+    animation: aum-shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes aum-shimmer {
+    0% {
+        background-position: 100% 0;
+    }
+
+    100% {
+        background-position: 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .aum .sk {
+        animation: none;
+    }
+}
+
+/* day summary modal */
+.aum-detail-empty {
+    padding: 24px 12px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.aum-trade {
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card-2);
+}
+
+.aum-trade+.aum-trade {
+    margin-top: 12px;
+}
+
+.aum-trade-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.aum-avatar {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-weight: 700;
+}
+
+.aum-trade-name {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.aum-trade-num {
+    color: var(--muted);
+}
+
+.aum-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.aum-tile {
+    --tone: var(--brand);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--card);
+    border: 1px solid var(--line);
+}
+
+.aum-tile.is-red {
+    --tone: var(--red);
+}
+
+.aum-tile.is-blue {
+    --tone: var(--blue);
+}
+
+.aum-tile.is-green {
+    --tone: var(--green);
+}
+
+.aum-tile>small {
+    color: var(--muted);
+}
+
+.aum-tile>b {
+    font-size: 20px;
+    color: var(--ink);
+}
+
+.aum-bar-track {
+    height: 5px;
+    margin-bottom: 4px;
+    border-radius: 999px;
+    background: var(--card-2);
+    overflow: hidden;
+}
+
+.aum-bar-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--tone);
+}
+
+.aum-status-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.aum-status-line b {
+    color: var(--ink);
+}
+
+.aum-muted {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+@media (max-width: 640px) {
+    .aum {
+        --aum-w1: 150px;
+    }
+
+    .aum-title {
+        width: 100%;
+    }
+
+    .aum-tiles {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Efficiency (Reverted) Monitoring — shares the .aum layout */
+.aum-count.is-red {
+    background: color-mix(in srgb, var(--red) 14%, transparent);
+    color: var(--red);
+}
+
+.aum-count.is-red:hover {
+    background: var(--red);
+    color: #fff;
+}
+
+.aum-detail-search {
+    max-width: 280px;
+    margin-bottom: 10px;
+}
+
+.aum-detail-wrap {
+    max-height: 60vh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.aum-detail-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+}
+
+.aum-detail-table th,
+.aum-detail-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+}
+
+.aum-detail-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.aum-detail-table tbody tr:hover td {
+    background: var(--card-2);
+}
+
+/* Scan Monitoring — BY CLIENT / BY DA tabs */
+.aum-tabs {
+    flex-shrink: 0;
+    display: flex;
+    gap: 2px;
+    padding: 0 12px;
+}
+
+.aum-tabs [role="tab"] {
+    position: relative;
+    padding: 13px 14px 11px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.aum-tabs [role="tab"].is-on {
+    color: var(--brand);
+    font-weight: 600;
+}
+
+.aum-tabs [role="tab"].is-on::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: var(--brand);
+}

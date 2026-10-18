@@ -1,0 +1,506 @@
+/* Monitoring → Collection (scoped to .cmo)
+   The page never scrolls, only the table does. Tune --cmo-top if there is a page scrollbar (bigger) or a gap (smaller). */
+.cmo {
+    --cmo-top: 164px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: calc(100vh - var(--cmo-top));
+    height: calc(100dvh - var(--cmo-top));
+    overflow: hidden;
+}
+
+html:has(.cmo),
+body:has(.cmo) {
+    overflow: hidden;
+}
+
+.cmo-bar {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 12px;
+    padding: 14px 16px;
+}
+
+.cmo-title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-right: auto;
+}
+
+.cmo-title h4 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.cmo-title span {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.cmo-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.cmo-field .field-label {
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.cmo-service {
+    flex: 0 1 260px;
+    min-width: 200px;
+}
+
+.cmo-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.cmo-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.cmo-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.cmo-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.cmo-table th,
+.cmo-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    white-space: nowrap;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.cmo-table th {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    background: var(--card-2);
+}
+
+.cmo-table .n {
+    text-align: right;
+}
+
+.cmo-table .c {
+    text-align: center;
+}
+
+.cmo-table .cmo-wide {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cmo-table td {
+    color: var(--ink);
+}
+
+.cmo-table tbody tr:hover td {
+    background: var(--card-2);
+}
+
+/* sticky: both header rows + the total row */
+.cmo-table thead tr:first-child th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    height: 34px;
+}
+
+.cmo-table thead .cmo-filter-row th {
+    position: sticky;
+    top: 34px;
+    z-index: 3;
+    padding: 4px 6px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.cmo-table tfoot th {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    color: var(--ink);
+    font-size: 12.5px;
+    text-transform: none;
+    border-top: 1px solid var(--line);
+}
+
+.cmo-filter-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    min-width: 70px;
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.cmo-filter-btn:hover {
+    border-color: var(--brand);
+}
+
+.cmo-filter-btn.is-on {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-weight: 600;
+}
+
+.cmo-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.cmo-badge.is-paid {
+    background: color-mix(in srgb, var(--green) 15%, transparent);
+    color: var(--green);
+}
+
+.cmo-badge.is-unpaid {
+    background: color-mix(in srgb, var(--orange) 18%, transparent);
+    color: var(--orange);
+}
+
+.cmo-empty {
+    padding: 40px 12px !important;
+    color: var(--muted) !important;
+    text-align: center !important;
+}
+
+/* footer + pager */
+.cmo-foot {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.cmo-pager {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.cmo-per {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+}
+
+.cmo-per .input {
+    width: auto;
+    padding: 3px 6px;
+    font-size: 12.5px;
+}
+
+.cmo-pg {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.cmo-pg:hover:not(:disabled) {
+    border-color: var(--brand);
+}
+
+.cmo-pg.is-on {
+    border-color: var(--brand);
+    background: var(--brand);
+    color: #fff;
+    font-weight: 600;
+}
+
+.cmo-pg:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.cmo-pg-gap {
+    padding: 0 4px;
+}
+
+/* filter panel */
+.cmo-filter-panel {
+    position: fixed;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    box-shadow: var(--shadow-lg);
+}
+
+.cmo-filter-links {
+    display: flex;
+    gap: 12px;
+}
+
+.cmo-filter-links button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--brand);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.cmo-filter-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 240px;
+    overflow: auto;
+}
+
+.cmo-filter-list label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 4px;
+    border-radius: 6px;
+    color: var(--ink);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.cmo-filter-list label:hover {
+    background: var(--card-2);
+}
+
+.cmo-filter-list span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cmo-filter-none {
+    margin: 8px 4px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.cmo-filter-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+/* skeleton */
+.cmo-sk td {
+    padding-top: 11px;
+    padding-bottom: 11px;
+}
+
+.cmo-sk .sk {
+    display: block;
+    height: 10px;
+    min-width: 30px;
+    border-radius: 5px;
+}
+
+.cmo .sk:not([style*="background"]) {
+    background: linear-gradient(90deg, rgba(148, 163, 184, .16) 25%, rgba(148, 163, 184, .32) 37%, rgba(148, 163, 184, .16) 63%);
+    background-size: 400% 100%;
+    animation: cmo-shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes cmo-shimmer {
+    0% {
+        background-position: 100% 0;
+    }
+
+    100% {
+        background-position: 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cmo .sk {
+        animation: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .cmo-title {
+        width: 100%;
+    }
+
+    .cmo-service {
+        flex-basis: 100%;
+    }
+
+    .cmo-pager {
+        margin-left: 0;
+    }
+}
+
+/* Retainers Fee — tabs, expandable forwarding balance (shares the .cmo layout) */
+.cmo-tabs {
+    flex-shrink: 0;
+    display: flex;
+    gap: 2px;
+    padding: 0 12px;
+}
+
+.cmo-tabs [role="tab"] {
+    position: relative;
+    padding: 13px 14px 11px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.cmo-tabs [role="tab"].is-on {
+    color: var(--brand);
+    font-weight: 600;
+}
+
+.cmo-tabs [role="tab"].is-on::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: var(--brand);
+}
+
+.cmo-table .rf-x {
+    width: 34px;
+    padding-left: 6px;
+    padding-right: 0;
+}
+
+.rf-expand {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--brand);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform .15s;
+}
+
+.rf-expand.is-open {
+    transform: rotate(90deg);
+}
+
+.cmo-table .rf-fwd-only td {
+    color: var(--muted);
+    font-style: italic;
+}
+
+.cmo-table .rf-detail-row>td {
+    padding: 8px 12px 12px 46px;
+    background: var(--card-2);
+}
+
+.rf-detail {
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 640px;
+    font-size: 12.5px;
+}
+
+.rf-detail th,
+.rf-detail td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    text-align: left;
+}
+
+.rf-detail th {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    background: var(--card-2);
+}
+
+.rf-detail .n {
+    text-align: right;
+}
+
+.rf-detail .strong {
+    font-weight: 700;
+}
+
+.rf-detail-empty {
+    padding: 6px 0;
+    color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rf-expand {
+        transition: none;
+    }
+}

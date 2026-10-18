@@ -1,0 +1,18 @@
+/* E-BIR → See adjustment: Adjustment column (adjusted − original) */
+.vs-ebir-table .vs-adj {
+    background: color-mix(in srgb, var(--orange, #d97706) 7%, transparent);
+    border-left: 2px solid color-mix(in srgb, var(--orange, #d97706) 45%, transparent);
+    font-weight: 600;
+}
+
+.vs-ebir-table th.vs-adj {
+    color: var(--orange, #d97706);
+}
+
+.vs-ebir-table td.vs-adj.is-neg {
+    color: var(--red, #dc2626);
+}
+
+.vs-ebir-table td.vs-adj.is-pos {
+    color: var(--green, #16a34a);
+}

@@ -1,0 +1,111 @@
+/* Sidebar: FEMS / STAFF switch (sliding pill) */
+.mode-switch {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin: 0px;
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .04);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, .25);
+    isolation: isolate;
+}
+
+/* the moving highlight */
+.mode-switch::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc(50% - 6px);
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--brand, #4f46e5), color-mix(in srgb, var(--brand, #4f46e5) 70%, #a855f7));
+    box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--brand, #4f46e5) 70%, transparent), inset 0 1px 0 rgba(255, 255, 255, .18);
+    transition: transform .28s cubic-bezier(.4, 0, .2, 1);
+}
+
+.mode-switch[data-mode="staff"]::before {
+    transform: translateX(calc(100% + 4px));
+}
+
+.mode-switch-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    color: rgba(255, 255, 255, .55);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    cursor: pointer;
+    transition: color .2s;
+}
+
+.mode-switch-btn:hover:not(.active) {
+    color: rgba(255, 255, 255, .85);
+}
+
+.mode-switch-btn.active {
+    color: #fff;
+}
+
+.mode-switch-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, .6);
+    outline-offset: -2px;
+}
+
+.mode-switch-icon {
+    flex-shrink: 0;
+    opacity: .9;
+}
+
+.mode-switch-short {
+    display: none;
+}
+
+/* collapsed sidebar: icons stacked, pill slides down */
+.sidebar.collapsed .mode-switch {
+    grid-template-columns: 1fr;
+    margin: 6px 8px 12px;
+}
+
+.sidebar.collapsed .mode-switch::before {
+    width: auto;
+    right: 4px;
+    height: calc(50% - 6px);
+    bottom: auto;
+}
+
+.sidebar.collapsed .mode-switch[data-mode="staff"]::before {
+    transform: translateY(calc(100% + 4px));
+}
+
+.sidebar.collapsed .mode-switch-full {
+    display: none;
+}
+
+.sidebar.collapsed .mode-switch-btn {
+    padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mode-switch::before {
+        transition: none;
+    }
+}
+
+.side-empty {
+    padding: 10px 16px;
+    color: rgba(255, 255, 255, .5);
+    font-size: 12.5px;
+}

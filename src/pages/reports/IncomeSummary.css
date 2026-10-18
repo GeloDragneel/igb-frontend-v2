@@ -1,0 +1,58 @@
+/* Reports → Income Summary
+   Uses the VAT Summary look (VATSummary.css, same folder) + these extras. */
+
+/* one header row only */
+.vs.is-page .vs-table thead .is-head th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.vs.is-page .vs-table thead .is-head .vs-f0,
+.vs.is-page .vs-table thead .is-head .vs-f1,
+.vs.is-page .vs-table thead .is-head .vs-f2 {
+    z-index: 4;
+}
+
+.vs.is-page .is-wn {
+    width: 150px;
+}
+
+/* income statement */
+.vs-ebir-table.is-stmt .is-label {
+    min-width: 280px;
+    color: var(--ink);
+}
+
+.vs-ebir-table.is-stmt .is-sec td {
+    padding-top: 12px;
+    background: var(--card-2);
+    color: var(--brand);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.vs-ebir-table.is-stmt .is-row .is-label {
+    padding-left: 24px;
+    font-style: italic;
+    color: var(--muted);
+}
+
+.vs-ebir-table.is-stmt .is-sub td {
+    font-weight: 600;
+    border-top: 1px solid var(--line);
+}
+
+.vs-ebir-table.is-stmt .is-total td {
+    font-weight: 700;
+    border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--brand) 4%, var(--card));
+}
+
+.vs-ebir-table.is-stmt .is-grand td {
+    font-weight: 800;
+    border-top: 2px solid var(--ink);
+    background: var(--brand-soft);
+}

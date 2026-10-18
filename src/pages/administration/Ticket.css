@@ -1,0 +1,715 @@
+/* Administration → Ticket (scoped to .at) */
+.at {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* one-line toolbar: tabs · search · refresh */
+.at-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    padding: 10px 14px;
+}
+
+.at-tabs {
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card-2);
+}
+
+.at-tabs button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.at-tabs button.is-on {
+    background: var(--card);
+    color: var(--brand);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .12);
+}
+
+.at-count {
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--line);
+    color: var(--ink);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+}
+
+.at-tabs button.is-on .at-count {
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.at-count.is-hot,
+.at-tabs button.is-on .at-count.is-hot {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.at-search {
+    flex: 1 1 220px;
+    max-width: 320px;
+}
+
+.at-bar .btn {
+    margin-left: auto;
+}
+
+/* table */
+.at-body {
+    padding: 0;
+    overflow: hidden;
+}
+
+.at-scroll {
+    max-height: calc(100vh - 330px);
+    min-height: 240px;
+    overflow: auto;
+}
+
+/* only the list's tbody scrolls */
+.at-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+}
+
+.at-table th,
+.at-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.at-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .03em;
+}
+
+.at-table tbody tr:hover td {
+    background: color-mix(in srgb, var(--brand) 4%, var(--card));
+}
+
+.at-table .at-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+}
+
+.at-remarks {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.at-view {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--brand);
+    cursor: pointer;
+}
+
+.at-view:hover {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+}
+
+.at-view svg {
+    width: 16px;
+    height: 16px;
+}
+
+.at-empty {
+    padding: 40px 12px !important;
+    color: var(--muted);
+    text-align: center;
+    white-space: normal !important;
+}
+
+.at-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--line);
+}
+
+.at-muted {
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.at-pager-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.at-pager-per {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.at-pager-per .input {
+    width: auto;
+    padding: 3px 6px;
+    font-size: 12.5px;
+}
+
+.at-pg {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.at-pg:hover:not(:disabled) {
+    border-color: var(--brand);
+}
+
+.at-pg.is-on {
+    border-color: var(--brand);
+    background: var(--brand);
+    color: #fff;
+    font-weight: 600;
+}
+
+.at-pg:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.at-pg-gap {
+    padding: 0 4px;
+    color: var(--muted);
+}
+
+/* invoice popup — same layout as the Sales / Invoicing screen, read-only */
+.at-mtitle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.at-tag {
+    padding: 1px 8px;
+    border: 1.5px solid currentColor;
+    border-radius: 6px;
+    color: #b45309;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    line-height: 18px;
+    text-transform: uppercase;
+}
+
+.at-iv {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.at-iv-top {
+    display: grid;
+    grid-template-columns: minmax(380px, 600px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+    .at-iv-top {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* left: label · read-only box */
+.at-form-ro {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.at-f {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+
+.at-f-label {
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: right;
+}
+
+.at-f-box {
+    box-sizing: border-box;
+    min-height: 30px;
+    padding: 6px 10px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--card-2);
+    color: var(--ink);
+    font-size: 12.5px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.at-f-empty {
+    color: var(--muted);
+}
+
+.at-f-num {
+    display: block;
+    text-align: right;
+}
+
+.at-f-file {
+    color: var(--brand);
+    text-decoration: underline;
+}
+
+/* right: attachment viewer — as tall as the form; the file scrolls inside it */
+.at-viewer {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    min-height: 300px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: #3b3b3f;
+}
+
+.at-viewer iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #525659;
+}
+
+.at-viewer-img {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: start center;
+    padding: 12px;
+    overflow: auto;
+}
+
+.at-viewer-img img {
+    max-width: 100%;
+    border-radius: 4px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+
+.at-viewer.is-empty {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px dashed var(--line);
+    background: var(--card-2);
+    color: var(--muted);
+    text-align: center;
+}
+
+.at-viewer.is-empty>span {
+    font-size: 30px;
+}
+
+.at-viewer.is-empty b {
+    color: var(--ink);
+    font-size: 14px;
+}
+
+.at-viewer.is-empty small {
+    font-size: 12px;
+}
+
+.at-viewer.is-empty a {
+    color: var(--brand);
+    font-weight: 600;
+}
+
+.at-spin {
+    width: 26px;
+    height: 26px;
+    border: 3px solid var(--line);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    animation: rv-spin .8s linear infinite;
+}
+
+@keyframes rv-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* items: only the table body scrolls, header stays */
+.at-items {
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}
+
+.at-items table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.at-items th,
+.at-items td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    background: var(--card);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.at-items th:last-child,
+.at-items td:last-child {
+    border-right: 0;
+}
+
+.at-items thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--card-2);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.at-items tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.at-items tbody td {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.at-items .at-num {
+    text-align: right;
+}
+
+.at-items .at-c-no {
+    width: 44px;
+    color: var(--muted);
+    text-align: center;
+}
+
+/* footer totals, right side like the old screen */
+.at-foot-sum {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: min(100%, 560px);
+    margin-left: auto;
+}
+
+.at-foot-sum .at-f {
+    grid-template-columns: 210px minmax(0, 1fr);
+}
+
+.at-f-num.is-total {
+    color: var(--brand);
+    font-weight: 700;
+}
+
+.at-tried {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.at-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    width: 100%;
+}
+
+.at-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.at-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.at-form textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+
+/* list badges */
+.at-who {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.at-who b {
+    font-weight: 600;
+}
+
+.at-who small {
+    color: var(--muted);
+    font-size: 11.5px;
+}
+
+.at-act {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 6px;
+    background: var(--card-2);
+    color: var(--ink);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+}
+
+.at-act.is-edit {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.at-act.is-void {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.at-act.is-cancel {
+    background: #ffedd5;
+    color: #c2410c;
+}
+
+.at-act.is-undeclared {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.at-status {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.at-status.is-0 {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.at-status.is-1 {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.at-status.is-2 {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.at-tag.is-0 {
+    color: #b45309;
+}
+
+.at-tag.is-1 {
+    color: #15803d;
+}
+
+.at-tag.is-2 {
+    color: #dc2626;
+}
+
+/* popup: ticket strip + Requested / Before switch */
+.at-ticket {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--brand);
+    border-radius: 8px;
+    background: var(--card-2);
+    font-size: 13px;
+}
+
+.at-ticket-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    color: var(--muted);
+}
+
+.at-ticket-info b {
+    color: var(--ink);
+}
+
+.at-ticket .at-mono {
+    color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+}
+
+.at-reason {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    color: var(--ink);
+}
+
+.at-reason b {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.at-switch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.at-switch button {
+    padding: 6px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.at-switch button.is-on {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.at-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 10px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.at-legend i {
+    width: 12px;
+    height: 12px;
+    border: 1px solid #f59e0b;
+    border-radius: 3px;
+    background: #fef3c7;
+}
+
+.at-inv {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* changed vs the invoice before */
+.at-f.is-changed .at-f-box {
+    border-color: #f59e0b;
+    background: #fef3c7;
+}
+
+.at-f.is-changed .at-f-label {
+    color: #b45309;
+}
+
+.at-items.is-changed {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 1px #f59e0b;
+}
+
+.at-decline {
+    border-color: #dc2626 !important;
+    background: #dc2626 !important;
+    color: #fff !important;
+}
+
+.at-confirm {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.at-confirm small {
+    color: #b91c1c;
+}

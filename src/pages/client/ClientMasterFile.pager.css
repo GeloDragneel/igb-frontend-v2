@@ -1,0 +1,25 @@
+/* numbered pagination (append to ClientMasterFile.css) */
+.cmf-pages {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.cmf-pg.is-on {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+    font-weight: 600;
+    cursor: default;
+}
+
+.cmf-pg-wide {
+    padding: 0 12px;
+}
+
+.cmf-gap {
+    min-width: 20px;
+    text-align: center;
+    color: var(--muted);
+}

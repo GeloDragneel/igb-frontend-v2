@@ -1,0 +1,88 @@
+/* Master File → Nature of Business → Charts of account popup */
+.cmf-act {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+}
+
+.ncoa {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ncoa-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    background: var(--brand-soft);
+    color: var(--brand-ink);
+}
+
+.ncoa-note .btn {
+    margin-left: auto;
+}
+
+.ncoa-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ncoa-bar .input {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+
+.ncoa-list {
+    max-height: 58vh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.ncoa-list thead th {
+    position: sticky;
+    top: 0;
+    background: var(--card);
+    z-index: 1;
+}
+
+.ncoa-head td {
+    background: var(--card-2);
+}
+
+.ncoa-code {
+    display: inline-block;
+    min-width: 52px;
+    color: var(--muted);
+}
+
+.ncoa-flag {
+    margin-right: 4px;
+    font-size: 11px;
+}
+
+.ncoa-actions {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.ncoa-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 13.5px;
+}
+
+.ncoa-flags label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}

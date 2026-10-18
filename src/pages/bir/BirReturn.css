@@ -1,0 +1,81 @@
+/* BIR & Tax → BIR Return: only the saved-files list scrolls; header and pager stay */
+.br-files-scroll {
+    max-height: calc(100vh - 450px);
+    /* ≈ same height as the Returns list on the left */
+    min-height: 160px;
+    overflow-y: auto;
+    padding-right: 4px;
+    /* room for the scrollbar */
+    overscroll-behavior: contain;
+}
+
+.br-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+}
+
+.br-pager-info {
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.br-pager-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.br-pager-per {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.br-pager-per .input {
+    width: auto;
+    padding: 3px 6px;
+    font-size: 12.5px;
+}
+
+.br-pg {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.br-pg:hover:not(:disabled) {
+    border-color: var(--brand);
+}
+
+.br-pg.is-on {
+    border-color: var(--brand);
+    background: var(--brand);
+    color: #fff;
+    font-weight: 600;
+}
+
+.br-pg:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.br-pg-gap {
+    padding: 0 4px;
+    color: var(--muted);
+}

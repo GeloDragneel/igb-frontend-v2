@@ -1,0 +1,86 @@
+/* default avatars by gender (photo wins when there is one) */
+.pa {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 50%;
+}
+
+.pa img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+}
+
+.pa svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.pa-male {
+    background: #dbeafe;
+}
+
+.pa-female {
+    background: #fce7f3;
+}
+
+.pa-neutral {
+    background: #e5e7eb;
+}
+
+.pa .pa-face,
+.pa .pa-neck {
+    fill: #f6c9a4;
+}
+
+.pa .pa-neck {
+    fill: #eab68f;
+}
+
+.pa-male .pa-body {
+    fill: #2563eb;
+}
+
+.pa-male .pa-hair {
+    fill: #3f2a1d;
+}
+
+.pa-female .pa-body {
+    fill: #db2777;
+}
+
+.pa-female .pa-hair,
+.pa-female .pa-hair-back {
+    fill: #4a2c1f;
+}
+
+.pa-neutral .pa-body {
+    fill: #64748b;
+}
+
+.pa-neutral .pa-hair {
+    fill: #475569;
+}
+
+/* header: staff photo on the user button and in the user menu (was Header.css) */
+.me-photo {
+    flex: none;
+    display: block;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: center top;
+    background: var(--card-2, #eef1f6);
+}
+
+.me-photo.is-36 {
+    width: 36px;
+    height: 36px;
+}
+
+.me-photo.is-42 {
+    width: 42px;
+    height: 42px;
+}

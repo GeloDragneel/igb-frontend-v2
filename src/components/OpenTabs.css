@@ -1,0 +1,271 @@
+/* ===== Breadcrumb row + browser-like page tabs ===== */
+.crumbbar {
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    min-height: 46px;
+    padding: 0 24px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 66px;
+    z-index: 39;
+}
+
+/* the breadcrumbs keep their look but now live inside the row */
+.crumbbar .crumbs {
+    position: static;
+    flex: none;
+    align-self: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.ptabs {
+    flex: 1;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    align-items: flex-end;
+}
+
+.ptabs-strip {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    margin-bottom: -1px;
+    /* active tab covers the row border */
+    padding-top: 6px;
+}
+
+.ptabs-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.ptab {
+    --tab-bg: transparent;
+    position: relative;
+    flex: none;
+    /* full width, never cut the name */
+    height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px 0 14px;
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    background: var(--tab-bg);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s, color .15s;
+}
+
+/* thin divider between inactive tabs, like Chrome */
+.ptab:not(.is-active)+.ptab:not(.is-active)::before {
+    content: "";
+    position: absolute;
+    left: -2px;
+    top: 11px;
+    bottom: 11px;
+    width: 1px;
+    background: var(--line);
+}
+
+.ptab:hover:not(.is-active) {
+    --tab-bg: var(--card-2);
+    color: var(--ink);
+}
+
+.ptab:hover::before,
+.ptab:hover+.ptab::before {
+    opacity: 0;
+}
+
+.ptab.is-active {
+    --tab-bg: var(--bg);
+    color: var(--ink);
+    font-weight: 600;
+    border-color: var(--line);
+    z-index: 1;
+}
+
+/* brand line on top of the active tab */
+.ptab.is-active::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: -1px;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: var(--brand);
+}
+
+.ptab:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: -2px;
+}
+
+.ptab.is-drag {
+    opacity: .45;
+}
+
+.ptab-dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--line);
+    transition: background .15s;
+}
+
+.ptab.is-active .ptab-dot {
+    background: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.ptab-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    line-height: 1.2;
+}
+
+.ptab-label,
+.ptab-sub,
+.ptab-crumbs {
+    white-space: nowrap;
+}
+
+.ptab-crumbs {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.ptab.is-active .ptab-crumbs {
+    color: var(--brand);
+}
+
+.ptab-sub {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.ptab-x {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s, background .12s, color .12s;
+}
+
+.ptab:hover .ptab-x,
+.ptab.is-active .ptab-x,
+.ptab-x:focus-visible {
+    opacity: 1;
+}
+
+.ptab-x:hover {
+    background: color-mix(in srgb, var(--red) 14%, transparent);
+    color: var(--red);
+}
+
+/* right-click menu */
+.ptabs-menu {
+    position: fixed;
+    z-index: 1000;
+    min-width: 200px;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    font-size: 13px;
+    color: var(--ink);
+}
+
+.ptabs-menu li[role="menuitem"] {
+    padding: 8px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.ptabs-menu li[role="menuitem"]:hover {
+    background: var(--brand-soft);
+    color: var(--brand-ink);
+}
+
+.ptabs-menu li[aria-disabled="true"] {
+    opacity: .4;
+    pointer-events: none;
+}
+
+.ptabs-menu .sep {
+    height: 1px;
+    margin: 5px 4px;
+    background: var(--line);
+}
+
+/* small screens: tabs get the whole row */
+@media (max-width: 960px) {
+    .crumbbar {
+        padding: 0 16px;
+        gap: 0;
+    }
+
+    .crumbbar .crumbs {
+        display: none;
+    }
+}
+
+/* < > when there are more tabs than space */
+.ptabs-arrow {
+    flex: none;
+    align-self: center;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin: 0 4px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--ink);
+    cursor: pointer;
+    transition: background .12s, color .12s, opacity .12s;
+}
+
+.ptabs-arrow:hover:not(:disabled) {
+    background: var(--brand-soft);
+    color: var(--brand-ink);
+    border-color: transparent;
+}
+
+.ptabs-arrow:disabled {
+    opacity: .35;
+    cursor: default;
+}

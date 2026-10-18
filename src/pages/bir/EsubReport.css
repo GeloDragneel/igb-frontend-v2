@@ -1,0 +1,126 @@
+/* BIR & Tax → E-Sub Report: only the table body scrolls; header, totals and pager stay */
+.es-scroll {
+    max-height: calc(100vh - 420px);
+    min-height: 160px;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.es-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--card);
+    box-shadow: inset 0 -1px 0 var(--line);
+}
+
+.es-scroll tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: var(--card);
+    box-shadow: inset 0 1px 0 var(--line);
+}
+
+/* Excel / PDF picker next to Print */
+.es-printas {
+    width: auto;
+    flex: 0 0 auto;
+}
+
+/* pager */
+.es-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+}
+
+.es-pager-info {
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.es-pager-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.es-pager-per {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.es-pager-per .input {
+    width: auto;
+    padding: 3px 6px;
+    font-size: 12.5px;
+}
+
+.es-pg {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.es-pg:hover:not(:disabled) {
+    border-color: var(--brand);
+}
+
+.es-pg.is-on {
+    border-color: var(--brand);
+    background: var(--brand);
+    color: #fff;
+    font-weight: 600;
+}
+
+.es-pg:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.es-pg-gap {
+    padding: 0 4px;
+    color: var(--muted);
+}
+
+/* PDF preview popup (old modal_PrintPDF) */
+.es-pdf {
+    display: block;
+    width: 100%;
+    height: calc(100vh - 220px);
+    min-height: 420px;
+    border: 0;
+    border-radius: 8px;
+    background: #525659;
+}
+
+@media print {
+    .es-scroll {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .es-scroll thead th,
+    .es-scroll tfoot td {
+        position: static;
+        box-shadow: none;
+    }
+}

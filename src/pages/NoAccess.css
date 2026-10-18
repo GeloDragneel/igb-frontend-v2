@@ -1,0 +1,14 @@
+.no-access {
+  max-width: 520px;
+  margin: 40px auto;
+  padding: 32px;
+  text-align: center;
+}
+
+.no-access h2 {
+  margin-top: 0;
+}
+
+.no-access p {
+  margin: 0 0 18px;
+}

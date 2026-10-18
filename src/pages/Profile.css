@@ -1,0 +1,367 @@
+/* My profile (pages/Profile) — imported by the profile page itself */
+/* =================== My profile =================== */
+.hr-emp-photo.is-view {
+    cursor: default;
+}
+
+.hr-emp-who .hr-emp-photo.is-view {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 5;
+    border-radius: 12px;
+}
+
+.hr-me-empty {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 24px;
+}
+
+.hr-me-empty .hr-emp-photo {
+    width: 96px;
+    height: 96px;
+    border-radius: 12px;
+    font-size: 30px;
+}
+
+.hr-me-empty h5 {
+    margin: 0 0 6px;
+    color: var(--ink);
+    font-size: 16px;
+}
+
+.hr-me-empty p {
+    margin: 0;
+    max-width: 560px;
+    color: var(--muted);
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+
+.hr-viewonly {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+
+/* calendar */
+.hr-cal {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+}
+
+.hr-cal-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+}
+
+.hr-cal-head>b {
+    min-width: 150px;
+    color: var(--ink);
+    font-size: 15px;
+    text-align: center;
+}
+
+.hr-cal-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-left: auto;
+}
+
+.hr-cal-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 11.5px;
+}
+
+.hr-cal-legend span::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    background: currentColor;
+}
+
+.hr-cal-legend .is-leave::before {
+    background: var(--blue);
+}
+
+.hr-cal-legend .is-ot::before {
+    background: var(--orange);
+}
+
+.hr-cal-legend .is-holiday::before {
+    background: var(--red);
+}
+
+.hr-cal-legend .is-present::before {
+    background: var(--green);
+}
+
+.hr-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.hr-cal-dow {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.hr-cal-day {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+    min-width: 0;
+    min-height: 92px;
+    padding: 6px 7px;
+    border: 0;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background .12s;
+}
+
+.hr-cal-day:nth-child(7n) {
+    border-right: 0;
+}
+
+.hr-cal-day:hover {
+    background: var(--brand-soft);
+}
+
+.hr-cal-day.is-rest {
+    background: var(--card-2);
+}
+
+.hr-cal-day.is-out {
+    opacity: .45;
+}
+
+.hr-cal-num {
+    align-self: flex-start;
+    min-width: 24px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.hr-cal-day.is-today .hr-cal-num {
+    background: var(--brand);
+    color: #fff;
+}
+
+.hr-cal-day.is-holiday .hr-cal-num {
+    color: var(--red);
+}
+
+.hr-cal-chip {
+    overflow: hidden;
+    padding: 2px 6px;
+    border-left: 3px solid currentColor;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.hr-cal-chip.is-holiday {
+    background: color-mix(in srgb, var(--red) 10%, transparent);
+    color: var(--red);
+}
+
+.hr-cal-chip.is-leave {
+    background: color-mix(in srgb, var(--blue) 12%, transparent);
+    color: var(--blue);
+}
+
+.hr-cal-chip.is-ot {
+    background: color-mix(in srgb, var(--orange) 13%, transparent);
+    color: var(--orange);
+}
+
+.hr-cal-chip.is-present {
+    background: color-mix(in srgb, var(--green) 11%, transparent);
+    color: var(--green);
+}
+
+.hr-cal-chip.is-present.is-late {
+    background: color-mix(in srgb, var(--orange) 11%, transparent);
+    color: var(--orange);
+}
+
+.hr-cal-chip.is-absent {
+    background: color-mix(in srgb, var(--red) 10%, transparent);
+    color: var(--red);
+}
+
+.hr-cal-chip.is-pending {
+    border-left-style: dashed;
+}
+
+.hr-cal-chip.is-rejected {
+    text-decoration: line-through;
+    opacity: .6;
+}
+
+/* my requests */
+.hr-me-list {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.hr-seg.is-inline {
+    display: inline-flex;
+    flex-wrap: nowrap;
+}
+
+.hr-seg.is-inline button {
+    flex: none;
+}
+
+.hr-me-pick {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.hr-me-pick button {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.hr-me-pick button:hover {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+}
+
+.hr-me-pick b {
+    font-size: 14px;
+}
+
+.hr-me-pick span {
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.hr-calc.is-one {
+    grid-template-columns: 1fr;
+    align-self: end;
+}
+
+.hr-calc.is-one span {
+    padding: 8px 12px;
+}
+
+@media (max-width: 760px) {
+    .hr-cal-day {
+        min-height: 64px;
+        padding: 4px;
+    }
+
+    .hr-cal-chip {
+        font-size: 10px;
+    }
+
+    .hr-me-pick {
+        grid-template-columns: 1fr;
+    }
+}
+
+.hr-section.hr-me {
+    padding: 18px;
+}
+
+/* photo upload (also in HR.css, here so this page works with an older HR.css) */
+.hr-emp-who .hr-emp-photo {
+    position: relative;
+    cursor: pointer;
+}
+
+.hr-emp-who .hr-emp-photo i {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 6px 0 8px;
+    background: rgba(0, 0, 0, .55);
+    color: #fff;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 600;
+    text-align: center;
+    opacity: 0;
+    transition: opacity .15s;
+}
+
+.hr-emp-who .hr-emp-photo:hover i {
+    opacity: 1;
+}
+
+.hr-emp-who .hr-emp-photo.is-pending {
+    outline: 2px dashed var(--orange);
+    outline-offset: 3px;
+}
+
+.hr-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.hr-emp-who .hr-photo-note {
+    color: var(--orange);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.hr-photo-act {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.hr-photo-act:empty {
+    display: none;
+}

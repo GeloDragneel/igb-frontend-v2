@@ -1,0 +1,394 @@
+/* Client → Masterlist (scoped to .cml)
+   Same layout as the billing pages: the page never scrolls, only the table does.
+   Tune --cml-top if there is a page scrollbar (bigger) or a gap at the bottom (smaller). */
+.cml {
+    --cml-top: 164px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: calc(100vh - var(--cml-top));
+    height: calc(100dvh - var(--cml-top));
+    overflow: hidden;
+}
+
+.cml-tabs,
+.cml-bar {
+    flex-shrink: 0;
+}
+
+/* tabs */
+.cml-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 12px;
+}
+
+.cml-tabs [role="tab"] {
+    position: relative;
+    padding: 13px 14px 11px;
+    border: 0;
+    background: none;
+    color: var(--muted, #6b7280);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.cml-tabs [role="tab"].is-on {
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.cml-tabs [role="tab"].is-on::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: #2563eb;
+}
+
+.cml-count {
+    margin-left: 4px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, .2);
+    font-size: 12px;
+}
+
+/* search bar */
+.cml-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 12px;
+    padding: 14px 16px;
+}
+
+.cml-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.cml-field .field-label {
+    color: var(--muted, #6b7280);
+    font-size: 12.5px;
+}
+
+.cml-grow {
+    flex: 1 1 320px;
+}
+
+.cml-md {
+    flex: 0 1 300px;
+}
+
+.cml-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* table */
+.cml-body {
+    padding: 0;
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.cml-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.cml-table {
+    width: 100%;
+    min-width: 860px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.cml-table th,
+.cml-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border, #eef0f3);
+    white-space: nowrap;
+}
+
+.cml-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--card, #fff);
+    color: var(--muted, #6b7280);
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.cml-table .n {
+    text-align: right;
+}
+
+.cml-table .c {
+    text-align: center;
+}
+
+.cml-row {
+    cursor: pointer;
+}
+
+.cml-row:hover td,
+.cml-row:focus-visible td {
+    background: rgba(37, 99, 235, .05);
+    outline: none;
+}
+
+.cml-empty {
+    padding: 40px 12px;
+    color: var(--muted, #6b7280);
+    text-align: center;
+    white-space: normal;
+}
+
+.cml-foot {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--border, #e5e7eb);
+    color: var(--muted, #6b7280);
+    font-size: 12.5px;
+}
+
+/* account rows */
+.cml-sm {
+    flex: 0 0 140px;
+}
+
+.cml-row.is-off td {
+    color: var(--muted, #9ca3af);
+}
+
+.cml-who {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+
+.cml-who small {
+    color: var(--muted, #6b7280);
+}
+
+/* client popup: the Settings layout inside the modal */
+.cml-pop {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cml-pop-id {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cml-pop-id .st-sub {
+    margin: 0;
+}
+
+.cml-pop .st-layout {
+    max-height: 62vh;
+    min-height: 420px;
+}
+
+.cml-pop .st-panel {
+    overflow: auto;
+}
+
+.cml-pop-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cml-pop-foot .st-dirty {
+    margin-right: auto;
+}
+
+.cml-client {
+    font-weight: 500;
+}
+
+@media (max-width: 640px) {
+    .cml {
+        height: auto;
+        min-height: calc(100vh - var(--cml-top));
+        overflow: visible;
+    }
+
+    .cml-body {
+        flex: none;
+    }
+
+    .cml-scroll {
+        max-height: 60vh;
+    }
+
+    .cml-md {
+        flex-basis: 100%;
+    }
+
+    .cml-actions {
+        margin-left: 0;
+    }
+}
+
+/* pagination */
+.cml-pager {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.cml-per {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+}
+
+.cml-per .input {
+    width: auto;
+    padding: 3px 6px;
+    font-size: 12.5px;
+}
+
+.cml-pg {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px;
+    background: var(--card, #fff);
+    color: inherit;
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.cml-pg:hover:not(:disabled) {
+    border-color: #93c5fd;
+}
+
+.cml-pg.is-on {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #fff;
+    font-weight: 600;
+}
+
+.cml-pg:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.cml-pg-gap {
+    padding: 0 4px;
+}
+
+@media (max-width: 640px) {
+    .cml-foot {
+        flex-wrap: wrap;
+    }
+
+    .cml-pager {
+        margin-left: 0;
+    }
+}
+
+.cml-who small .ba-main-tag {
+    margin-left: 6px;
+}
+
+/* skeleton rows (uses the global .sk / .sk-cell shimmer from Settings; fallback below if they're missing) */
+.cml-sk-row td {
+    padding-top: 13px;
+    padding-bottom: 13px;
+}
+
+.cml-sk-row .sk-cell {
+    display: block;
+    height: 12px;
+    min-width: 24px;
+    border-radius: 6px;
+}
+
+.cml-sk-row .cml-sk-sub {
+    height: 9px;
+    margin-top: 7px;
+    opacity: .7;
+}
+
+.cml .sk:not([style*="background"]) {
+    background: linear-gradient(90deg, rgba(148, 163, 184, .16) 25%, rgba(148, 163, 184, .32) 37%, rgba(148, 163, 184, .16) 63%);
+    background-size: 400% 100%;
+    animation: cml-shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes cml-shimmer {
+    0% {
+        background-position: 100% 0;
+    }
+
+    100% {
+        background-position: 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cml .sk {
+        animation: none;
+    }
+}
+
+.cml-sk-foot {
+    display: inline-block;
+    width: 170px;
+    height: 11px;
+    border-radius: 6px;
+}
+
+/* account popup → Login tab (m_user_client, 1 : 1 with the account) */
+.cml-login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cml-login-form .st-note {
+    margin: 0;
+}
+
+.cml-login-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+}
+
+.cml-table td.cml-login-off {
+    color: var(--muted, #9ca3af);
+    text-decoration: line-through;
+}

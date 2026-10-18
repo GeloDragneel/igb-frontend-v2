@@ -1,0 +1,255 @@
+/* Monitoring → Audit Reconciliation (scoped to .diag)
+   The page never scrolls, only the scan log does. Tune --diag-top if there is a page scrollbar (bigger) or a gap (smaller). */
+.diag {
+  --diag-top: 164px;
+  --diag-excellent: #3fd6ac;
+  --diag-good: #a9d65c;
+  --diag-attention: #e8a33d;
+  --diag-critical: #e85d4a;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--diag-top));
+  height: calc(100dvh - var(--diag-top));
+  min-height: 520px;
+}
+
+.diag-console {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* header */
+.diag-console-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.diag-console-title h4 { margin: 2px 0 0; font-size: 18px; font-weight: 600; color: var(--ink); }
+.diag-eyebrow {
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.diag-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.diag-month-input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.diag-month-input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.diag-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--brand);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+.diag-run-btn:hover:not(:disabled) { background: var(--brand-ink); }
+.diag-run-btn:disabled { opacity: .5; cursor: default; }
+.diag-run-btn + .diag-run-btn { background: var(--teal); }
+.diag-run-icon { display: inline-flex; }
+.diag-run-btn.scanning .diag-run-icon { animation: diag-pulse 1s ease-in-out infinite; }
+
+/* body */
+.diag-body-grid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* left rail */
+.diag-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border-right: 1px solid var(--line);
+  overflow: auto;
+}
+.diag-gauge-wrap { position: relative; width: 210px; height: 210px; flex-shrink: 0; }
+.diag-gauge { width: 100%; height: 100%; transform: rotate(-90deg); }
+.diag-gauge circle { fill: none; }
+.diag-gauge-ticks { stroke: var(--line); stroke-width: 2; stroke-dasharray: 2 6; }
+.diag-gauge-track { stroke: var(--card-2); stroke-width: 14; }
+.diag-gauge-fill {
+  stroke-width: 14;
+  stroke-linecap: round;
+  transition: stroke-dashoffset .35s ease, stroke .35s ease;
+}
+.diag-gauge-readout {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.diag-gauge-value { font-size: 40px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1; }
+.diag-gauge-value small { font-size: 18px; color: var(--muted); margin-left: 2px; }
+.diag-gauge-label { color: var(--muted); font-size: 12.5px; }
+.diag-stats-footnote { color: var(--muted); font-size: 12.5px; text-align: center; }
+
+.diag-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.diag-stat-tile {
+  --tile: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--tile);
+  border-radius: 12px;
+  background: var(--card-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.diag-stat-tile[data-status="excellent"] { --tile: var(--diag-excellent); }
+.diag-stat-tile[data-status="good"] { --tile: var(--diag-good); }
+.diag-stat-tile[data-status="attention"] { --tile: var(--diag-attention); }
+.diag-stat-tile[data-status="critical"] { --tile: var(--diag-critical); }
+.diag-stat-tile:hover { border-color: var(--tile); }
+.diag-stat-tile.is-active { border-color: var(--tile); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tile) 35%, transparent); }
+.diag-stat-tile-name { color: var(--muted); font-size: 12px; }
+.diag-stat-tile-count { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* scan log */
+.diag-log-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.diag-log-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.diag-log-panel-title { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.diag-log-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-right: auto; }
+.diag-filter-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.diag-filter-btn:hover { color: var(--ink); }
+.diag-filter-btn.is-active { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+
+.diag-log { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px 0; }
+.diag-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 360px;
+  margin: 60px auto;
+  color: var(--muted);
+  text-align: center;
+}
+.diag-empty-glyph { font-size: 32px; color: var(--brand); }
+.diag-loading-spin { display: inline-block; animation: diag-spin 1s linear infinite; }
+
+.diag-log-line {
+  --st: var(--muted);
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 150px;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid var(--st);
+  animation: diag-in .25s ease-out;
+}
+.diag-log-line.status-excellent { --st: var(--diag-excellent); }
+.diag-log-line.status-good { --st: var(--diag-good); }
+.diag-log-line.status-attention { --st: var(--diag-attention); }
+.diag-log-line.status-critical { --st: var(--diag-critical); }
+.diag-log-index { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.diag-log-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.diag-log-name { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); }
+.diag-saved-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--diag-excellent) 18%, transparent);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 600;
+}
+.diag-log-issues { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+.diag-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.diag-status-badge.is-critical { background: color-mix(in srgb, var(--diag-critical) 14%, transparent); color: var(--red); }
+.diag-status-badge.is-good { background: color-mix(in srgb, var(--diag-good) 18%, transparent); color: var(--ink); }
+.diag-compliance-check { display: inline-flex; flex-shrink: 0; }
+
+.diag-compliance-list { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 0; padding: 0; list-style: none; }
+.diag-compliance-item { display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; overflow-wrap: anywhere; }
+.diag-compliance-item.is-checked .diag-compliance-check { color: var(--diag-excellent); }
+.diag-compliance-item.is-unchecked .diag-compliance-check { color: var(--diag-attention); }
+.diag-compliance-item.is-missing { color: var(--muted); }
+.diag-compliance-item.is-missing .diag-compliance-check { color: var(--diag-critical); }
+
+.diag-log-meter { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding-top: 2px; }
+.diag-log-score { font-weight: 700; color: var(--st); font-variant-numeric: tabular-nums; }
+.diag-log-bar { width: 100%; height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
+.diag-log-bar-fill { height: 100%; border-radius: inherit; background: var(--st); transition: width .3s ease; }
+
+@keyframes diag-spin { to { transform: rotate(360deg); } }
+@keyframes diag-pulse { 50% { opacity: .35; } }
+@keyframes diag-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .diag-log-line, .diag-loading-spin, .diag-run-btn.scanning .diag-run-icon { animation: none; }
+  .diag-gauge-fill, .diag-log-bar-fill { transition: none; }
+}
+
+@media (max-width: 900px) {
+  .diag { height: auto; min-height: 0; }
+  .diag-body-grid { grid-template-columns: 1fr; }
+  .diag-rail { border-right: 0; border-bottom: 1px solid var(--line); }
+  .diag-log { max-height: 70vh; }
+}
+@media (max-width: 560px) {
+  .diag-log-line { grid-template-columns: 34px minmax(0, 1fr); }
+  .diag-log-meter { grid-column: 2; align-items: stretch; }
+  .diag-header-actions { width: 100%; }
+  .diag-month-input { flex: 1 1 120px; }
+}

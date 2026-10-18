@@ -1,0 +1,49 @@
+/* Books & Ledger → Ledgers: Print ▾ menu and PDF preview */
+.lg-print {
+    position: relative;
+    display: inline-block;
+}
+
+.lg-print-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
+    min-width: 170px;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+}
+
+.lg-print-menu button {
+    display: block;
+    width: 100%;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.lg-print-menu button:hover,
+.lg-print-menu button:focus-visible {
+    background: var(--brand-soft, rgba(37, 99, 235, .08));
+    outline: none;
+}
+
+.lg-pdf {
+    display: block;
+    width: 100%;
+    height: 75vh;
+    border: 0;
+    border-radius: 8px;
+    background: #525659;
+}
