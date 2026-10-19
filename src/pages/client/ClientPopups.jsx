@@ -1070,3 +1070,81 @@ export function DeleteAccountPopup({ account, onClose, onDeleted }) {
         </Modal>
     );
 }
+
+/* ---------- Assigned clients: pick the DA and Auditor of one account (old modal_AssignedClients) ---------- */
+// staff = { da: [{id, name}], auditors: [{id, name}] } from /client-accounts/assignees
+export function AssignedClientPopup({ account, staff, onClose, onSaved }) {
+    const [daId, setDaId] = useState(account.da_id || null);
+    const [auId, setAuId] = useState(account.auditor_id || null);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+    const changed = (daId || null) !== (account.da_id || null) || (auId || null) !== (account.auditor_id || null);
+
+    const save = async () => {
+        setBusy(true);
+        setError("");
+        try {
+            const r = await apiFetch(`/client-accounts/${account.id}/assigned`, {
+                method: "PUT", body: JSON.stringify({ da_id: daId, auditor_id: auId }),
+            });
+            onSaved(r.message || "Saved.");
+        } catch (e) {
+            setError(e.message || "Couldn't save.");
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Modal title="Assigned DA / Auditor" onClose={onClose} size="lg"
+            footer={
+                <div className="tm-foot">
+                    <button className="btn" onClick={onClose}>Cancel</button>
+                    <button className="btn btn-primary" onClick={save} disabled={busy || !changed}>{busy ? "Saving…" : "Save"}</button>
+                </div>
+            }>
+            <p className="asg-who">
+                <b>{[account.client_num, account.client_name].filter(Boolean).join(" - ")}</b>
+                <small>{[account.branch_type, account.branch_code, account.trade_name].filter(Boolean).join(" - ")}</small>
+            </p>
+            <div className="asg-grid">
+                <StaffPick title="Data analyst (DA)" list={staff?.da} value={daId} onChange={setDaId} current={account.da_name} />
+                <StaffPick title="Auditor" list={staff?.auditors} value={auId} onChange={setAuId} current={account.auditor_name} />
+            </div>
+            {error && <div className="alert-error st-mt" role="alert">{error}</div>}
+        </Modal>
+    );
+}
+
+// searchable radio list; clicking the selected one again clears it (same as the old page)
+function StaffPick({ title, list, value, onChange, current }) {
+    const [q, setQ] = useState("");
+    const all = list || [];
+    const shown = useMemo(() => {
+        const t = q.trim().toLowerCase();
+        return t ? all.filter((e) => String(e.name).toLowerCase().includes(t)) : all;
+    }, [all, q]);
+    const picked = all.find((e) => Number(e.id) === Number(value));
+
+    return (
+        <div className="asg-col">
+            <div className="asg-head">
+                <span className="field-label">{title}</span>
+                <span className="asg-picked">{picked ? picked.name : value ? current || `#${value}` : "None"}</span>
+            </div>
+            <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" aria-label={`Search ${title}`} />
+            <div className="asg-list" role="radiogroup" aria-label={title}>
+                {!list && <div className="asg-empty">Loading…</div>}
+                {list && shown.length === 0 && <div className="asg-empty">{q ? "Nothing matches the search." : "No employees."}</div>}
+                {shown.map((e) => {
+                    const on = Number(e.id) === Number(value);
+                    return (
+                        <button key={e.id} type="button" role="radio" aria-checked={on} className={`asg-item${on ? " is-on" : ""}`}
+                            onClick={() => onChange(on ? null : Number(e.id))}>
+                            <span className="asg-radio" aria-hidden="true" />{e.name}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}

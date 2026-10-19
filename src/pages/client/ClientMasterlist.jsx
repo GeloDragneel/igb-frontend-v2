@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SearchSelect from "../../components/SearchSelect";
 import { useToast } from "../../components/Toast";
 import { apiFetch } from "../../context/AuthContext";
-import { ClientPopup, AccountPopup, DeleteAccountPopup, isActive, isMain } from "./ClientPopups";
+import { ClientPopup, AccountPopup, DeleteAccountPopup, AssignedClientPopup, isActive, isMain } from "./ClientPopups";
 import "./ClientMasterlist.css";
 
+const ENDPOINT = { clients: "/clients", accounts: "/client-accounts", assigned: "/client-accounts/assigned" };
 const val = (v) => (v === null || v === undefined || v === "" ? "—" : String(v));
 
 export default function ClientMasterlist() {
@@ -26,6 +27,8 @@ export default function ClientMasterlist() {
     const [openClient, setOpenClient] = useState(undefined);   // client_num | null (new) | undefined (closed)
     const [openAccount, setOpenAccount] = useState(null);
     const [delAccount, setDelAccount] = useState(null);
+    const [assignAcc, setAssignAcc] = useState(null);    // account whose DA / Auditor is being edited
+    const [staff, setStaff] = useState(null);            // { da, auditors } for the assign popup
     const [pg, setPg] = useState({ key: "", n: 1 });
     const [perPage, setPerPage] = useState(15);
 
@@ -49,11 +52,11 @@ export default function ClientMasterlist() {
         try {
             const p = new URLSearchParams({ page: String(page), per_page: String(perPage) });
             if (debounced) p.set("q", debounced);
-            if (tab === "accounts") {
+            if (tab !== "clients") {
                 if (clientFilter) p.set("client_num", clientFilter);
                 if (status !== "all") p.set("active", status);
             }
-            const r = await apiFetch(`${tab === "clients" ? "/clients" : "/client-accounts"}?${p}`);
+            const r = await apiFetch(`${ENDPOINT[tab]}?${p}`);
             if (id !== reqId.current) return;
             setRows(r.data || []);
             setTotal(r.total || 0);
@@ -81,13 +84,19 @@ export default function ClientMasterlist() {
 
     const reload = () => { load(); loadClientList(); };
 
+    // DA / Auditor lists: loaded once, the first time the assign popup opens
+    const openAssign = (a) => {
+        setAssignAcc(a);
+        if (!staff) apiFetch("/client-accounts/assignees").then(setStaff).catch((e) => { setAssignAcc(null); notify(e.message || "Couldn't load the employees."); });
+    };
+
     const clientOpts = useMemo(() => [{ value: "", label: "All clients" }, ...clientList.map((c) => ({
         value: String(c.client_num), label: [c.client_num, c.name].filter(Boolean).join(" - ") || "—",
     }))], [clientList]);
 
     const pages = Math.max(1, Math.ceil(total / perPage));
     const from = (page - 1) * perPage;
-    const filtered = !!debounced || (tab === "accounts" && (!!clientFilter || status !== "all"));
+    const filtered = !!debounced || (tab !== "clients" && (!!clientFilter || status !== "all"));
     const q = debounced;
 
     const L = meta?.lookups || {};
@@ -96,7 +105,7 @@ export default function ClientMasterlist() {
     return (
         <div className="cml">
             <section className="card cml-tabs" role="tablist" aria-label="Masterlist">
-                {[["clients", "Clients", counts.clients], ["accounts", "Client accounts", counts.accounts]].map(([k, l, n]) => (
+                {[["clients", "Clients", counts.clients], ["accounts", "Client accounts", counts.accounts], ["assigned", "Assigned clients", counts.accounts]].map(([k, l, n]) => (
                     <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "is-on" : ""} onClick={() => { if (tab !== k) { setRows([]); setTab(k); } }}>
                         {l} <span className="cml-count">{n}</span>
                     </button>
@@ -107,9 +116,9 @@ export default function ClientMasterlist() {
                 <label className="cml-field cml-grow">
                     <span className="field-label">Search</span>
                     <input className="input" value={query} onChange={(e) => setQuery(e.target.value)}
-                        placeholder={tab === "clients" ? "Client #, name, phone, email, status..." : "Trade name, branch code, client, nature, TIN, RDO..."} />
+                        placeholder={tab === "clients" ? "Client #, name, phone, email, status..." : tab === "assigned" ? "Client, trade name, branch code, DA, auditor..." : "Trade name, branch code, client, nature, TIN, RDO..."} />
                 </label>
-                {tab === "accounts" && (
+                {tab !== "clients" && (
                     <>
                         <div className="cml-field cml-md">
                             <span className="field-label">Client</span>
@@ -168,6 +177,34 @@ export default function ClientMasterlist() {
                                 ))}
                             </tbody>
                         </table>
+                    ) : tab === "assigned" ? (
+                        <table className="cml-table">
+                            <thead>
+                                <tr><th>Client account</th><th>Status</th><th>DA</th><th>Auditor</th><th className="c">Active</th><th /></tr>
+                            </thead>
+                            <tbody>
+                                {loading && <SkeletonRows cols={6} rows={perPage} twoLine />}
+                                {!loading && rows.length === 0 && <tr><td colSpan={6} className="cml-empty">{q || clientFilter || status !== "all" ? "Nothing matches the filters." : "No client accounts yet."}</td></tr>}
+                                {!loading && rows.map((a) => (
+                                    <tr key={a.id} className={`cml-row${isActive(a) ? "" : " is-off"}`} tabIndex={0} onClick={() => openAssign(a)}
+                                        onKeyDown={(e) => e.key === "Enter" && openAssign(a)}>
+                                        <td>
+                                            <div className="cml-who">
+                                                <span className="strong">{[a.client_num, a.client_name].filter(Boolean).join(" - ") || "—"}</span>
+                                                <small>{[a.branch_type, a.branch_code, a.trade_name].filter(Boolean).join(" - ") || "—"}</small>
+                                            </div>
+                                        </td>
+                                        <td>{a.status_label || "—"}</td>
+                                        <td className={a.da_name ? "" : "cml-none"}>{a.da_name || "Not assigned"}</td>
+                                        <td className={a.auditor_name ? "" : "cml-none"}>{a.auditor_name || "Not assigned"}</td>
+                                        <td className="c"><span className={`tm-status ${isActive(a) ? "is-on" : ""}`}><span className="tm-dot" aria-hidden="true" />{isActive(a) ? "Yes" : "No"}</span></td>
+                                        <td className="c" onClick={(e) => e.stopPropagation()}>
+                                            <button className="btn btn-sm" onClick={() => openAssign(a)} aria-label={`Assign DA / Auditor for ${a.trade_name}`}>Assign</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     ) : (
                         <table className="cml-table">
                             <thead>
@@ -212,7 +249,7 @@ export default function ClientMasterlist() {
                             {filtered && ` (filtered from ${tab === "clients" ? counts.clients : counts.accounts})`}
                         </span>
                     )}
-                    {tab === "accounts" && clientFilter && <button className="btn btn-sm" onClick={() => setClientFilter("")}>Show all clients</button>}
+                    {tab !== "clients" && clientFilter && <button className="btn btn-sm" onClick={() => setClientFilter("")}>Show all clients</button>}
                     <Pager page={page} pages={pages} onPage={setPage} perPage={perPage} onPerPage={setPerPage} disabled={loading} />
                 </footer>
             </section>
@@ -223,6 +260,10 @@ export default function ClientMasterlist() {
             {openAccount && meta && (
                 <AccountPopup account={openAccount} clientNum={openAccount.client_num} L={L} hasRdo={hasRdo} onClose={() => setOpenAccount(null)}
                     onSaved={(_, m) => { setOpenAccount(null); notify(m); reload(); }} />
+            )}
+            {assignAcc && (
+                <AssignedClientPopup account={assignAcc} staff={staff} onClose={() => setAssignAcc(null)}
+                    onSaved={(m) => { setAssignAcc(null); notify(m); load(); }} />
             )}
             {delAccount && (
                 <DeleteAccountPopup account={delAccount} onClose={() => setDelAccount(null)}
