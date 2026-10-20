@@ -8,6 +8,8 @@ import { useToast } from "./Toast";
 import { useAuth, apiFetch } from "../context/AuthContext";
 import BirthdayPopup from "./BirthdayPopup";
 import NotificationBell from "./NotificationBell";
+import AiAssistant from "./AiAssistant";
+import Messenger from "./Messenger";
 import "./PersonAvatar.css"; // header photo styles
 import { useAppData, saleBalance } from "../context/AppDataContext";
 
@@ -199,6 +201,9 @@ export default function Header({ onMenu }) {
         {/* birthday today: animated cake (click = celebrants) · pops up by itself once after login */}
         <BirthdayPopup />
 
+        {/* AI Assistant: messenger-style chat (bottom right) */}
+        <AiAssistant />
+
         <button
           className="icon-btn round"
           onClick={toggleTheme}
@@ -206,6 +211,9 @@ export default function Header({ onMenu }) {
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
+
+        {/* Messenger: employees only (Staff / ClientStaff) */}
+        <Messenger />
 
         {/* Notifications: Staff / ClientStaff → NotificationController · Client → the alerts above */}
         <NotificationBell alerts={alerts} open={notifOpen} setOpen={setNotifOpen} onOpen={() => setUserOpen(false)} />

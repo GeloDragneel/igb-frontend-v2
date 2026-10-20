@@ -1,0 +1,1988 @@
+/* Messenger (FB style). Light by default, [data-theme="dark"] below. */
+.ms-list,
+.ms-win,
+.ms-modal,
+.ms-bubble {
+    --ms-bg: #ffffff;
+    --ms-soft: #f0f2f5;
+    --ms-hover: #f2f3f5;
+    --ms-line: #e4e6eb;
+    --ms-text: #050505;
+    --ms-muted: #65676b;
+    --ms-blue: #0866ff;
+    --ms-mine: linear-gradient(180deg, #0a7cff 0%, #0866ff 100%);
+    --ms-theirs: #f0f0f0;
+    --ms-shadow: 0 12px 28px rgba(0, 0, 0, .2), 0 2px 4px rgba(0, 0, 0, .1);
+}
+
+[data-theme="dark"] .ms-list,
+[data-theme="dark"] .ms-win,
+[data-theme="dark"] .ms-modal,
+[data-theme="dark"] .ms-bubble {
+    --ms-bg: #242526;
+    --ms-soft: #3a3b3c;
+    --ms-hover: #3a3b3c;
+    --ms-line: #3e4042;
+    --ms-text: #e4e6eb;
+    --ms-muted: #b0b3b8;
+    --ms-theirs: #303030;
+    --ms-shadow: 0 12px 28px rgba(0, 0, 0, .5);
+}
+
+/* ---------- header button ---------- */
+.ms-trigger {
+    color: var(--ms-blue, #0866ff);
+}
+
+.ms-trigger.is-on {
+    background: rgba(8, 102, 255, .1);
+}
+
+/* ---------- avatars ---------- */
+.ms-av {
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    border-radius: 50%;
+}
+
+.ms-av img,
+.ms-av-init {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.ms-av-init {
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+
+.ms-online {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #31a24c;
+    border: 2px solid var(--ms-bg, #fff);
+    box-sizing: border-box;
+}
+
+.ms-av-group {
+    position: relative;
+    display: inline-block;
+    flex: none;
+}
+
+.ms-av-group>.ms-av {
+    position: absolute;
+    border: 2px solid var(--ms-bg, #fff);
+    box-sizing: content-box;
+}
+
+.ms-av-group>.ms-av:first-child {
+    top: 0;
+    right: 0;
+}
+
+.ms-av-group>.ms-av:nth-child(2) {
+    bottom: 0;
+    left: 0;
+}
+
+.ms-av-group>.ms-online {
+    right: 0;
+    bottom: 0;
+}
+
+/* ---------- chat list (dropdown) ---------- */
+.ms-list {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    width: 360px;
+    max-width: calc(100vw - 24px);
+    max-height: min(640px, calc(100vh - 90px));
+    padding: 12px 8px 8px;
+    border-radius: 12px;
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    box-shadow: var(--ms-shadow);
+}
+
+.ms-list-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px 8px;
+}
+
+.ms-list-head h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.ms-circle {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--ms-soft);
+    color: var(--ms-text);
+    cursor: pointer;
+}
+
+.ms-circle:hover {
+    filter: brightness(.95);
+}
+
+.ms-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 8px 8px;
+    padding: 0 12px;
+    height: 36px;
+    border-radius: 18px;
+    background: var(--ms-soft);
+    color: var(--ms-muted);
+}
+
+.ms-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: none;
+    color: var(--ms-text);
+    font: inherit;
+    font-size: 14.5px;
+}
+
+.ms-active {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 4px 4px 8px;
+    scrollbar-width: thin;
+}
+
+.ms-active-p {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: 64px;
+    flex: none;
+    padding: 4px 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--ms-muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ms-active-p:hover {
+    background: var(--ms-hover);
+}
+
+.ms-active-p span {
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ms-convs {
+    overflow-y: auto;
+    min-height: 120px;
+}
+
+.ms-conv,
+.ms-pick-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ms-conv:hover,
+.ms-pick-row:hover {
+    background: var(--ms-hover);
+}
+
+.ms-conv-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.ms-conv-name {
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ms-conv-last {
+    display: flex;
+    min-width: 0;
+    color: var(--ms-muted);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.ms-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ms-conv.is-unread .ms-conv-name,
+.ms-conv.is-unread .ms-conv-last {
+    color: var(--ms-text);
+    font-weight: 700;
+}
+
+.ms-unread-dot {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--ms-blue);
+}
+
+.ms-sub {
+    padding: 10px 8px 4px;
+    color: var(--ms-muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.ms-empty {
+    padding: 24px 12px;
+    color: var(--ms-muted);
+    font-size: 13.5px;
+    text-align: center;
+}
+
+/* ---------- dock + windows ---------- */
+.ms-dock {
+    position: fixed;
+    right: 24px;
+    bottom: 0;
+    z-index: 1400;
+    display: flex;
+    align-items: flex-end;
+    flex-direction: row-reverse;
+    gap: 12px;
+    pointer-events: none;
+}
+
+body.ai-chat-open .ms-dock {
+    right: 424px;
+}
+
+/* AI Assistant window is open on the right */
+.ms-dock>* {
+    pointer-events: auto;
+}
+
+.ms-win {
+    display: flex;
+    flex-direction: column;
+    width: 338px;
+    height: 455px;
+    max-height: calc(100vh - 80px);
+    border-radius: 8px 8px 0 0;
+    overflow: hidden;
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    box-shadow: var(--ms-shadow);
+    animation: ms-up .16s ease-out;
+}
+
+@keyframes ms-up {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+
+.ms-win-head {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 6px 6px 4px;
+    border-bottom: 1px solid var(--ms-line);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+
+.ms-win-who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ms-win-who:hover {
+    background: var(--ms-hover);
+}
+
+.ms-win-title {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.ms-win-title strong {
+    overflow: hidden;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ms-win-title small {
+    color: var(--ms-muted);
+    font-size: 12px;
+}
+
+.ms-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--ms-blue);
+    cursor: pointer;
+}
+
+.ms-icon:hover {
+    background: var(--ms-hover);
+}
+
+.ms-icon.is-blue {
+    color: var(--ms-blue);
+}
+
+.ms-like {
+    font-size: 20px;
+}
+
+.ms-win-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 8px 4px;
+    overscroll-behavior: contain;
+}
+
+.ms-intro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px 8px 18px;
+    text-align: center;
+}
+
+.ms-intro strong {
+    margin-top: 6px;
+    font-size: 16px;
+}
+
+.ms-intro small {
+    color: var(--ms-muted);
+    font-size: 12.5px;
+}
+
+.ms-time {
+    margin: 12px 0 6px;
+    color: var(--ms-muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.ms-system {
+    margin: 6px 16px;
+    color: var(--ms-muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+.ms-sender {
+    margin: 6px 0 2px 44px;
+    color: var(--ms-muted);
+    font-size: 11.5px;
+}
+
+.ms-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.ms-row.is-me {
+    flex-direction: row-reverse;
+}
+
+.ms-row-av {
+    width: 28px;
+    flex: none;
+}
+
+.ms-msg {
+    max-width: 72%;
+    padding: 7px 12px;
+    border-radius: 18px;
+    background: var(--ms-theirs);
+    color: var(--ms-text);
+    font-size: 14.5px;
+    line-height: 1.34;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.ms-msg a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.is-me .ms-msg {
+    background: var(--ms-mine);
+    color: #fff;
+}
+
+/* FB corner shape inside a run */
+.ms-row:not(.is-me):not(.is-first) .ms-msg {
+    border-top-left-radius: 4px;
+}
+
+.ms-row:not(.is-me):not(.is-last) .ms-msg {
+    border-bottom-left-radius: 4px;
+}
+
+.ms-row.is-me:not(.is-first) .ms-msg {
+    border-top-right-radius: 4px;
+}
+
+.ms-row.is-me:not(.is-last) .ms-msg {
+    border-bottom-right-radius: 4px;
+}
+
+.ms-msg.is-img {
+    padding: 0;
+    background: none !important;
+    overflow: hidden;
+    border-radius: 14px;
+}
+
+.ms-msg.is-img img {
+    display: block;
+    max-width: 220px;
+    max-height: 260px;
+    border-radius: 14px;
+    border: 1px solid var(--ms-line);
+    object-fit: cover;
+    cursor: zoom-in;
+}
+
+.ms-msg.is-unsent {
+    background: none !important;
+    color: var(--ms-muted) !important;
+    border: 1px solid var(--ms-line);
+    font-style: italic;
+    font-size: 13.5px;
+}
+
+.ms-msg.is-pending {
+    opacity: .65;
+}
+
+.ms-msg.is-failed {
+    opacity: .6;
+    outline: 1px solid #e41e3f;
+}
+
+.ms-fail {
+    margin: 2px 4px 0;
+    color: #e41e3f;
+    font-size: 11.5px;
+    text-align: right;
+}
+
+.ms-actions {
+    visibility: hidden;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    align-self: center;
+}
+
+.ms-row.is-me .ms-actions {
+    flex-direction: row-reverse;
+}
+
+.ms-row:hover .ms-actions,
+.ms-row:focus-within .ms-actions {
+    visibility: visible;
+}
+
+.ms-actions button {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--ms-muted);
+    cursor: pointer;
+}
+
+.ms-actions button:hover {
+    background: var(--ms-hover);
+}
+
+.ms-seen {
+    display: flex;
+    justify-content: flex-end;
+    gap: 2px;
+    margin: 3px 2px 0;
+    color: var(--ms-muted);
+    font-size: 11px;
+}
+
+.ms-typing {
+    display: flex;
+    gap: 4px;
+    padding: 12px 14px;
+}
+
+.ms-typing i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ms-muted);
+    animation: ms-blink 1.2s infinite ease-in-out;
+}
+
+.ms-typing i:nth-child(2) {
+    animation-delay: .15s;
+}
+
+.ms-typing i:nth-child(3) {
+    animation-delay: .3s;
+}
+
+@keyframes ms-blink {
+
+    0%,
+    80%,
+    100% {
+        opacity: .3;
+        transform: translateY(0);
+    }
+
+    40% {
+        opacity: 1;
+        transform: translateY(-3px);
+    }
+}
+
+.ms-files {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px 0;
+    overflow-x: auto;
+}
+
+.ms-file {
+    position: relative;
+    flex: none;
+    width: 52px;
+    height: 52px;
+}
+
+.ms-file img {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.ms-file button {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+    cursor: pointer;
+}
+
+.ms-file-add {
+    flex: none;
+    width: 52px;
+    height: 52px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--ms-soft);
+    color: var(--ms-text);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+}
+
+.ms-win-foot {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 8px;
+}
+
+.ms-win-foot textarea {
+    flex: 1;
+    min-width: 0;
+    min-height: 36px;
+    max-height: 110px;
+    padding: 8px 12px;
+    resize: none;
+    border: 0;
+    border-radius: 18px;
+    outline: 0;
+    background: var(--ms-soft);
+    color: var(--ms-text);
+    font: inherit;
+    font-size: 14.5px;
+    line-height: 1.35;
+    field-sizing: content;
+}
+
+/* minimized chat head */
+.ms-bubble {
+    position: relative;
+    margin-bottom: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    box-shadow: var(--ms-shadow);
+}
+
+.ms-bubble-x {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    display: none;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+}
+
+.ms-bubble:hover .ms-bubble-x {
+    display: grid;
+}
+
+/* ---------- chat info ---------- */
+.ms-info {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px 14px;
+}
+
+.ms-info-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--ms-blue);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ms-info-back:hover {
+    background: var(--ms-hover);
+}
+
+.ms-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 4px 0 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ms-muted);
+}
+
+.ms-field-row {
+    display: flex;
+    gap: 6px;
+}
+
+.ms-modal-name {
+    flex: none !important;
+}
+
+.ms-field input,
+.ms-modal-name {
+    flex: 1;
+    min-width: 0;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--ms-line);
+    border-radius: 8px;
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    font: inherit;
+    font-size: 14px;
+    outline: 0;
+}
+
+.ms-field input:focus,
+.ms-modal-name:focus {
+    border-color: var(--ms-blue);
+}
+
+.ms-info-sub {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 6px 0;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.ms-members {
+    margin: 0 0 14px;
+    padding: 0;
+    list-style: none;
+}
+
+.ms-members li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+}
+
+.ms-member-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.ms-member-body strong {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ms-member-body small {
+    color: var(--ms-muted);
+    font-size: 12px;
+}
+
+.ms-member-act {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.ms-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ms-blue);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ms-link.is-red {
+    color: #e41e3f;
+}
+
+.ms-link:disabled {
+    opacity: .5;
+}
+
+.ms-btn {
+    height: 36px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--ms-soft);
+    color: var(--ms-text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ms-btn:disabled {
+    opacity: .5;
+    cursor: default;
+}
+
+.ms-btn.is-primary {
+    background: var(--ms-blue);
+    color: #fff;
+}
+
+.ms-btn.is-red {
+    color: #e41e3f;
+}
+
+.ms-leave {
+    width: 100%;
+}
+
+/* ---------- people modal ---------- */
+.ms-modal-back {
+    position: fixed;
+    inset: 0;
+    z-index: 1600;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, .45);
+}
+
+.ms-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 440px;
+    max-width: 100%;
+    max-height: min(640px, calc(100vh - 32px));
+    padding: 14px;
+    border-radius: 12px;
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    box-shadow: var(--ms-shadow);
+}
+
+.ms-modal header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--ms-line);
+}
+
+.ms-modal h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.ms-modal .ms-search {
+    margin: 0;
+}
+
+.ms-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ms-chips button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 0;
+    border-radius: 14px;
+    background: rgba(8, 102, 255, .12);
+    color: var(--ms-blue);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ms-pick {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 160px;
+    margin: 0 -6px;
+}
+
+.ms-check {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--ms-muted);
+    border-radius: 50%;
+}
+
+.ms-check.is-on {
+    border-color: var(--ms-blue);
+    background: var(--ms-blue);
+    box-shadow: inset 0 0 0 3px var(--ms-bg);
+}
+
+.ms-modal footer {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ms-modal footer .ms-btn {
+    width: 100%;
+}
+
+.ms-modal footer small {
+    color: var(--ms-muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+/* ---------- photo viewer ---------- */
+.ms-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1700;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, .88);
+    cursor: zoom-out;
+}
+
+.ms-lightbox img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 6px;
+}
+
+.ms-lightbox-x {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .15);
+    color: #fff;
+    cursor: pointer;
+}
+
+@media (max-width: 720px) {
+    .ms-dock {
+        right: 8px;
+        left: 8px;
+        justify-content: flex-start;
+    }
+
+    .ms-win {
+        width: 100%;
+    }
+
+    .ms-dock .ms-win:not(:first-child) {
+        display: none;
+    }
+
+    /* phones: one chat at a time */
+}
+
+.ms-conv-time {
+    flex: none;
+}
+
+/* ---------- pin ---------- */
+.ms-conv {
+    position: relative;
+}
+
+.ms-pin-mark {
+    display: inline-flex;
+    margin-right: 4px;
+    color: var(--ms-blue);
+    vertical-align: -1px;
+}
+
+.ms-pin-btn {
+    visibility: hidden;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--ms-line);
+    border-radius: 50%;
+    background: var(--ms-bg);
+    color: var(--ms-muted);
+    cursor: pointer;
+}
+
+.ms-conv:hover .ms-pin-btn,
+.ms-pin-btn:focus-visible {
+    visibility: visible;
+}
+
+.ms-pin-btn:hover,
+.ms-pin-btn.is-on {
+    color: var(--ms-blue);
+    border-color: var(--ms-blue);
+}
+
+.ms-pin-wide {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin: 0 0 12px;
+}
+
+.ms-pin-wide.is-on {
+    color: var(--ms-blue);
+}
+
+/* ---------- reactions ---------- */
+.ms-bub-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    max-width: 72%;
+    min-width: 0;
+}
+
+.ms-row.is-me .ms-bub-wrap {
+    align-items: flex-end;
+}
+
+.ms-bub-wrap .ms-msg {
+    max-width: 100%;
+}
+
+.ms-row.has-react {
+    margin-bottom: 14px;
+}
+
+.ms-reacts {
+    position: absolute;
+    bottom: -14px;
+    right: 4px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    height: 22px;
+    padding: 0 5px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--ms-bg);
+    color: var(--ms-muted);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .22);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ms-row:not(.is-me) .ms-reacts {
+    right: auto;
+    left: 4px;
+}
+
+.ms-reacts span {
+    font-size: 13px;
+    line-height: 1;
+}
+
+.ms-reacts b {
+    margin-left: 3px;
+    font-weight: 600;
+}
+
+.ms-react-bar {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    border-radius: 24px;
+    background: var(--ms-bg);
+    box-shadow: var(--ms-shadow);
+    animation: ms-pop .14s ease-out;
+}
+
+.ms-row.is-me .ms-react-bar {
+    right: 0;
+}
+
+.ms-row:not(.is-me) .ms-react-bar {
+    left: 0;
+}
+
+@keyframes ms-pop {
+    from {
+        transform: scale(.85) translateY(6px);
+        opacity: 0;
+    }
+
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+
+.ms-react-bar button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    font-size: 22px;
+    cursor: pointer;
+    transition: transform .12s;
+}
+
+.ms-react-bar button:hover {
+    transform: scale(1.25);
+}
+
+.ms-react-bar button.is-on {
+    background: rgba(8, 102, 255, .14);
+}
+
+.ms-react-bar .ms-react-plus {
+    width: 30px;
+    height: 30px;
+    background: var(--ms-soft);
+    color: var(--ms-muted);
+    font-size: 0;
+}
+
+.ms-react-bar .ms-react-plus:hover {
+    transform: none;
+}
+
+/* big emoji-only messages, like FB */
+.ms-msg.is-big {
+    padding: 0 2px;
+    background: none !important;
+    font-size: 34px;
+    line-height: 1.15;
+}
+
+/* ---------- replies ---------- */
+.ms-quote-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 8px 0 -8px 34px;
+}
+
+.ms-quote-row.is-me {
+    align-items: flex-end;
+    margin-left: 0;
+}
+
+.ms-quote-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 6px 2px;
+    color: var(--ms-muted);
+    font-size: 11.5px;
+}
+
+.ms-quote {
+    max-width: 72%;
+    padding: 7px 12px 16px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--ms-soft);
+    color: var(--ms-muted);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.3;
+    text-align: left;
+    cursor: pointer;
+    opacity: .9;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow-wrap: anywhere;
+}
+
+.ms-quote img {
+    display: block;
+    max-width: 90px;
+    max-height: 70px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.ms-row.is-flash .ms-msg {
+    animation: ms-flash 1.2s ease-out;
+}
+
+@keyframes ms-flash {
+
+    0%,
+    40% {
+        box-shadow: 0 0 0 3px rgba(8, 102, 255, .55);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(8, 102, 255, 0);
+    }
+}
+
+.ms-replying {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px 0 14px;
+    border-top: 1px solid var(--ms-line);
+}
+
+.ms-replying div {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.3;
+}
+
+.ms-replying strong {
+    font-size: 13px;
+}
+
+.ms-replying span {
+    overflow: hidden;
+    color: var(--ms-muted);
+    font-size: 12.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------- emoji picker ---------- */
+.ms-win {
+    position: relative;
+}
+
+.ms-emoji-anchor {
+    position: static;
+    flex: none;
+}
+
+.ms-icon.is-on {
+    background: var(--ms-hover);
+}
+
+.ms-emoji {
+    position: absolute;
+    z-index: 20;
+    width: 290px;
+    padding: 8px;
+    border-radius: 12px;
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    box-shadow: var(--ms-shadow);
+    animation: ms-pop .14s ease-out;
+}
+
+.ms-emoji.is-input,
+.ms-emoji.is-react {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    bottom: 58px;
+}
+
+.ms-emoji-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+    overflow-x: auto;
+}
+
+.ms-emoji-tabs button {
+    flex: none;
+    padding: 4px 9px;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    color: var(--ms-muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ms-emoji-tabs button.is-on {
+    background: rgba(8, 102, 255, .12);
+    color: var(--ms-blue);
+}
+
+.ms-emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.ms-emoji-grid button {
+    display: grid;
+    place-items: center;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ms-emoji-grid button:hover {
+    background: var(--ms-hover);
+}
+
+/* ---------- header dropdown: "See all in Messenger" ---------- */
+.ms-see-all {
+    margin: 6px 8px 0;
+    padding: 10px;
+    border: 0;
+    border-top: 1px solid var(--ms-line);
+    background: none;
+    color: var(--ms-blue);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 0 0 8px 8px;
+}
+
+.ms-see-all:hover {
+    background: var(--ms-hover);
+}
+
+/* ---------- full page: /messenger ---------- */
+.ms-page {
+    --ms-bg: #ffffff;
+    --ms-soft: #f0f2f5;
+    --ms-hover: #f2f3f5;
+    --ms-line: #e4e6eb;
+    --ms-text: #050505;
+    --ms-muted: #65676b;
+    --ms-blue: #0866ff;
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
+    gap: 12px;
+    height: calc(100vh - 150px);
+    min-height: 480px;
+}
+
+[data-theme="dark"] .ms-page {
+    --ms-bg: #242526;
+    --ms-soft: #3a3b3c;
+    --ms-hover: #3a3b3c;
+    --ms-line: #3e4042;
+    --ms-text: #e4e6eb;
+    --ms-muted: #b0b3b8;
+}
+
+.ms-page-msg {
+    padding: 48px;
+    color: var(--muted, #6b7280);
+    text-align: center;
+}
+
+/* left: chat list (same look as the dropdown, but a column) */
+.ms-page .ms-page-side {
+    position: static;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    height: 100%;
+    min-height: 0;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+    border: 1px solid var(--ms-line);
+}
+
+.ms-page .ms-convs {
+    flex: 1;
+    min-height: 0;
+}
+
+.ms-conv.is-selected {
+    background: rgba(8, 102, 255, .1);
+}
+
+.ms-conv.is-selected:hover {
+    background: rgba(8, 102, 255, .14);
+}
+
+/* middle + right */
+.ms-page-main {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+}
+
+.ms-pchat {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    height: 100%;
+    min-height: 0;
+}
+
+.ms-pchat.has-info {
+    grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.ms-page .ms-win {
+    width: auto;
+    height: 100%;
+    max-height: none;
+    border-radius: 12px;
+    animation: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+    border: 1px solid var(--ms-line);
+}
+
+.ms-pchat-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ms-pchat-head {
+    padding: 8px 10px;
+}
+
+.ms-pchat-head .ms-win-who {
+    cursor: default;
+}
+
+.ms-pchat-head .ms-win-who:hover {
+    background: none;
+}
+
+.ms-pchat-head .ms-win-title strong {
+    font-size: 16.5px;
+}
+
+.ms-pchat-head .ms-icon {
+    width: 38px;
+    height: 38px;
+}
+
+.ms-page-back {
+    display: none;
+}
+
+.ms-page .ms-win-body {
+    padding: 12px 18px 6px;
+}
+
+.ms-page .ms-msg,
+.ms-page .ms-bub-wrap {
+    max-width: min(560px, 70%);
+}
+
+.ms-page .ms-bub-wrap .ms-msg {
+    max-width: 100%;
+}
+
+.ms-page .ms-msg.is-img img {
+    max-width: 320px;
+    max-height: 360px;
+}
+
+.ms-page .ms-win-foot {
+    padding: 10px 14px 14px;
+}
+
+.ms-page .ms-emoji.is-input,
+.ms-page .ms-emoji.is-react {
+    left: auto;
+    right: 14px;
+    width: 340px;
+    bottom: 64px;
+}
+
+.ms-pchat-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.ms-pchat-info .ms-info {
+    padding-top: 12px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.ms-info-close {
+    display: none;
+}
+
+/* nothing picked yet */
+.ms-page-pick {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    padding: 24px;
+}
+
+.ms-page-icon {
+    display: grid;
+    place-items: center;
+    width: 88px;
+    height: 88px;
+    margin-bottom: 8px;
+    border-radius: 50%;
+    background: rgba(8, 102, 255, .1);
+    color: var(--ms-blue);
+}
+
+.ms-page-pick h3 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.ms-page-pick p {
+    margin: 0 0 10px;
+    color: var(--ms-muted);
+}
+
+.ms-page-btns {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+.ms-page-btns .ms-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+@media (max-width: 1180px) {
+
+    /* narrower: the info panel slides over from the right */
+    .ms-pchat.has-info {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ms-info-close {
+        display: inline-flex;
+    }
+
+    .ms-pchat-info {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1300;
+        width: min(360px, 100vw);
+        border-radius: 0 !important;
+        box-shadow: -8px 0 24px rgba(0, 0, 0, .2) !important;
+    }
+}
+
+@media (max-width: 860px) {
+    .ms-page {
+        grid-template-columns: minmax(0, 1fr);
+        height: calc(100vh - 130px);
+    }
+
+    .ms-page.has-chat .ms-page-side {
+        display: none;
+    }
+
+    /* phones: list OR chat */
+    .ms-page:not(.has-chat) .ms-page-main {
+        display: none;
+    }
+
+    .ms-page-back {
+        display: grid;
+    }
+}
+
+.ms-conv,
+.ms-pick-row,
+.ms-win *,
+.ms-list *,
+.ms-page * {
+    box-sizing: border-box;
+}
+
+/* ---------- files in chat ---------- */
+.ms-filebadge {
+    display: grid;
+    place-items: center;
+    flex: none;
+    border-radius: 8px;
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: .02em;
+}
+
+.ms-msg:has(.ms-filemsg) {
+    padding: 6px;
+}
+
+.ms-filemsg {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 190px;
+    max-width: 260px;
+    padding: 4px 8px 4px 4px;
+    color: inherit !important;
+    text-decoration: none !important;
+}
+
+.ms-filemsg span {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.ms-filemsg strong {
+    overflow: hidden;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ms-filemsg small {
+    opacity: .75;
+    font-size: 12px;
+}
+
+.ms-filemsg:hover strong {
+    text-decoration: underline;
+}
+
+.ms-file.is-doc {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 150px;
+    padding: 0 8px 0 10px;
+    border-radius: 8px;
+    background: var(--ms-soft);
+}
+
+.ms-file-name {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------- chat info: FB-style sections ---------- */
+.ms-quick {
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    margin: -4px 0 12px;
+}
+
+.ms-quick button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    background: none;
+    color: var(--ms-text);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.ms-quick button span {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--ms-soft);
+}
+
+.ms-quick button:hover span {
+    filter: brightness(.95);
+}
+
+.ms-quick button.is-on span {
+    background: rgba(8, 102, 255, .14);
+    color: var(--ms-blue);
+}
+
+.ms-sec {
+    border-radius: 8px;
+}
+
+.ms-sec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--ms-text);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ms-sec-head:hover {
+    background: var(--ms-hover);
+}
+
+.ms-sec-head svg {
+    transition: transform .15s;
+    color: var(--ms-muted);
+}
+
+.ms-sec.is-open .ms-sec-head svg {
+    transform: rotate(180deg);
+}
+
+.ms-sec-body {
+    padding: 2px 8px 10px;
+}
+
+.ms-kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 13.5px;
+}
+
+.ms-kv span {
+    color: var(--ms-muted);
+}
+
+.ms-add-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.ms-leave {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+/* Media / Files / Links */
+.ms-shared-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--ms-soft);
+}
+
+.ms-shared-tabs button {
+    flex: 1;
+    padding: 6px 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--ms-muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ms-shared-tabs button.is-on {
+    background: var(--ms-bg);
+    color: var(--ms-text);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+}
+
+.ms-media-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ms-media-grid button {
+    aspect-ratio: 1;
+    padding: 0;
+    border: 0;
+    background: var(--ms-soft);
+    cursor: zoom-in;
+}
+
+.ms-media-grid img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.ms-media-grid button:hover img {
+    opacity: .85;
+}
+
+.ms-shared-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 6px;
+    border-radius: 8px;
+    color: var(--ms-text) !important;
+    text-decoration: none !important;
+}
+
+.ms-shared-row:hover {
+    background: var(--ms-hover);
+}
+
+.ms-shared-row>svg {
+    flex: none;
+    color: var(--ms-muted);
+}
+
+.ms-shared-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    line-height: 1.3;
+}
+
+.ms-shared-body strong {
+    overflow: hidden;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ms-shared-body small {
+    overflow: hidden;
+    color: var(--ms-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ms-linkbadge {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--ms-soft);
+    color: var(--ms-muted);
+}
+
+.ms-more {
+    width: 100%;
+    margin-top: 8px;
+}
+
+.ms-shared .ms-empty {
+    padding: 14px 6px;
+}

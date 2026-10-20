@@ -123,6 +123,8 @@ import UserLogs from "./pages/administration/UserLogs";
 import UserAccess from "./pages/administration/UserAccess";
 import DatabaseSettings from "./pages/administration/DatabaseSettings";
 
+import { MessengerPage } from "./components/Messenger";
+
 // Built pages. Add new ones here as you make them;
 // everything else in the sidebar shows "Coming soon".
 const PAGES = {
@@ -282,6 +284,7 @@ export default function App() {
         {/* Invoice page: /task/sales/new and /task/sales/INV-0001 */}
         <Route path="/task/sales/:id" element={<SalesDetail />} />
         <Route path="*" element={<NotFound />} />
+        <Route path="/messenger" element={<MessengerPage />} />
       </Route>
     </Routes>
   );
