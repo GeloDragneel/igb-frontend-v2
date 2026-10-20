@@ -115,10 +115,14 @@ export default function BillingDashboard() {
   useEffect(() => { load(); }, [load]);
 
   const t = soa?.transaction;
-  const accountOpts = useMemo(() => [{ value: "", label: "— Select account —" }, ...accounts.map((a) => ({
-    value: String(a.id),
-    label: `${a.client_name || "—"} — ${a.trade_name || "—"}${a.branch_code ? ` | ${a.branch_code}` : ""}`,
-  }))], [accounts]);
+  // 2 lines per account:  Trade name - Branch code  /  client name (smaller, grey) – sorted by trade name
+  const accountOpts = useMemo(() => [{ value: "", label: "— Select account —" }, ...[...accounts]
+    .sort((a, b) => `${a.trade_name || ""} ${a.branch_code || ""}`.localeCompare(`${b.trade_name || ""} ${b.branch_code || ""}`))
+    .map((a) => ({
+      value: String(a.id),
+      label: `${a.trade_name || "—"}${a.branch_code ? ` (${a.branch_code})` : ""}`,
+      hint: a.client_name || "—",
+    }))], [accounts]);
   const periodOpts = [{ value: "", label: caid ? "All periods" : "Pick an account first" },
   ...(account?.periods || []).map((p) => ({ value: p.trans_number, label: `${p.service_period || p.trans_number} · ${p.trans_number}${p.is_paid ? " · closed" : ""}` }))];
 
@@ -197,8 +201,8 @@ export default function BillingDashboard() {
       {/* ---------- filters ---------- */}
       <section className="card bd-filters">
         <div className="bd-filter bd-filter-wide">
-          <span className="field-label">Account (client — trade name | branch)</span>
-          <SearchSelect value={caid} onChange={setCaid} options={accountOpts} searchPlaceholder="Search client, trade name or branch..." aria-label="Account" />
+          <span className="field-label">Account (trade name - branch · client)</span>
+          <SearchSelect value={caid} onChange={setCaid} options={accountOpts} searchPlaceholder="Search trade name, branch or client..." aria-label="Account" />
         </div>
         <div className="bd-filter">
           <span className="field-label">Service period (SOA)</span>
@@ -284,7 +288,7 @@ export default function BillingDashboard() {
           {!caid && (
             <div className="bd-pick">
               <b>Select an account</b>
-              <span>Pick a client — trade name | branch above to see its services and payments.</span>
+              <span>Pick an account (trade name - branch) above to see its services and payments.</span>
             </div>
           )}
           {caid && loading && <p className="bd-empty">Loading…</p>}

@@ -31,12 +31,10 @@
 
 /* ---------- header button ---------- */
 .ms-trigger {
-    color: var(--ms-blue, #0866ff);
+    color: inherit;
 }
 
-.ms-trigger.is-on {
-    background: rgba(8, 102, 255, .1);
-}
+/* same colour as the other header icons */
 
 /* ---------- avatars ---------- */
 .ms-av {
