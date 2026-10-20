@@ -22,7 +22,7 @@ const Spark = ({ size = 18 }) => (
 
 const time = (t) => {
     const d = t ? new Date(String(t).replace(" ", "T")) : new Date();
-    return isNaN(d) ? "" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return isNaN(d) ? "" : d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" });
 };
 
 /* **bold**, `code`, "- " / "1. " lists, blank lines – no HTML from the AI is ever injected */

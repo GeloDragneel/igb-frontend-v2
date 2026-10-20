@@ -4,12 +4,14 @@
 //   full page: <MessengerPage /> on /messenger (list · chat · info), shares the same live data.
 //   The open chat is kept in memory (not in the URL), so the app's tab bar shows ONE "Messenger" tab.
 // Real time: Pusher (private-emp.<employee id>) when the server has the keys, else polling.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Pusher from "pusher-js";
 import { useAuth, apiFetch, apiForm } from "../context/AuthContext";
 import { useToast } from "./Toast";
+import { Sticker, StickerPicker } from "./Stickers";
+import { GifPicker } from "./Gifs";
 import "./Messenger.css";
 
 const EMPLOYEE_TYPES = ["Staff", "ClientStaff"];
@@ -19,6 +21,8 @@ const POLL_MS = 4000;         // only when Pusher is not set up
 
 /* ---------------- small helpers ---------------- */
 
+const TZ = "Asia/Manila";                               // every time is shown in Philippine time
+const phDay = (d) => d.toLocaleDateString("en-CA", { timeZone: TZ });   // "2026-10-20"
 const toDate = (t) => (t ? new Date(String(t).replace(" ", "T")) : null);
 function ago(t) {
     const d = toDate(t);
@@ -27,17 +31,53 @@ function ago(t) {
     if (s < 60) return "now";
     if (s < 3600) return `${Math.floor(s / 60)}m`;
     if (s < 86400) return `${Math.floor(s / 3600)}h`;
-    if (s < 7 * 86400) return d.toLocaleDateString([], { weekday: "short" });
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    if (s < 7 * 86400) return d.toLocaleDateString("en-PH", { weekday: "short", timeZone: TZ });
+    return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", timeZone: TZ });
 }
 const activeText = (p) => (p?.online ? "Active now" : p?.last_seen ? `Active ${ago(p.last_seen)} ago`.replace("now ago", "just now") : "");
 function stamp(t) {
     const d = toDate(t);
     if (!d || isNaN(d)) return "";
-    const today = new Date().toDateString() === d.toDateString();
-    return today ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-        : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const today = phDay(new Date()) === phDay(d);
+    return today ? d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", timeZone: TZ })
+        : d.toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: TZ });
 }
+// chat themes (keys = MessengerController::THEMES): my bubbles + the buttons in that chat
+const THEMES = {
+    default: { name: "Default", mine: "linear-gradient(180deg, #0a7cff 0%, #0866ff 100%)", accent: "#0866ff" },
+    ocean: { name: "Ocean", mine: "linear-gradient(160deg, #00c6ff 0%, #0072ff 100%)", accent: "#0072ff" },
+    berry: { name: "Berry", mine: "linear-gradient(160deg, #ff5ea8 0%, #a445ff 100%)", accent: "#c23bff" },
+    sunset: { name: "Sunset", mine: "linear-gradient(160deg, #ffb347 0%, #ff5f6d 100%)", accent: "#f2545b" },
+    forest: { name: "Forest", mine: "linear-gradient(160deg, #3fbf6f 0%, #12855a 100%)", accent: "#16935f" },
+    grape: { name: "Grape", mine: "linear-gradient(160deg, #8f6bff 0%, #5b2bd6 100%)", accent: "#6a3df0" },
+    rose: { name: "Rose", mine: "linear-gradient(160deg, #ff8fa3 0%, #e0245e 100%)", accent: "#e0245e" },
+    teal: { name: "Teal", mine: "linear-gradient(160deg, #2dd4bf 0%, #0d9488 100%)", accent: "#0d9488" },
+    tangerine: { name: "Tangerine", mine: "linear-gradient(160deg, #ffa53a 0%, #f76b1c 100%)", accent: "#f2711c" },
+    midnight: { name: "Midnight", mine: "linear-gradient(160deg, #475569 0%, #0f172a 100%)", accent: "#334155" },
+    igb: { name: "IGB", mine: "linear-gradient(160deg, #6366f1 0%, #8b5cf6 55%, #d946ef 100%)", accent: "#7c3aed" },
+};
+// chat backgrounds (keys = MessengerController::BACKGROUNDS); dark ones switch the small labels to light text
+const svgBg = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+const BACKGROUNDS = {
+    none: { name: "None", css: "" },
+    sky: { name: "Sky", css: "linear-gradient(180deg, #e0f2ff 0%, #f5fbff 100%)" },
+    blush: { name: "Blush", css: "linear-gradient(180deg, #ffe4ec 0%, #fff6f8 100%)" },
+    mint: { name: "Mint", css: "linear-gradient(180deg, #dcfce7 0%, #f3fff7 100%)" },
+    sand: { name: "Sand", css: "linear-gradient(180deg, #fdf0d5 0%, #fffaf0 100%)" },
+    lavender: { name: "Lavender", css: "linear-gradient(180deg, #ede9fe 0%, #faf8ff 100%)" },
+    aurora: { name: "Aurora", css: "radial-gradient(at 15% 10%, #c7f9e9 0, transparent 45%), radial-gradient(at 85% 20%, #dbe4ff 0, transparent 45%), radial-gradient(at 50% 95%, #fde2f3 0, transparent 50%), #f8fafc" },
+    peach: { name: "Peach", css: "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)" },
+    dots: { name: "Dots", css: `${svgBg("<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><circle cx='2' cy='2' r='1.6' fill='#c7cdd8'/></svg>")}, #f7f8fa` },
+    grid: { name: "Grid", css: `${svgBg("<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26'><path d='M26 0H0V26' fill='none' stroke='#e3e7ee' stroke-width='1'/></svg>")}, #fbfcfe` },
+    waves: { name: "Waves", css: `${svgBg("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='40'><path d='M0 20 Q20 0 40 20 T80 20' fill='none' stroke='#d6e4ff' stroke-width='2'/></svg>")}, #f4f8ff` },
+    night: { name: "Night", css: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)", dark: true },
+    galaxy: { name: "Galaxy", css: `${svgBg("<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><g fill='#ffffff'><circle cx='10' cy='14' r='1'/><circle cx='70' cy='30' r='1.3'/><circle cx='100' cy='90' r='.9'/><circle cx='40' cy='80' r='1.1'/><circle cx='90' cy='8' r='.8'/><circle cx='22' cy='108' r='.9'/></g></svg>")}, radial-gradient(at 30% 20%, #4c1d95 0, transparent 55%), radial-gradient(at 80% 80%, #1e3a8a 0, transparent 55%), #0b1020`, dark: true },
+};
+const bgOf = (key) => BACKGROUNDS[key] || BACKGROUNDS.none;
+
+const themeOf = (key) => THEMES[key] || THEMES.default;
+const themeStyle = (key) => { const t = themeOf(key); return { "--ms-mine": t.mine, "--ms-blue": t.accent }; };
+
 const DOC_EXT = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "txt", "ppt", "pptx", "zip", "rar", "7z", "odt", "ods", "rtf", "xml", "json"];
 const DOC_ACCEPT = DOC_EXT.map((e) => `.${e}`).join(",");
 const extOf = (n = "") => (n.split(".").pop() || "").toLowerCase();
@@ -128,6 +168,11 @@ const I = {
     download: <><path d="M12 3v12" /><path d="M7 10l5 5 5-5" /><path d="M5 21h14" /></>,
     bell: <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" /></>,
     logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></>,
+    forward: <><path d="M15 14l5-5-5-5" /><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5V20" /></>,
+    copy: <><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></>,
+    trash: <><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /></>,
+    gif: <><rect x="2.5" y="5" width="19" height="14" rx="3.5" /><text x="12" y="15.2" textAnchor="middle" fontSize="7.6" fontWeight="800" fontFamily="Arial, Helvetica, sans-serif" fill="currentColor" stroke="none" letterSpacing=".2">GIF</text></>,
+    sticker: <><path d="M14 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h6l8-8V7a4 4 0 0 0-4-4h-3z" /><path d="M13 21v-4a4 4 0 0 1 4-4h4" /><path d="M8.5 13.5s1.2 1.5 3 1.5" /><path d="M9 9h.01M14 9h.01" strokeWidth="2.6" /></>,
     expand: <><path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" /></>,
     pin: <><path d="M12 17v5" /><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z" /></>,
 };
@@ -187,12 +232,14 @@ function MessengerInner() {
     const [unread, setUnread] = useState(0);
     const [online, setOnline] = useState([]);
     const [rt, setRt] = useState(false);                 // Pusher connected
+    const [limits, setLimits] = useState({ post: 0, file: 0 });   // php.ini post_max_size / upload_max_filesize (bytes)
     const [convs, setConvs] = useState(null);            // chat list (loaded on first open)
     const [chats, setChats] = useState({});              // id → { conversation, members, messages, hasMore, typing }
     const [wins, setWins] = useState([]);                // [{ id, min }]
     const [listOpen, setListOpen] = useState(false);
     const [modal, setModal] = useState(null);            // "message" | "group" | { add: conversationId }
     const [lightbox, setLightbox] = useState(null);
+    const [forwardMsg, setForwardMsg] = useState(null);  // message being forwarded
     const chatsRef = useRef(chats); chatsRef.current = chats;
     const winsRef = useRef(wins); winsRef.current = wins;
     const meRef = useRef(me); meRef.current = me;
@@ -203,6 +250,7 @@ function MessengerInner() {
         try {
             const r = await apiFetch("/messenger/summary");
             setMe(r.me); setUnread(r.unread || 0); setOnline(r.online || []);
+            if (r.limits) setLimits((cur) => (cur.post === r.limits.post && cur.file === r.limits.file ? cur : r.limits));
             if (r.pusher && !pusherCfg.current) pusherCfg.current = r.pusher;
             return r;
         } catch { return null; }
@@ -220,7 +268,7 @@ function MessengerInner() {
 
     const putPayload = useCallback((r) => {
         const id = r.conversation.id;
-        setChat(id, (cur) => ({ typing: {}, ...cur, conversation: r.conversation, members: r.members, messages: r.messages, hasMore: r.has_more }));
+        setChat(id, (cur) => ({ typing: {}, ...cur, conversation: r.conversation, members: r.members, messages: r.messages, hasMore: r.has_more, pinned: r.pinned || [] }));
         return id;
     }, [setChat]);
 
@@ -330,7 +378,7 @@ function MessengerInner() {
                 try {
                     const r = await apiFetch(`/messenger/conversations/${w.id}?after_id=${last}`);
                     setChat(w.id, (cur) => cur && ({
-                        ...cur, conversation: r.conversation, members: r.members,
+                        ...cur, conversation: r.conversation, members: r.members, pinned: r.pinned || cur.pinned || [],
                         messages: cur.messages.map((m) => (r.changed || []).find((x) => x.id === m.id) || (r.unsent.includes(m.id) ? { ...m, unsent: true, body: null, image: null } : m)),
                     }));
                     receive(w.id, r.messages);
@@ -378,8 +426,8 @@ function MessengerInner() {
 
     const value = useMemo(() => ({
         me, unread, online, rt, convs, chats, wins, setChat, loadConvs, loadChat, loadSummary, openChat, closeChat, toggleMin,
-        openDirect, putPayload, receive, setModal, setLightbox, setListOpen, notify, togglePin, onPage, pageChat, setPageChat, openPage, navigate,
-    }), [me, unread, online, rt, convs, chats, wins, setChat, loadConvs, loadChat, loadSummary, openChat, openDirect, putPayload, receive, notify, togglePin, onPage, pageChat, openPage, navigate]);
+        openDirect, putPayload, receive, setModal, setLightbox, setListOpen, notify, togglePin, onPage, pageChat, setPageChat, openPage, navigate, limits, setForwardMsg,
+    }), [me, unread, online, rt, convs, chats, wins, setChat, loadConvs, loadChat, loadSummary, openChat, openDirect, putPayload, receive, notify, togglePin, onPage, pageChat, openPage, navigate, limits]);
 
     useEffect(() => { publish(value); }, [value]);
     useEffect(() => () => publish(null), []);
@@ -394,6 +442,7 @@ function MessengerInner() {
                 document.body
             )}
             {modal && createPortal(<PeopleModal mode={modal} onClose={() => setModal(null)} />, document.body)}
+            {forwardMsg && createPortal(<ForwardModal msg={forwardMsg} onClose={() => setForwardMsg(null)} />, document.body)}
             {lightbox && createPortal(
                 <div className="ms-lightbox" onClick={() => setLightbox(null)} role="dialog" aria-label="Photo">
                     <img src={lightbox} alt="" />
@@ -438,9 +487,12 @@ function HeaderButton({ open, setOpen }) {
 
 /* ================= chat list (header dropdown + Messenger page) ================= */
 
+const FILTERS = [["all", "All"], ["unread", "Unread"], ["people", "People"], ["groups", "Groups"]];
+
 function ChatList({ onPick, selected = null, page = false }) {
     const { convs, loadConvs, openDirect, setModal, togglePin } = useMs();
     const [q, setQ] = useState("");
+    const [filter, setFilter] = useState("all");
     const [people, setPeople] = useState([]);
 
     useEffect(() => {
@@ -449,7 +501,10 @@ function ChatList({ onPick, selected = null, page = false }) {
     }, [loadConvs]);
 
     const term = q.trim().toLowerCase();
-    const shown = (convs || []).filter((c) => !term || c.name.toLowerCase().includes(term));
+    const shown = (convs || []).filter((c) => (!term || c.name.toLowerCase().includes(term))
+        && (filter === "all" || (filter === "unread" && c.unread > 0) || (filter === "people" && !c.is_group) || (filter === "groups" && c.is_group)))
+        .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));      // pinned on top (stable: keeps newest-first inside)
+    const counts = { unread: (convs || []).filter((c) => c.unread > 0).length, groups: (convs || []).filter((c) => c.is_group).length };
     const directIds = new Set((convs || []).filter((c) => !c.is_group).map((c) => c.other?.id));
     const peopleHits = term ? people.filter((p) => p.name.toLowerCase().includes(term) && !directIds.has(p.id)).slice(0, 8) : [];
     const activeNow = people.filter((p) => p.online);
@@ -466,7 +521,15 @@ function ChatList({ onPick, selected = null, page = false }) {
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Messenger" aria-label="Search Messenger" />
             </label>
 
-            {!term && activeNow.length > 0 && (
+            <div className="ms-filters" role="tablist" aria-label="Show">
+                {FILTERS.map(([k, l]) => (
+                    <button key={k} role="tab" aria-selected={filter === k} className={filter === k ? "is-on" : ""} onClick={() => setFilter(k)}>
+                        {l}{k === "unread" && counts.unread > 0 && <b>{counts.unread}</b>}
+                    </button>
+                ))}
+            </div>
+
+            {!term && filter !== "groups" && activeNow.length > 0 && (
                 <div className="ms-active" aria-label="Active now">
                     {activeNow.map((p) => (
                         <button key={p.id} className="ms-active-p" onClick={() => openDirect(p.id)} title={p.name}>
@@ -480,21 +543,27 @@ function ChatList({ onPick, selected = null, page = false }) {
             <div className="ms-convs">
                 {convs === null && <div className="ms-empty">Loading…</div>}
                 {convs && shown.length === 0 && peopleHits.length === 0 && (
-                    <div className="ms-empty">{term ? "No results." : "No chats yet. Start one with the pencil button."}</div>
+                    <div className="ms-empty">{term ? "No results." : filter === "unread" ? "No unread chats. 🎉" : filter === "groups" ? "No group chats yet. Make one with the group button." : filter === "people" ? "No direct chats yet." : "No chats yet. Start one with the pencil button."}</div>
                 )}
-                {shown.map((c) => (
-                    <div key={c.id} role="button" tabIndex={0} aria-current={selected === c.id ? "true" : undefined}
-                        className={`ms-conv${c.unread ? " is-unread" : ""}${c.pinned ? " is-pinned" : ""}${selected === c.id ? " is-selected" : ""}`}
-                        onClick={() => onPick(c.id)} onKeyDown={(e) => e.key === "Enter" && onPick(c.id)}>
-                        <ConvAvatar c={c} size={page ? 56 : 52} />
-                        <span className="ms-conv-body">
-                            <span className="ms-conv-name">{c.pinned && <span className="ms-pin-mark" title="Pinned"><Svg i="pin" size={12} /></span>}{c.name}</span>
-                            <span className="ms-conv-last"><span className="ms-ellipsis">{c.preview || (c.is_group ? `${c.members} members` : "")}</span>{c.time && <span className="ms-conv-time">{"\u00a0· "}{ago(c.time)}</span>}</span>
-                        </span>
-                        <button className={`ms-pin-btn${c.pinned ? " is-on" : ""}`} onClick={(e) => { e.stopPropagation(); togglePin(c.id, !c.pinned); }}
-                            title={c.pinned ? "Unpin chat" : "Pin chat"} aria-label={c.pinned ? `Unpin ${c.name}` : `Pin ${c.name}`}><Svg i="pin" size={15} /></button>
-                        {c.unread > 0 && <i className="ms-unread-dot" aria-label={`${c.unread} unread`} />}
-                    </div>
+                {shown.map((c, i) => (
+                    <Fragment key={c.id}>
+                        {filter === "all" && !term && (i === 0 || shown[i - 1].pinned !== c.pinned) && (
+                            <div className="ms-sub">{c.pinned ? "Pinned" : "Recent"}</div>
+                        )}
+                        <div role="button" tabIndex={0} aria-current={selected === c.id ? "true" : undefined}
+                            className={`ms-conv${c.unread ? " is-unread" : ""}${c.pinned ? " is-pinned" : ""}${selected === c.id ? " is-selected" : ""}`}
+                            onClick={() => onPick(c.id)} onKeyDown={(e) => e.key === "Enter" && onPick(c.id)}>
+                            <ConvAvatar c={c} size={page ? 56 : 52} />
+                            <span className="ms-conv-body">
+                                <span className="ms-conv-name">{c.pinned && <span className="ms-pin-mark" title="Pinned"><Svg i="pin" size={12} /></span>}{c.name}</span>
+                                <span className="ms-conv-last"><span className="ms-ellipsis">{c.preview || (c.is_group ? `${c.members} members` : "")}</span>{c.time && <span className="ms-conv-time">{"\u00a0· "}{ago(c.time)}</span>}</span>
+                            </span>
+                            <button className={`ms-pin-btn${c.pinned ? " is-on" : ""}`} onClick={(e) => { e.stopPropagation(); togglePin(c.id, !c.pinned); }}
+                                title={c.pinned ? "Unpin chat" : "Pin chat"} aria-label={c.pinned ? `Unpin ${c.name}` : `Pin ${c.name}`}><Svg i="pin" size={15} /></button>
+                            {c.unread > 0 && <i className="ms-unread-dot" aria-label={`${c.unread} unread`} />}
+                            {c.is_group && <span className="ms-group-tag" title="Group chat">Group</span>}
+                        </div>
+                    </Fragment>
                 ))}
                 {peopleHits.length > 0 && <div className="ms-sub">People</div>}
                 {peopleHits.map((p) => (
@@ -511,7 +580,7 @@ function ChatList({ onPick, selected = null, page = false }) {
 /* ================= one chat window ================= */
 
 function ChatWindow({ win, page = false }) {
-    const { me, rt, chats, setChat, closeChat, toggleMin, loadSummary, loadConvs, receive, setLightbox, notify, setModal, putPayload, setPageChat, openPage } = useMs();
+    const { me, rt, chats, setChat, closeChat, toggleMin, loadSummary, loadConvs, receive, setLightbox, notify, setModal, putPayload, setPageChat, openPage, limits, setForwardMsg } = useMs();
     const c = chats[win.id];
     const body = useRef(null);
     const input = useRef(null);
@@ -523,6 +592,8 @@ function ChatWindow({ win, page = false }) {
     const [loadingOld, setLoadingOld] = useState(false);
     const [replyTo, setReplyTo] = useState(null);        // message being replied to
     const [emojiOpen, setEmojiOpen] = useState(false);   // emoji picker for the text box
+    const [stickerOpen, setStickerOpen] = useState(false); // sticker tray
+    const [gifOpen, setGifOpen] = useState(false);         // GIF tray
     const [reactFor, setReactFor] = useState(null);      // message id with the reaction bar open
     const [reactMore, setReactMore] = useState(null);    // message id with the full emoji list (react)
     const lastTyping = useRef(0);
@@ -551,6 +622,9 @@ function ChatWindow({ win, page = false }) {
             .then(() => { loadSummary(); loadConvs(); }).catch(() => { });
     }, [lastId, win.min, win.id, c, setChat, loadSummary, loadConvs]);
 
+    // photos / GIFs get taller when they finish loading → stay at the bottom if we were there
+    const keepBottom = () => { if (atBottom.current && body.current) body.current.scrollTop = body.current.scrollHeight; };
+
     const onScroll = async (e) => {
         const el = e.currentTarget;
         atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -567,22 +641,44 @@ function ChatWindow({ win, page = false }) {
         }
     };
 
-    // photos (≤ 10 MB) and documents (PDF, Word, Excel… ≤ 20 MB); max 10 at a time
+    // size limits: our own (photo 10 MB, file 20 MB) and the server's php.ini (one file / everything sent together)
+    const MB = 1048576;
+    const photoMax = Math.min(10 * MB, limits.file || Infinity);
+    const docMax = Math.min(20 * MB, limits.file || Infinity);
+    const totalMax = limits.post ? limits.post - 64 * 1024 : Infinity;     // room for the text and form fields
+    const mb = (b) => `${(b / MB).toFixed(b < 10 * MB ? 1 : 0)} MB`;
+    const [sizeError, setSizeError] = useState("");
+
+    // photos and documents (PDF, Word, Excel…); max 10 at a time
     const addFiles = (list) => {
         const all = [...list];
-        const imgs = all.filter((f) => f.type.startsWith("image/") && f.size <= 10 * 1024 * 1024);
-        const docs = all.filter((f) => !f.type.startsWith("image/") && DOC_EXT.includes(extOf(f.name)) && f.size <= 20 * 1024 * 1024);
-        const skipped = all.length - imgs.length - docs.length;
-        if (skipped) notify(`${skipped} file(s) skipped: photos up to 10 MB; PDF, Word, Excel, CSV, PowerPoint, TXT or ZIP up to 20 MB.`, "error");
-        setFiles((cur) => [...cur,
-        ...imgs.map((file) => ({ file, kind: "image", url: URL.createObjectURL(file) })),
-        ...docs.map((file) => ({ file, kind: "file", url: `doc-${file.name}-${file.size}-${Math.random()}` })),
-        ].slice(0, 10));
+        const errs = [];
+        const ok = [];
+        let total = files.reduce((a, f) => a + f.file.size, 0);
+        for (const f of all) {
+            const isImg = f.type.startsWith("image/");
+            if (!isImg && !DOC_EXT.includes(extOf(f.name))) { errs.push(`${f.name}: this file type can't be sent.`); continue; }
+            const max = isImg ? photoMax : docMax;
+            if (f.size > max) { errs.push(`${f.name} is too big (${mb(f.size)}). Max ${mb(max)} per ${isImg ? "photo" : "file"}.`); continue; }
+            if (total + f.size > totalMax) { errs.push(`${f.name} wasn't added: all files together can be up to ${mb(totalMax)} per message. Send it in another message.`); continue; }
+            if (files.length + ok.length >= 10) { errs.push("Up to 10 photos or files per message."); break; }
+            total += f.size;
+            ok.push(f);
+        }
+        setSizeError(errs.join("\n"));
+        if (ok.length) setFiles((cur) => [...cur,
+        ...ok.map((file) => (file.type.startsWith("image/")
+            ? { file, kind: "image", url: URL.createObjectURL(file) }
+            : { file, kind: "file", url: `doc-${file.name}-${file.size}-${Math.random()}` })),
+        ]);
     };
 
     const send = async (override) => {
         const body_ = (override ?? text).trim();
         if (!body_ && !files.length) return;
+        const total = files.reduce((a, f) => a + f.file.size, 0);
+        if (total > totalMax) { setSizeError(`Too big: ${mb(total)} in this message. Max ${mb(totalMax)} – remove some files and send them separately.`); return; }
+        setSizeError("");
         const tempId = `t${Date.now()}`;
         const reply = replyTo ? { id: replyTo.id, sender_id: replyTo.sender_id, sender: replyTo.sender, type: replyTo.type, body: replyTo.body, image: replyTo.image, file_name: replyTo.file_name } : null;
         const temps = [
@@ -611,9 +707,33 @@ function ChatWindow({ win, page = false }) {
             loadConvs();
         } catch (e) {
             setChat(win.id, (cur) => cur && ({ ...cur, messages: cur.messages.map((m) => (String(m.id).startsWith(tempId) ? { ...m, pending: false, failed: true } : m)) }));
-            notify(e.message || "Message not sent.", "error");
+            // PHP refuses big uploads with a warning page (not JSON) → say it plainly
+            const msg = String(e?.message || "");
+            const tooBig = e?.status === 413 || /Content-Length|exceeds|too large|Unexpected token|JSON/i.test(msg);
+            if (tooBig) setSizeError("Too big for the server. Send fewer or smaller files at a time.");
+            notify(tooBig ? "Files too big – not sent." : msg || "Message not sent.", "error");
         } finally {
             sending.forEach((f) => f.kind === "image" && setTimeout(() => URL.revokeObjectURL(f.url), 60000));
+        }
+    };
+
+    // a sticker / GIF goes out straight away (like FB), on its own
+    const sendGif = (url) => sendSticker(url, "gif");
+    const sendSticker = async (k, kind = "sticker") => {
+        setStickerOpen(false); setGifOpen(false);
+        const tempId = `t${Date.now()}`;
+        const reply = replyTo ? { id: replyTo.id, sender_id: replyTo.sender_id, sender: replyTo.sender, type: replyTo.type, body: replyTo.body, image: replyTo.image, file_name: replyTo.file_name } : null;
+        setChat(win.id, (cur) => cur && ({ ...cur, messages: [...cur.messages, { id: tempId, type: kind, body: k, sender_id: me, pending: true, time: new Date().toISOString(), reply }] }));
+        setReplyTo(null);
+        atBottom.current = true;
+        try {
+            const r = await apiFetch(`/messenger/conversations/${win.id}/messages`, { method: "POST", body: JSON.stringify({ [kind]: k, reply_to_id: reply?.id || null }) });
+            setChat(win.id, (cur) => cur && ({ ...cur, messages: cur.messages.filter((m) => m.id !== tempId) }));
+            receive(win.id, r.messages, { sound: false });
+            loadConvs();
+        } catch (e) {
+            setChat(win.id, (cur) => cur && ({ ...cur, messages: cur.messages.map((m) => (m.id === tempId ? { ...m, pending: false, failed: true } : m)) }));
+            notify(e.message || (kind === "gif" ? "GIF not sent." : "Sticker not sent."), "error");
         }
     };
 
@@ -624,6 +744,12 @@ function ChatWindow({ win, page = false }) {
             apiFetch(`/messenger/conversations/${win.id}/typing`, { method: "POST" }).catch(() => { });
         }
     };
+
+    const pinMsg = async (m, on) => {
+        try { putPayload(await apiFetch(`/messenger/messages/${m.id}/pin`, { method: "POST", body: JSON.stringify({ pinned: on }) })); notify(on ? "Message pinned" : "Message unpinned"); }
+        catch (e) { notify(e.message || "Couldn't pin the message.", "error"); }
+    };
+    const [pinIdx, setPinIdx] = useState(0);
 
     const unsend = async (m) => {
         try {
@@ -657,13 +783,74 @@ function ChatWindow({ win, page = false }) {
     const startReply = (m) => { setReplyTo(m); setTimeout(() => input.current?.focus(), 0); };
 
     // jump to the original message of a reply (when it's loaded)
-    const jumpTo = (id) => {
-        const el = body.current?.querySelector(`[data-mid="${id}"]`);
-        if (!el) return notify("That message is further up. Scroll up to load it.");
+    const flash = (el) => {
         el.scrollIntoView({ block: "center", behavior: "smooth" });
         el.classList.add("is-flash");
-        setTimeout(() => el.classList.remove("is-flash"), 1400);
+        setTimeout(() => el.classList.remove("is-flash"), 1600);
     };
+
+    // jump to a message; older ones are loaded page by page until it's there
+    const jumpTo = async (id) => {
+        const find = () => body.current?.querySelector(`[data-mid="${id}"]`);
+        if (find()) return flash(find());
+        atBottom.current = false;
+        let cur = chats[win.id];
+        for (let n = 0; n < 40 && cur?.hasMore && !cur.messages.some((m) => m.id === id); n++) {
+            const first = cur.messages.find((m) => typeof m.id === "number")?.id;
+            try {
+                const r = await apiFetch(`/messenger/conversations/${win.id}?before_id=${first}`);
+                cur = { ...cur, messages: [...r.messages, ...cur.messages], hasMore: r.has_more };
+            } catch { break; }
+        }
+        if (cur && cur !== chats[win.id]) setChat(win.id, (x) => x && ({ ...x, messages: cur.messages, hasMore: cur.hasMore }));
+        setTimeout(() => (find() ? flash(find()) : notify("Couldn't find that message.")), 80);
+    };
+
+    // search in this conversation
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [sq, setSq] = useState("");
+    const [hits, setHits] = useState(null);
+    const searchRef = useRef(null);
+    useEffect(() => {
+        if (!searchOpen) { setSq(""); setHits(null); return; }
+        setTimeout(() => searchRef.current?.focus(), 30);
+    }, [searchOpen]);
+    useEffect(() => {
+        const q = sq.trim();
+        if (q.length < 2) { setHits(null); return; }
+        const t = setTimeout(() => {
+            apiFetch(`/messenger/conversations/${win.id}/search?q=${encodeURIComponent(q)}`).then((r) => setHits(r.items)).catch(() => setHits([]));
+        }, 300);
+        return () => clearTimeout(t);
+    }, [sq, win.id]);
+    const mark = (text) => {
+        const q = sq.trim();
+        if (!q) return text;
+        const parts = String(text).split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig"));
+        return parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : <Fragment key={i}>{p}</Fragment>));
+    };
+    const searchBar = searchOpen && (
+        <div className="ms-csearch">
+            <div className="ms-csearch-bar">
+                <Svg i="search" size={16} />
+                <input ref={searchRef} value={sq} onChange={(e) => setSq(e.target.value)} placeholder="Search in conversation"
+                    onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setSearchOpen(false); } if (e.key === "Enter" && hits?.[0]) jumpTo(hits[0].id); }} />
+                {hits && <small>{hits.length >= 50 ? "50+" : hits.length} found</small>}
+                <button type="button" className="ms-icon" onClick={() => setSearchOpen(false)} aria-label="Close search"><Svg i="x" size={16} /></button>
+            </div>
+            {hits && (
+                <div className="ms-csearch-list">
+                    {hits.length === 0 && <div className="ms-empty">No messages found.</div>}
+                    {hits.map((h) => (
+                        <button key={h.id} type="button" onClick={() => jumpTo(h.id)}>
+                            <span className="ms-csearch-top"><strong>{h.sender}</strong><small>{stamp(h.time)}</small></span>
+                            <span className="ms-csearch-text">{h.type === "file" && "📎 "}{mark(h.text)}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 
     const insertEmoji = (e) => {
         const el = input.current;
@@ -708,11 +895,29 @@ function ChatWindow({ win, page = false }) {
 
     const leave = () => (page ? setPageChat(null) : closeChat(win.id));
     const info_ = conv && (
-        <ChatInfo c={c} page={page} onBack={() => setInfo(false)} onAdd={() => setModal({ add: win.id })} putPayload={putPayload} closeChat={leave} />
+        <ChatInfo c={c} page={page} onBack={() => setInfo(false)} onAdd={() => setModal({ add: win.id })} putPayload={putPayload} closeChat={leave}
+            onSearch={() => { if (!page) setInfo(false); setSearchOpen(true); }}
+            onJump={(id) => { if (!page) setInfo(false); setTimeout(() => jumpTo(id), 60); }} onUnpin={(id) => pinMsg({ id }, false)} />
+    );
+    const pins = c?.pinned || [];
+    const pin = pins.length ? pins[Math.min(pinIdx, pins.length - 1)] : null;
+    const pinBar = pin && (
+        <div className="ms-pinbar">
+            <span className="ms-pinbar-ico"><Svg i="pin" size={15} /></span>
+            <button type="button" className="ms-pinbar-main" title="Go to message"
+                onClick={() => { jumpTo(pin.id); setPinIdx((i) => (i + 1) % pins.length); }}>
+                <small>Pinned{pins.length > 1 ? ` · ${Math.min(pinIdx, pins.length - 1) + 1} of ${pins.length}` : ""}</small>
+                <span>{pin.type === "image" ? "📷 " : pin.type === "file" ? "📎 " : pin.type === "sticker" ? "🧩 " : pin.type === "gif" ? "🎞️ " : ""}<b>{pin.sender.split(" ")[0]}:</b> {pin.text}</span>
+            </button>
+            {pins.length > 1 && <button type="button" className="ms-pinbar-all" onClick={() => setInfo(true)}>See all</button>}
+        </div>
     );
     const main = (
         <>
-            <div className="ms-win-body" ref={body} onScroll={onScroll}>
+            {pinBar}
+            {searchBar}
+            <div className={`ms-win-body${bgOf(conv?.background).dark ? " is-darkbg" : ""}${conv?.background ? " has-bg" : ""}`} ref={body} onScroll={onScroll}
+                style={conv?.background ? { background: bgOf(conv.background).css } : undefined}>
                 {!c && <div className="ms-empty">Loading…</div>}
                 {c && !c.hasMore && conv && (
                     <div className="ms-intro">
@@ -737,22 +942,26 @@ function ChatWindow({ win, page = false }) {
                                 <div className={`ms-quote-row${own ? " is-me" : ""}`}>
                                     <span className="ms-quote-label"><Svg i="reply" size={11} /> {replyLabel(m)}</span>
                                     <button type="button" className="ms-quote" onClick={() => jumpTo(m.reply.id)}>
-                                        {m.reply.unsent ? <em>Message unsent</em> : m.reply.type === "image" ? (m.reply.image ? <img src={m.reply.image} alt="" /> : "Photo") : m.reply.type === "file" ? `📎 ${m.reply.file_name || "File"}` : m.reply.body}
+                                        {m.reply.unsent ? <em>Message unsent</em> : (m.reply.type === "image" || m.reply.type === "gif") ? (m.reply.image ? <img src={m.reply.image} alt="" /> : m.reply.type === "gif" ? "GIF" : "Photo") : m.reply.type === "file" ? `📎 ${m.reply.file_name || "File"}` : m.reply.type === "sticker" ? <Sticker k={m.reply.body} size={44} animate={false} /> : m.reply.body}
                                     </button>
                                 </div>
                             )}
                             <div data-mid={m.id} className={`ms-row${own ? " is-me" : ""}${firstOfRun ? " is-first" : ""}${lastOfRun ? " is-last" : ""}${(m.reactions || []).length ? " has-react" : ""}`}>
                                 {!own && <span className="ms-row-av">{lastOfRun && <Avatar name={m.sender} photo={m.photo} size={28} />}</span>}
-                                <div className="ms-bub-wrap">
-                                    <div className={`ms-msg${m.type === "image" && !m.unsent ? " is-img" : ""}${m.unsent ? " is-unsent" : ""}${m.pending ? " is-pending" : ""}${m.failed ? " is-failed" : ""}${!m.unsent && /^(\p{Extended_Pictographic}|\uFE0F|\u200D|\s){1,8}$/u.test(m.body || "") && m.type === "text" ? " is-big" : ""}`} title={stamp(m.time)}>
+                                <div className={`ms-bub-wrap${m.pinned ? " is-pinned" : ""}`}>
+                                    {m.forwarded && !m.unsent && <span className="ms-fwd"><Svg i="forward" size={11} /> Forwarded</span>}
+                                    {m.pinned && <span className="ms-pinned-mark" title="Pinned"><Svg i="pin" size={11} /></span>}
+                                    <div className={`ms-msg${m.type === "image" && !m.unsent ? " is-img" : ""}${m.type === "sticker" && !m.unsent ? " is-sticker" : ""}${m.type === "gif" && !m.unsent ? " is-img is-gif" : ""}${m.unsent ? " is-unsent" : ""}${m.pending ? " is-pending" : ""}${m.failed ? " is-failed" : ""}${!m.unsent && /^(\p{Extended_Pictographic}|\uFE0F|\u200D|\s){1,8}$/u.test(m.body || "") && m.type === "text" ? " is-big" : ""}`} title={stamp(m.time)}>
                                         {m.unsent ? (own ? "You unsent a message" : `${firstName(m.sender)} unsent a message`)
-                                            : m.type === "image" ? <img src={m.image} alt={m.file_name || "Photo"} onClick={() => setLightbox(m.image)} loading="lazy" />
-                                                : m.type === "file" ? (
-                                                    <a className="ms-filemsg" href={m.file || undefined} target="_blank" rel="noreferrer" download={m.file_name} onClick={(e) => !m.file && e.preventDefault()}>
-                                                        <FileBadge name={m.file_name} size={38} />
-                                                        <span><strong>{m.file_name}</strong><small>{fileSize(m.file_size)}{m.file ? " · Download" : ""}</small></span>
-                                                    </a>
-                                                ) : <Linkify text={m.body} />}
+                                            : m.type === "image" ? <img src={m.image} alt={m.file_name || "Photo"} onClick={() => setLightbox(m.image)} onLoad={keepBottom} />
+                                                : m.type === "sticker" ? <Sticker k={m.body} size={page ? 140 : 112} />
+                                                    : m.type === "gif" ? <img className="ms-gifmsg" src={m.body} alt="GIF" onClick={() => setLightbox(m.body)} onLoad={keepBottom} />
+                                                        : m.type === "file" ? (
+                                                            <a className="ms-filemsg" href={m.file || undefined} target="_blank" rel="noreferrer" download={m.file_name} onClick={(e) => !m.file && e.preventDefault()}>
+                                                                <FileBadge name={m.file_name} size={38} />
+                                                                <span><strong>{m.file_name}</strong><small>{fileSize(m.file_size)}{m.file ? " · Download" : ""}</small></span>
+                                                            </a>
+                                                        ) : <Linkify text={m.body} />}
                                     </div>
                                     {(m.reactions || []).length > 0 && (
                                         <button type="button" className="ms-reacts" onClick={() => setReactFor(reactFor === m.id ? null : m.id)}
@@ -775,7 +984,13 @@ function ChatWindow({ win, page = false }) {
                                     <span className="ms-actions">
                                         <button type="button" className="ms-emoji-btn" onClick={() => { setReactMore(null); setReactFor(reactFor === m.id ? null : m.id); }} title="React" aria-label="React"><Svg i="smile" size={16} /></button>
                                         <button type="button" onClick={() => startReply(m)} title="Reply" aria-label="Reply"><Svg i="reply" size={16} /></button>
-                                        {own && <button type="button" onClick={() => unsend(m)} title="Unsend" aria-label="Unsend message"><Svg i="more" size={16} /></button>}
+                                        <MsgMenu own={own}
+                                            items={[
+                                                { icon: "pin", label: m.pinned ? "Unpin" : "Pin", run: () => pinMsg(m, !m.pinned) },
+                                                { icon: "forward", label: "Forward", run: () => setForwardMsg(m) },
+                                                m.type === "text" && { icon: "copy", label: "Copy text", run: () => navigator.clipboard?.writeText(m.body || "").then(() => notify("Copied")) },
+                                                own && { icon: "trash", label: "Unsend", danger: true, run: () => unsend(m) },
+                                            ].filter(Boolean)} />
                                     </span>
                                 )}
                             </div>
@@ -798,6 +1013,12 @@ function ChatWindow({ win, page = false }) {
                 )}
             </div>
 
+            {sizeError && (
+                <div className="ms-size-error" role="alert">
+                    <span>{sizeError}</span>
+                    <button type="button" onClick={() => setSizeError("")} aria-label="Dismiss"><Svg i="x" size={14} /></button>
+                </div>
+            )}
             {files.length > 0 && (
                 <div className="ms-files">
                     {files.map((f, i) => (
@@ -821,7 +1042,7 @@ function ChatWindow({ win, page = false }) {
                 <div className="ms-replying">
                     <div>
                         <strong>Replying to {replyTo.sender_id === me ? "yourself" : replyTo.sender}</strong>
-                        <span>{replyTo.type === "image" ? "Photo" : replyTo.type === "file" ? `📎 ${replyTo.file_name}` : replyTo.body}</span>
+                        <span>{replyTo.type === "image" ? "Photo" : replyTo.type === "file" ? `📎 ${replyTo.file_name}` : replyTo.type === "sticker" ? "Sticker" : replyTo.type === "gif" ? "GIF" : replyTo.body}</span>
                     </div>
                     <button type="button" className="ms-icon" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><Svg i="x" size={16} /></button>
                 </div>
@@ -847,12 +1068,20 @@ function ChatWindow({ win, page = false }) {
                     aria-label="Message"
                 />
                 <span className="ms-emoji-anchor">
-                    <button type="button" className={`ms-icon is-blue ms-emoji-btn${emojiOpen ? " is-on" : ""}`} onClick={() => setEmojiOpen(!emojiOpen)} aria-label="Emoji" title="Emoji"><Svg i="smile" size={20} /></button>
+                    <button type="button" className={`ms-icon is-blue ms-gif-btn${gifOpen ? " is-on" : ""}`} onClick={() => { setEmojiOpen(false); setStickerOpen(false); setGifOpen(!gifOpen); }} aria-label="GIFs" title="GIFs"><Svg i="gif" size={20} /></button>
+                    {gifOpen && <GifPicker className="is-input" onPick={sendGif} onClose={() => setGifOpen(false)} notify={notify} />}
+                </span>
+                <span className="ms-emoji-anchor">
+                    <button type="button" className={`ms-icon is-blue ms-sticker-btn${stickerOpen ? " is-on" : ""}`} onClick={() => { setEmojiOpen(false); setGifOpen(false); setStickerOpen(!stickerOpen); }} aria-label="Stickers" title="Stickers"><Svg i="sticker" size={20} /></button>
+                    {stickerOpen && <StickerPicker className="is-input" onPick={sendSticker} onClose={() => setStickerOpen(false)} />}
+                </span>
+                <span className="ms-emoji-anchor">
+                    <button type="button" className={`ms-icon is-blue ms-emoji-btn${emojiOpen ? " is-on" : ""}`} onClick={() => { setStickerOpen(false); setEmojiOpen(!emojiOpen); }} aria-label="Emoji" title="Emoji"><Svg i="smile" size={20} /></button>
                     {emojiOpen && <EmojiPicker className="is-input" onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />}
                 </span>
                 {text.trim() || files.length
                     ? <button type="submit" className="ms-icon is-blue" aria-label="Send"><Svg i="send" size={20} /></button>
-                    : <button type="button" className="ms-icon ms-like" onClick={() => send("👍")} aria-label="Send a like">👍</button>}
+                    : <button type="button" className="ms-icon ms-like" onClick={() => send(conv?.emoji || "👍")} aria-label={`Send ${conv?.emoji || "👍"}`}>{conv?.emoji || "👍"}</button>}
             </form>
         </>
     );
@@ -862,24 +1091,25 @@ function ChatWindow({ win, page = false }) {
         return (
             <section className={`ms-pchat${info ? " has-info" : ""}`} aria-label={`Chat with ${title}`}
                 onDragOver={(e) => { e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}>
-                <div className="ms-pchat-main ms-win">
+                <div className="ms-pchat-main ms-win" style={themeStyle(conv?.theme)}>
                     <header className="ms-win-head ms-pchat-head">
                         <button className="ms-icon ms-page-back" onClick={() => setPageChat(null)} aria-label="Back to chats"><Svg i="back" size={20} /></button>
                         <span className="ms-win-who">
                             {conv && <ConvAvatar c={{ ...conv, online: online_ }} size={42} />}
                             <span className="ms-win-title"><strong>{title}</strong><small>{status}</small></span>
                         </span>
+                        <button className={`ms-icon${searchOpen ? " is-on" : ""}`} onClick={() => setSearchOpen(!searchOpen)} aria-label="Search in conversation" title="Search in conversation"><Svg i="search" size={19} /></button>
                         <button className={`ms-icon${info ? " is-on" : ""}`} onClick={() => setInfo(!info)} aria-label="Chat info" title="Chat info" aria-pressed={info}><Svg i="info" size={20} /></button>
                     </header>
                     {main}
                 </div>
-                {info && <aside className="ms-pchat-info ms-win">{info_}</aside>}
+                {info && <aside className="ms-pchat-info ms-win" style={themeStyle(conv?.theme)}>{info_}</aside>}
             </section>
         );
     }
 
     return (
-        <section className="ms-win" aria-label={`Chat with ${title}`}
+        <section className="ms-win" aria-label={`Chat with ${title}`} style={themeStyle(conv?.theme)}
             onDragOver={(e) => { e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}>
             <header className="ms-win-head">
                 <button className="ms-win-who" onClick={() => setInfo(!info)} title="Chat info">
@@ -887,6 +1117,7 @@ function ChatWindow({ win, page = false }) {
                     <span className="ms-win-title"><strong>{title}</strong><small>{status}</small></span>
                 </button>
                 <button className="ms-icon" onClick={() => openPage(win.id)} aria-label="Open in Messenger" title="Open in Messenger"><Svg i="expand" size={16} /></button>
+                <button className="ms-icon" onClick={() => { setInfo(false); setSearchOpen(!searchOpen); }} aria-label="Search in conversation" title="Search in conversation"><Svg i="search" size={17} /></button>
                 <button className="ms-icon" onClick={() => setInfo(!info)} aria-label="Chat info" title="Chat info"><Svg i="info" size={18} /></button>
                 <button className="ms-icon" onClick={() => toggleMin(win.id)} aria-label="Minimize" title="Minimize"><Svg i="minus" size={18} /></button>
                 <button className="ms-icon" onClick={() => closeChat(win.id)} aria-label="Close" title="Close"><Svg i="x" size={18} /></button>
@@ -1014,8 +1245,42 @@ function SharedTabs({ conversationId, refreshKey }) {
     );
 }
 
-function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, page = false }) {
-    const { notify, loadConvs, convs, togglePin } = useMs();
+// "…" menu on a member (like FB): message, admin, remove
+function MemberMenu({ p, canManage, busy, onAdmin, onRemove, onMessage }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e) => !ref.current?.contains(e.target) && setOpen(false);
+        const onKey = (e) => e.key === "Escape" && (e.stopPropagation(), setOpen(false));
+        document.addEventListener("mousedown", onDown);
+        window.addEventListener("keydown", onKey, true);
+        return () => { document.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey, true); };
+    }, [open]);
+    const pick = (fn) => { setOpen(false); fn(); };
+    return (
+        <span className="ms-mmenu" ref={ref}>
+            <button className={`ms-mmenu-btn${open ? " is-on" : ""}`} onClick={() => setOpen(!open)} aria-label={`Options for ${p.name}`} aria-expanded={open} disabled={busy}>
+                <Svg i="more" size={18} />
+            </button>
+            {open && (
+                <div className="ms-mmenu-pop" role="menu">
+                    <button role="menuitem" onClick={() => pick(onMessage)}><Svg i="chat" size={16} /> Message</button>
+                    {canManage && (
+                        <button role="menuitem" onClick={() => pick(onAdmin)}><Svg i="group" size={16} /> {p.is_admin ? "Remove as admin" : "Make admin"}</button>
+                    )}
+                    {canManage && (
+                        <button role="menuitem" className="is-red" onClick={() => pick(onRemove)}><Svg i="logout" size={16} /> Remove from group</button>
+                    )}
+                </div>
+            )}
+        </span>
+    );
+}
+
+function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, onSearch, onJump, onUnpin, page = false }) {
+    const { notify, loadConvs, convs, togglePin, openDirect } = useMs();
+    const [emojiOpen, setEmojiOpen] = useState(false);
     const conv = c.conversation;
     const pinned = !!(convs || []).find((x) => x.id === conv.id)?.pinned;
     useEffect(() => { if (convs === null) loadConvs(); }, [convs, loadConvs]);
@@ -1037,6 +1302,7 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, page = false }) {
     const admin = (p, on) => run(async () => putPayload(await apiFetch(`/messenger/conversations/${conv.id}/members/${p.id}/admin`, { method: "PUT", body: JSON.stringify({ is_admin: on }) })));
     const meRow = c.members.find((m) => m.me);
     const admins = c.members.filter((m) => m.is_admin);
+    const customize = (body) => run(async () => { putPayload(await apiFetch(`/messenger/conversations/${conv.id}/customize`, { method: "PUT", body: JSON.stringify(body) })); });
 
     return (
         <div className="ms-info">
@@ -1056,6 +1322,7 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, page = false }) {
                 {conv.is_group && (
                     <button onClick={onAdd}><span><Svg i="plus" size={18} /></span>Add</button>
                 )}
+                <button onClick={onSearch}><span><Svg i="search" size={18} /></span>Search</button>
             </div>
 
             {conv.is_group && (
@@ -1065,8 +1332,8 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, page = false }) {
                 </Section>
             )}
 
-            {conv.is_group && (
-                <Section title="Customize chat">
+            <Section title="Customize chat">
+                {conv.is_group && (
                     <label className="ms-field">
                         <span>Group name</span>
                         <div className="ms-field-row">
@@ -1074,8 +1341,43 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, page = false }) {
                             <button className="ms-btn" disabled={busy || name === (conv.has_name ? conv.name : "")} onClick={rename}>Save</button>
                         </div>
                     </label>
-                </Section>
-            )}
+                )}
+                <div className="ms-field"><span>Theme</span></div>
+                <div className="ms-themes" role="radiogroup" aria-label="Chat theme">
+                    {Object.entries(THEMES).map(([k, t]) => {
+                        const on = (conv.theme || "default") === k;
+                        return (
+                            <button key={k} role="radio" aria-checked={on} className={on ? "is-on" : ""} disabled={busy}
+                                onClick={() => !on && customize({ theme: k })} title={t.name}>
+                                <span style={{ background: t.mine }} />
+                                <small>{t.name}</small>
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="ms-field"><span>Background</span></div>
+                <div className="ms-bgs" role="radiogroup" aria-label="Chat background">
+                    {Object.entries(BACKGROUNDS).map(([k, b]) => {
+                        const on = (conv.background || "none") === k;
+                        return (
+                            <button key={k} role="radio" aria-checked={on} className={on ? "is-on" : ""} disabled={busy}
+                                onClick={() => !on && customize({ background: k })} title={b.name}>
+                                <span style={{ background: b.css || "var(--ms-bg)" }}>{k === "none" && <Svg i="x" size={14} />}</span>
+                                <small>{b.name}</small>
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="ms-emoji-row">
+                    <span className="ms-field"><span>Quick reaction</span></span>
+                    <span className="ms-emoji-anchor ms-emoji-cur">
+                        <button className="ms-btn ms-emoji-btn" onClick={() => setEmojiOpen(!emojiOpen)} disabled={busy}>
+                            <b>{conv.emoji || "👍"}</b> Change
+                        </button>
+                        {emojiOpen && <EmojiPicker className="is-info" onPick={(e) => { setEmojiOpen(false); customize({ emoji: e }); }} onClose={() => setEmojiOpen(false)} />}
+                    </span>
+                </div>
+            </Section>
 
             {conv.is_group && (
                 <Section title={`Chat members (${c.members.length})`} open>
@@ -1087,16 +1389,32 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, page = false }) {
                                     <strong>{p.name}{p.me && " (You)"}</strong>
                                     <small>{[p.is_admin && "Admin", activeText(p)].filter(Boolean).join(" · ")}</small>
                                 </span>
-                                {!p.me && meRow?.is_admin && (
-                                    <span className="ms-member-act">
-                                        <button className="ms-link" disabled={busy} onClick={() => admin(p, !p.is_admin)}>{p.is_admin ? "Remove admin" : "Make admin"}</button>
-                                        <button className="ms-link is-red" disabled={busy} onClick={() => remove(p)}>Remove</button>
-                                    </span>
+                                {!p.me && (
+                                    <MemberMenu p={p} busy={busy} canManage={!!meRow?.is_admin}
+                                        onMessage={() => openDirect(p.id)} onAdmin={() => admin(p, !p.is_admin)} onRemove={() => remove(p)} />
                                 )}
                             </li>
                         ))}
                     </ul>
                     <button className="ms-btn ms-add-row" onClick={onAdd}><Svg i="plus" size={16} /> Add people</button>
+                </Section>
+            )}
+
+            {(c.pinned || []).length > 0 && (
+                <Section title={`Pinned messages (${c.pinned.length})`} open>
+                    {c.pinned.map((p) => (
+                        <div key={p.id} className="ms-pinned-row">
+                            <button type="button" className="ms-pinned-open" onClick={() => onJump(p.id)} title="Go to message">
+                                {p.type === "sticker" && p.sticker ? <Sticker k={p.sticker} size={36} animate={false} /> : (p.type === "image" || p.type === "gif") && p.image ? <img src={p.image} alt="" /> : p.type === "file" ? <FileBadge name={p.text} size={34} /> : <span className="ms-linkbadge"><Svg i="pin" size={15} /></span>}
+                                <span className="ms-shared-body">
+                                    <strong>{p.sender}</strong>
+                                    <small className="ms-pinned-text">{p.text}</small>
+                                    <small>Pinned by {p.pinned_by.split(" ")[0]} · {ago(p.pinned_at)}</small>
+                                </span>
+                            </button>
+                            <button type="button" className="ms-icon" onClick={() => onUnpin(p.id)} title="Unpin" aria-label="Unpin message"><Svg i="x" size={15} /></button>
+                        </div>
+                    ))}
                 </Section>
             )}
 
@@ -1109,6 +1427,110 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, page = false }) {
                     <button className="ms-btn is-red ms-leave" disabled={busy} onClick={() => remove(meRow)}><Svg i="logout" size={16} /> Leave group</button>
                 </Section>
             )}
+        </div>
+    );
+}
+
+/* ================= "…" menu on a message: pin, forward, copy, unsend ================= */
+
+function MsgMenu({ items, own }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e) => !ref.current?.contains(e.target) && setOpen(false);
+        const onKey = (e) => e.key === "Escape" && (e.stopPropagation(), setOpen(false));
+        document.addEventListener("mousedown", onDown);
+        window.addEventListener("keydown", onKey, true);
+        return () => { document.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey, true); };
+    }, [open]);
+    return (
+        <span className={`ms-msgmenu${open ? " is-open" : ""}`} ref={ref}>
+            <button type="button" className={open ? "is-on" : ""} onClick={() => setOpen(!open)} title="More" aria-label="More" aria-expanded={open}><Svg i="more" size={16} /></button>
+            {open && (
+                <div className={`ms-mmenu-pop ms-msgmenu-pop${own ? " is-me" : ""}`} role="menu">
+                    {items.map((it) => (
+                        <button key={it.label} role="menuitem" className={it.danger ? "is-red" : ""} onClick={() => { setOpen(false); it.run(); }}>
+                            <Svg i={it.icon} size={16} /> {it.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </span>
+    );
+}
+
+/* ================= forward: pick chats / people, each with its own Send ================= */
+
+function ForwardModal({ msg, onClose }) {
+    const { convs, loadConvs, receive, notify } = useMs();
+    const [people, setPeople] = useState(null);
+    const [q, setQ] = useState("");
+    const [sent, setSent] = useState({});                 // "c12" / "p5" → "sending" | "sent"
+
+    useEffect(() => { if (convs === null) loadConvs(); }, [convs, loadConvs]);
+    useEffect(() => { apiFetch("/messenger/people").then(setPeople).catch(() => setPeople([])); }, []);
+    useEffect(() => {
+        const onKey = (e) => e.key === "Escape" && onClose();
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose]);
+
+    const term = q.trim().toLowerCase();
+    const chatsList = (convs || []).filter((c) => !term || c.name.toLowerCase().includes(term));
+    const directIds = new Set((convs || []).filter((c) => !c.is_group).map((c) => c.other?.id));
+    const peopleList = (people || []).filter((p) => !directIds.has(p.id) && (!term || p.name.toLowerCase().includes(term)));
+
+    const send = async (key, body) => {
+        setSent((s) => ({ ...s, [key]: "sending" }));
+        try {
+            const r = await apiFetch(`/messenger/messages/${msg.id}/forward`, { method: "POST", body: JSON.stringify(body) });
+            setSent((s) => ({ ...s, [key]: "sent" }));
+            receive(r.conversation_id, r.messages, { sound: false });   // shows in that chat if it's open
+            loadConvs();
+        } catch (e) {
+            setSent((s) => ({ ...s, [key]: undefined }));
+            notify(e.message || "Couldn't forward.", "error");
+        }
+    };
+    const btn = (key, body) => (
+        <button className={`ms-btn ms-send-btn${sent[key] === "sent" ? " is-sent" : " is-primary"}`} disabled={!!sent[key]} onClick={() => send(key, body)}>
+            {sent[key] === "sent" ? "Sent" : sent[key] === "sending" ? "Sending…" : "Send"}
+        </button>
+    );
+    const preview = msg.type === "image" ? "📷 Photo" : msg.type === "file" ? `📎 ${msg.file_name}` : msg.type === "sticker" ? "Sticker" : msg.type === "gif" ? "GIF" : msg.body;
+
+    return (
+        <div className="ms-modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+            <div className="ms-modal" role="dialog" aria-label="Forward">
+                <header><h3>Forward</h3><button className="ms-icon" onClick={onClose} aria-label="Close"><Svg i="x" size={18} /></button></header>
+                <div className="ms-fwd-preview">{msg.type === "image" && msg.image ? <img src={msg.image} alt="" /> : msg.type === "gif" ? <img src={msg.body} alt="" /> : msg.type === "sticker" ? <Sticker k={msg.body} size={44} animate={false} /> : null}<span>{preview}</span></div>
+                <label className="ms-search">
+                    <Svg i="search" size={16} />
+                    <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search for people and groups" />
+                </label>
+                <div className="ms-pick">
+                    {(convs === null || people === null) && <div className="ms-empty">Loading…</div>}
+                    {chatsList.length > 0 && <div className="ms-sub">Recent chats</div>}
+                    {chatsList.map((c) => (
+                        <div key={`c${c.id}`} className="ms-pick-row">
+                            <ConvAvatar c={c} size={40} />
+                            <span className="ms-conv-body"><span className="ms-conv-name">{c.name}</span><span className="ms-conv-last">{c.is_group ? `${c.members} members` : activeText(c.other)}</span></span>
+                            {btn(`c${c.id}`, { conversation_id: c.id })}
+                        </div>
+                    ))}
+                    {peopleList.length > 0 && <div className="ms-sub">People</div>}
+                    {peopleList.map((p) => (
+                        <div key={`p${p.id}`} className="ms-pick-row">
+                            <Avatar name={p.name} photo={p.photo} size={40} online={p.online} />
+                            <span className="ms-conv-body"><span className="ms-conv-name">{p.name}</span><span className="ms-conv-last">{p.role || activeText(p)}</span></span>
+                            {btn(`p${p.id}`, { employee_id: p.id })}
+                        </div>
+                    ))}
+                    {convs && people && chatsList.length === 0 && peopleList.length === 0 && <div className="ms-empty">No results.</div>}
+                </div>
+                <footer><button className="ms-btn" onClick={onClose}>Done</button></footer>
+            </div>
         </div>
     );
 }
