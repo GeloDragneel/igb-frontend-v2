@@ -1,0 +1,113 @@
+/* Header bell (NotificationBell.jsx) – uses the Header's popover / popover-item / dot classes */
+.nb-pop {
+    width: 360px;
+    max-width: calc(100vw - 32px);
+}
+
+.nb-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.nb-link {
+    border: 0;
+    background: none;
+    color: #2563eb;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+}
+
+.nb-link:hover {
+    text-decoration: underline;
+}
+
+.nb-list {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.nb-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding-right: 8px;
+}
+
+.nb-item.is-unread {
+    background: rgba(37, 99, 235, 0.06);
+}
+
+.nb-open {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.nb-open .dot {
+    margin-top: 6px;
+    flex: none;
+}
+
+.nb-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.nb-text {
+    line-height: 1.35;
+}
+
+.nb-item:not(.is-unread) .nb-text {
+    color: var(--muted, #6b7280);
+}
+
+.nb-item.is-unread .nb-text {
+    font-weight: 600;
+}
+
+.nb-sub {
+    color: var(--muted, #6b7280);
+    font-size: 12px;
+}
+
+.nb-check {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 50%;
+    background: none;
+    color: #2563eb;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.nb-check:hover {
+    background: #eff6ff;
+    border-color: #2563eb;
+}
+
+.dot-gray {
+    background: #9ca3af;
+}
+
+.dot-blue {
+    background: #2563eb;
+}

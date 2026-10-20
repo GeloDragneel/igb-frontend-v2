@@ -12,10 +12,10 @@ const val = (v) => (v === null || v === undefined || v === "" ? "—" : String(v
 
 export default function ClientMasterlist() {
     const notify = useToast();
-    const [meta, setMeta] = useState(null);           // { lookups, has_rdo }
+    const [meta, setMeta] = useState(null); // { lookups, has_rdo }
     const [tab, setTab] = useState("clients");
-    const [rows, setRows] = useState([]);              // the current page (clients or accounts)
-    const [total, setTotal] = useState(0);             // rows matching the filters
+    const [rows, setRows] = useState([]); // the current page (clients or accounts)
+    const [total, setTotal] = useState(0); // rows matching the filters
     const [counts, setCounts] = useState({ clients: 0, accounts: 0 });
     const [clientList, setClientList] = useState([]);  // client # + name for the client filter
     const [debounced, setDebounced] = useState("");
@@ -23,12 +23,12 @@ export default function ClientMasterlist() {
     const [error, setError] = useState("");
     const [query, setQuery] = useState("");
     const [clientFilter, setClientFilter] = useState("");
-    const [status, setStatus] = useState("all");      // all | active | inactive
+    const [status, setStatus] = useState("all"); // all | active | inactive
     const [openClient, setOpenClient] = useState(undefined);   // client_num | null (new) | undefined (closed)
     const [openAccount, setOpenAccount] = useState(null);
     const [delAccount, setDelAccount] = useState(null);
-    const [assignAcc, setAssignAcc] = useState(null);    // account whose DA / Auditor is being edited
-    const [staff, setStaff] = useState(null);            // { da, auditors } for the assign popup
+    const [assignAcc, setAssignAcc] = useState(null); // account whose DA / Auditor is being edited
+    const [staff, setStaff] = useState(null); // { da, auditors } for the assign popup
     const [pg, setPg] = useState({ key: "", n: 1 });
     const [perPage, setPerPage] = useState(15);
 

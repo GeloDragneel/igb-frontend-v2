@@ -1,0 +1,345 @@
+/* Period picker popover (sidebar, dark) – teal accent like the period button */
+.period-pop.pp {
+    position: fixed;
+    z-index: 1900;
+    right: auto;
+    bottom: auto;
+    margin: 0;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 300px;
+    max-width: calc(100vw - 24px);
+    padding: 16px;
+    border-radius: 14px;
+    background: #111a2e;
+    border: 1px solid rgba(52, 211, 166, .3);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+    color: #e5e7eb;
+    font-family: inherit;
+    animation: pp-cal-in .14s ease-out;
+}
+
+/* the ‹ arrow pointing at the period button */
+.period-pop.pp::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: calc(var(--arrow, 20px) - 6px);
+    width: 12px;
+    height: 12px;
+    background: #111a2e;
+    border-left: 1px solid rgba(52, 211, 166, .3);
+    border-bottom: 1px solid rgba(52, 211, 166, .3);
+    transform: rotate(45deg);
+}
+
+.period-pop.pp .pp-title {
+    color: rgba(255, 255, 255, .45);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.period-pop.pp .pp-title+.pp-quick,
+.period-pop.pp .pp-title+.pp-range {
+    margin-top: -4px;
+}
+
+/* quick chips: 2 per row */
+.period-pop.pp .pp-quick {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.period-pop.pp .pp-chip {
+    padding: 7px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, .08);
+    background: rgba(255, 255, 255, .03);
+    color: #cbd5e1;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+.period-pop.pp .pp-chip:hover {
+    border-color: rgba(52, 211, 166, .45);
+    color: #e7fbf4;
+}
+
+.period-pop.pp .pp-chip.is-on {
+    background: rgba(52, 211, 166, .14);
+    border-color: #34d3a6;
+    color: #34d3a6;
+}
+
+/* From / To */
+.period-pop.pp .pp-range {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .03);
+    border: 1px solid rgba(255, 255, 255, .06);
+}
+
+.period-pop.pp .pp-field {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.period-pop.pp .pp-label {
+    color: rgba(255, 255, 255, .55);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.period-pop.pp .pp-box {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 36px;
+    padding: 0 4px 0 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, .1);
+    background: #0b1324;
+    transition: border-color .15s, box-shadow .15s;
+}
+
+.period-pop.pp .pp-box:hover {
+    border-color: rgba(52, 211, 166, .45);
+}
+
+.period-pop.pp .pp-box:focus-within,
+.period-pop.pp .pp-box.is-open {
+    border-color: #34d3a6;
+    box-shadow: 0 0 0 3px rgba(52, 211, 166, .18);
+}
+
+.period-pop.pp .pp-input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: none;
+    color: #f1f5f9;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color-scheme: dark;
+}
+
+/* hide Chrome's own (gray) month picker – ours opens instead */
+.period-pop.pp .pp-input::-webkit-calendar-picker-indicator {
+    display: none;
+}
+
+.period-pop.pp .pp-cal-btn {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: rgba(255, 255, 255, .6);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+
+.period-pop.pp .pp-cal-btn:hover,
+.period-pop.pp .pp-cal-btn[aria-expanded="true"] {
+    background: rgba(52, 211, 166, .14);
+    color: #34d3a6;
+}
+
+/* month panel (portal, to the right of the period popover) */
+.pp-cal {
+    position: fixed;
+    z-index: 2000;
+    width: 236px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #111a2e;
+    border: 1px solid rgba(52, 211, 166, .35);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .5);
+    color: #e5e7eb;
+    font-family: inherit;
+    animation: pp-cal-in .14s ease-out;
+}
+
+/* the ‹ arrow pointing at the field */
+.pp-cal::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: calc(var(--arrow, 40px) - 6px);
+    width: 12px;
+    height: 12px;
+    background: #111a2e;
+    border-left: 1px solid rgba(52, 211, 166, .35);
+    border-bottom: 1px solid rgba(52, 211, 166, .35);
+    transform: rotate(45deg);
+}
+
+@keyframes pp-cal-in {
+    from {
+        opacity: 0;
+        transform: translateX(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.pp-cal-year {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.pp-cal-year strong {
+    color: #f1f5f9;
+    font-size: 14px;
+}
+
+.pp-cal-year button {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, .05);
+    color: #cbd5e1;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.pp-cal-year button:hover {
+    background: rgba(52, 211, 166, .16);
+    color: #34d3a6;
+}
+
+.pp-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.pp-cal-grid button {
+    height: 34px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .03);
+    color: #cbd5e1;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+}
+
+.pp-cal-grid button:hover:not(:disabled) {
+    background: rgba(52, 211, 166, .12);
+    color: #e7fbf4;
+}
+
+.pp-cal-grid button.is-now {
+    border-color: rgba(52, 211, 166, .5);
+}
+
+.pp-cal-grid button.is-on {
+    background: #34d3a6;
+    color: #062a20;
+    border-color: #34d3a6;
+}
+
+.pp-cal-grid button:disabled {
+    opacity: .3;
+    cursor: default;
+}
+
+.pp-cal-foot {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, .07);
+}
+
+.pp-cal-foot button {
+    border: 0;
+    background: none;
+    padding: 2px 0;
+    color: #34d3a6;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pp-cal-foot button:last-child {
+    color: rgba(255, 255, 255, .5);
+}
+
+.pp-cal-foot button:hover {
+    text-decoration: underline;
+}
+
+/* footer */
+.period-pop.pp .pp-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.period-pop.pp .pp-count {
+    color: rgba(255, 255, 255, .5);
+    font-size: 12px;
+}
+
+.period-pop.pp .pp-apply {
+    padding: 8px 18px;
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+    background: #34d3a6;
+    color: #062a20;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    transition: filter .15s, opacity .15s;
+}
+
+.period-pop.pp .pp-apply:hover:not(:disabled) {
+    filter: brightness(1.08);
+}
+
+.period-pop.pp .pp-apply:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+.period-pop.pp .pp-apply:focus-visible,
+.period-pop.pp .pp-chip:focus-visible {
+    outline: 2px solid rgba(52, 211, 166, .7);
+    outline-offset: 2px;
+}

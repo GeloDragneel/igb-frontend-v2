@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Icon from "./Icons";
 import Avatar from "./Avatar";
 import ConfirmDialog from "./ConfirmDialog";
@@ -7,6 +7,7 @@ import SearchSelect from "./SearchSelect";
 import { useToast } from "./Toast";
 import { useAuth, apiFetch } from "../context/AuthContext";
 import BirthdayPopup from "./BirthdayPopup";
+import NotificationBell from "./NotificationBell";
 import "./PersonAvatar.css"; // header photo styles
 import { useAppData, saleBalance } from "../context/AppDataContext";
 
@@ -78,9 +79,7 @@ export default function Header({ onMenu }) {
   const [userOpen, setUserOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-  const notifRef = useRef(null);
   const userRef = useRef(null);
-  useDismiss(notifOpen, setNotifOpen, notifRef);
   useDismiss(userOpen, setUserOpen, userRef);
 
   /* ---------- Staff: employee photo (S3) on the user button ---------- */
@@ -208,33 +207,8 @@ export default function Header({ onMenu }) {
           <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
 
-        {/* Notifications */}
-        <div className="pop-wrap" ref={notifRef}>
-          <button
-            className="icon-btn round"
-            onClick={() => { setNotifOpen(!notifOpen); setUserOpen(false); }}
-            aria-label="Notifications"
-            aria-expanded={notifOpen}
-          >
-            <Icon name="bell" />
-            {alerts.length > 0 && <span className="count">{alerts.length}</span>}
-          </button>
-          {notifOpen && (
-            <div className="popover" role="dialog" aria-label="Notifications">
-              <div className="popover-head">Notifications</div>
-              {alerts.length === 0 ? (
-                <div className="popover-empty">You're all caught up.</div>
-              ) : (
-                alerts.map((a) => (
-                  <Link key={a.key} to={a.to} className="popover-item" onClick={() => setNotifOpen(false)}>
-                    <span className={`dot dot-${a.tone}`} />
-                    {a.text}
-                  </Link>
-                ))
-              )}
-            </div>
-          )}
-        </div>
+        {/* Notifications: Staff / ClientStaff → NotificationController · Client → the alerts above */}
+        <NotificationBell alerts={alerts} open={notifOpen} setOpen={setNotifOpen} onOpen={() => setUserOpen(false)} />
 
         {/* User menu */}
         <div className="pop-wrap" ref={userRef}>
