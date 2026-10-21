@@ -4,6 +4,7 @@ import { useToast } from "../../components/Toast";
 import { useAuth, apiFetch } from "../../context/AuthContext";
 import BirFormModal, { BirFilingModal } from "./BirFormModal";
 import PayBillModal from "../../components/payments/PayBillModal";
+import BirPayModal from "./BirPayModal";
 import { FORMS, blank, fromFile, fromProfile } from "./birForms";
 import "./BirReturn.css";
 
@@ -178,8 +179,11 @@ export default function BirReturn() {
         }
     };
 
-    // PAY → Pay Bill on the Expenses bill made when the return was filed
+    // PAY → General Journal payment (new filings) · old filings (Expenses bill) still use Pay Bill
     const pay = async (x) => {
+        // General Journal Pay window for every filed return (an old Expenses-bill filing with nothing paid moves over by itself);
+        // only an old filing that already has Pay Bill payments stays on Pay Bill
+        if (x.filing?.kind === "journal" || !(x.filing?.paid > 0)) { setPayFor({ filename: x.filename }); return; }
         setPayLoading(x.filename);
         try {
             const r = await apiFetch(`/bir/filing/${encodeURIComponent(x.filename)}`);
@@ -368,7 +372,7 @@ export default function BirReturn() {
                                                 <span className={`br-status is-${x.status || "not_filed"}`}>{STATUS[x.status] || STATUS.not_filed}</span>
                                                 {x.filing && x.filing.reconciled !== null && x.filing.reconciled !== undefined && (
                                                     <span className={`br-status ${x.filing.reconciled ? "is-paid" : "is-unpaid"}`}
-                                                        title="Return amounts compared with the books when it was filed">
+                                                        title="Return amounts compared with the books right now">
                                                         {x.filing.reconciled ? "Reconciled" : "Not reconciled"}
                                                     </span>
                                                 )}
@@ -456,7 +460,11 @@ export default function BirReturn() {
                 />
             )}
 
-            {payFor && (
+            {payFor?.filename && (
+                <BirPayModal filename={payFor.filename}
+                    onClose={() => { setPayFor(null); loadOne(form); }} onDone={() => loadOne(form)} />
+            )}
+            {payFor?.invoiceNo && (
                 <PayBillModal type="expenses" invoiceNo={payFor.invoiceNo} accounts={payFor.accounts}
                     onClose={() => { setPayFor(null); loadOne(form); }} onDone={() => loadOne(form)} />
             )}
