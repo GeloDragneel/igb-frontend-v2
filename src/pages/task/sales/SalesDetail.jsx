@@ -14,6 +14,7 @@ import { auditTone } from "../Sales";
 import { ProductForm } from "../../setup/Product";
 import ReceiveMoneyModal from "../../../components/payments/ReceiveMoneyModal";
 import { isReceivableAccount } from "../../../components/payments/paymentUtils";
+import DuplicateDocModal from "../../../components/invoice/DuplicateDocModal";
 /* =========================================================
    Helpers
    ========================================================= */
@@ -486,11 +487,23 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
         })),
     });
 
+    // Document No. already used (123 vs 123-155-125 …) → popup with the matches + supervisor override, before the review
+    const [dupFor, setDupFor] = useState(null);   // { body, matches }
+    const openReview = async (body) => {
+        if (body.document_no && !body.scan_action && !body.doc_override_token) {
+            try {
+                const r = await apiFetch(`/sales/document-check?document_no=${encodeURIComponent(body.document_no)}`);
+                if (r.matches?.length) { setDupFor({ body, matches: r.matches }); return; }
+            } catch { /* the server checks again on save */ }
+        }
+        setReview(body);
+    };
+
     const save = () => {
         setSaveError("");
         if (!validate()) return setSaveError("Please fix the highlighted fields.");
         if (saved) setTicket({ ...buildBody(), action: "EDIT" });
-        else setReview(buildBody());
+        else openReview(buildBody());
     };
 
     const submitNew = async () => {
@@ -532,7 +545,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     const forCollection = () => {
         setSaveError("");
         if (!validate()) return setSaveError("Please fix the highlighted fields.");
-        setReview({ ...buildBody(), trans_type: "billing" });
+        openReview({ ...buildBody(), trans_type: "billing" });
     };
     // INVALID / PARTIAL INVALID (reason popup) and CANCEL (no price needed)
     const markInvalid = (action) => {
@@ -976,6 +989,16 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                 />
             )}
 
+            {dupFor && (
+                <DuplicateDocModal
+                    module="sales"
+                    docNo={dupFor.body.document_no}
+                    matches={dupFor.matches}
+                    partyLabel="Customer"
+                    onCancel={() => setDupFor(null)}
+                    onApproved={(token) => { const body = { ...dupFor.body, doc_override_token: token }; setDupFor(null); setReview(body); }}
+                />
+            )}
             {review && (
                 <ReviewPanel
                     title={f.documentNo ? `#${f.documentNo}` : "New invoice"}
@@ -1601,12 +1624,14 @@ function ReviewPanel({ title, f, calc, lookups, saving, onClose, onSubmit }) {
     const allAccounts = [...(lookups.accounts || []), ...(lookups.sales_accounts || [])];
     const accName = (code) => allAccounts.find((a) => a.account_code === code)?.account_name || "";
     const outputVatAcc = allAccounts.find((a) => /output\s*(vat|tax)/i.test(a.account_name));
+    // the journal is in pesos: every line amount × exchange rate (the debit / grand total already is)
+    const exRate = Number(f.exRate) || 1;
 
     const rows = [];
     rows.push({ code: f.accountCode || "—", name: accName(f.accountCode) || "No account selected", dr: calc.grandTotal, cr: 0 });
     if (calc.wtaxIT) rows.push({ code: "21910", name: "Withholding Tax (IT)", dr: calc.wtaxIT, cr: 0 });
     if (calc.wtaxVT) rows.push({ code: "21910", name: "Withholding Tax (VAT)", dr: calc.wtaxVT, cr: 0 });
-    if (calc.outputVat) rows.push({ code: outputVatAcc?.account_code || "—", name: outputVatAcc?.account_name || "Output VAT", dr: 0, cr: calc.outputVat });
+    if (calc.outputVat) rows.push({ code: outputVatAcc?.account_code || "—", name: outputVatAcc?.account_name || "Output VAT", dr: 0, cr: r4(calc.outputVat * exRate) });
 
     const byAccount = {};
     f.lines.filter((l) => l.itemId).forEach((l) => {
@@ -1614,12 +1639,12 @@ function ReviewPanel({ title, f, calc, lookups, saving, onClose, onSubmit }) {
         const amt = c.netOfVat + c.vatExempt + c.nonVat + c.zeroRated;
         byAccount[l.accountCode] = (byAccount[l.accountCode] || 0) + amt;
     });
-    Object.entries(byAccount).forEach(([code, amt]) => rows.push({ code, name: accName(code), dr: 0, cr: r4(amt) }));
+    Object.entries(byAccount).forEach(([code, amt]) => rows.push({ code, name: accName(code), dr: 0, cr: r4(amt * exRate) }));
 
     const totalDr = r4(rows.reduce((n, r) => n + r.dr, 0));
     const totalCr = r4(rows.reduce((n, r) => n + r.cr, 0));
     const balanced = Math.abs(totalDr - totalCr) < 0.01;
-    const gross = r4(f.lines.filter((l) => l.itemId).reduce((n, l) => n + lineCalc(l).total, 0));
+    const gross = r4(f.lines.filter((l) => l.itemId).reduce((n, l) => n + lineCalc(l).total, 0) * exRate);
 
     const customer = f.customerId ? lookups.customers.find((c) => String(c.id) === String(f.customerId))?.name : "WALK IN";
     const docType = lookups.document_types.find((d) => String(d.id) === String(f.documentTypeId))?.name || "—";
@@ -1653,7 +1678,7 @@ function ReviewPanel({ title, f, calc, lookups, saving, onClose, onSubmit }) {
                         <ul className="rv-list">
                             <li><span>Gross</span><b>{n2(gross)}</b></li>
                             <li><span>Net</span><b>{n2(calc.subTotal)}</b></li>
-                            <li><span>VAT amount</span><b>{n2(calc.outputVat)}</b></li>
+                            <li><span>VAT amount</span><b>{n2(calc.outputVat * exRate)}</b></li>
                             <li><span>CWT (income)</span><b>{n2(calc.wtaxIT)}</b></li>
                             <li><span>CWT (VAT)</span><b>{n2(calc.wtaxVT)}</b></li>
                         </ul>

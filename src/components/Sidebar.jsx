@@ -111,6 +111,20 @@ const firstLink = (nav) => {
   return e ? linksOf(e)[0] : null;
 };
 
+// the open tabs (OpenTabs keeps them in sessionStorage "igb-tabs:<login>")
+// → the last one you used on that side, so switching FEMS ⇄ STAFF goes back to where you were
+function lastTabOf(mode, user, access, only) {
+  try {
+    const tabs = JSON.parse(sessionStorage.getItem(`igb-tabs:${user?.id ?? user?.username ?? "guest"}`) || "[]");
+    const mine = (Array.isArray(tabs) ? tabs : [])
+      .filter((t) => t?.key && t?.path && modeOfPath(t.key) === mode && canOpen(t.key, user?.type, access, only) === true)
+      .sort((a, b) => (b.used || 0) - (a.used || 0));
+    return mine[0]?.path || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -165,9 +179,10 @@ export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
       pendingNav.current = true;
       return;
     }
-    const first = firstLink(buildNav(m, access, user?.type));
-    if (first) {
-      navigate(first);
+    // last tab you used on that side; its start page only when it has no tabs yet
+    const target = lastTabOf(m, user, access, only) || firstLink(buildNav(m, access, user?.type));
+    if (target) {
+      navigate(target);
       onNavigate?.();
     }
   };
@@ -175,9 +190,9 @@ export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
   useEffect(() => {
     if (!pendingNav.current || !access || mode !== "staff") return;
     pendingNav.current = false;
-    const first = firstLink(buildNav("staff", access, user?.type));
-    if (first) {
-      navigate(first);
+    const target = lastTabOf("staff", user, access, only) || firstLink(buildNav("staff", access, user?.type));
+    if (target) {
+      navigate(target);
       onNavigate?.();
     }
   }, [access, mode]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -16,6 +16,7 @@ import { auditTone } from "../Purchases";
 import { ProductForm } from "../../setup/Product";
 import PayBillModal from "../../../components/payments/PayBillModal";
 import { isPayableAccount } from "../../../components/payments/paymentUtils";
+import DuplicateDocModal from "../../../components/invoice/DuplicateDocModal";
 /* =========================================================
    Lists for this page (vendors, items, purchase accounts, ATC ...)
    Same shape as the Sales lookups. Kept 10 minutes per account.
@@ -534,11 +535,23 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
         })),
     });
 
+    // Document No. already used (123 vs 123-155-125 …) → popup with the matches + supervisor override, before the review
+    const [dupFor, setDupFor] = useState(null);   // { body, matches }
+    const openReview = async (body) => {
+        if (body.document_no && !body.scan_action && !body.doc_override_token) {
+            try {
+                const r = await apiFetch(`/purchases/document-check?document_no=${encodeURIComponent(body.document_no)}`);
+                if (r.matches?.length) { setDupFor({ body, matches: r.matches }); return; }
+            } catch { /* the server checks again on save */ }
+        }
+        setReview(body);
+    };
+
     const save = () => {
         setSaveError("");
         if (!validate()) return setSaveError("Please fix the highlighted fields.");
         if (saved) setTicket({ ...buildBody(), action: "EDIT" });
-        else setReview(buildBody());
+        else openReview(buildBody());
     };
 
     const submitNew = async () => {
@@ -580,7 +593,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     const forPayment = () => {
         setSaveError("");
         if (!validate()) return setSaveError("Please fix the highlighted fields.");
-        setReview({ ...buildBody(), trans_type: "billing" });
+        openReview({ ...buildBody(), trans_type: "billing" });
     };
     // INVALID / PARTIAL INVALID (reason popup) and CANCEL (no price needed)
     const markInvalid = (action) => {
@@ -1033,6 +1046,16 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                 />
             )}
 
+            {dupFor && (
+                <DuplicateDocModal
+                    module="purchases"
+                    docNo={dupFor.body.document_no}
+                    matches={dupFor.matches}
+                    partyLabel="Vendor"
+                    onCancel={() => setDupFor(null)}
+                    onApproved={(token) => { const body = { ...dupFor.body, doc_override_token: token }; setDupFor(null); setReview(body); }}
+                />
+            )}
             {review && (
                 <ReviewPanel
                     title={f.documentNo ? `#${f.documentNo}` : "New invoice"}
