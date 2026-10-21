@@ -803,10 +803,9 @@ function PrintModal({ transNumber, job, onClose }) {
   }, [transNumber, job]);
 
   return (
-    <Modal title={`Print Preview · ${job.label}`} onClose={onClose} size="lg"
+    <Modal title={`Print Preview · ${job.label}`} onClose={onClose} size="xlg"
       footer={<>
         {url && <a className="btn" href={url} download={`${job.type}-${transNumber}.pdf`}>Download</a>}
-        <button className="btn btn-dark" onClick={onClose}>Close</button>
       </>}>
       {error && <div className="alert-error" role="alert">{error}</div>}
       {!url && !error && <div className="bd-pdf-wait">Preparing {job.label}…</div>}

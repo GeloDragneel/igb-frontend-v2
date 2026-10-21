@@ -3446,3 +3446,11 @@ body.ai-chat-open .ms-dock {
     font-weight: 900;
     letter-spacing: .06em;
 }
+
+/* message ⋯ menu: drawn on the page (portal), so the chat window can't cut it off */
+.ms-msgmenu-float {
+    z-index: 2000;
+    right: auto;
+    bottom: auto;
+    min-width: 170px;
+}

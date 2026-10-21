@@ -125,6 +125,16 @@ function lastTabOf(mode, user, access, only) {
   }
 }
 
+// logo: public/igb-logo.png (falls back to the old "IGB" mark if the file is missing)
+function BrandLogo() {
+  const [bad, setBad] = useState(false);
+  if (bad) return <span className="brand-mark">IGB</span>;
+  return (
+    <img className="brand-logo" src="/igb-logo.png" alt="IGB" onError={() => setBad(true)}
+      style={{ width: 40, height: 40, flex: "none", objectFit: "contain", borderRadius: 8 }} />
+  );
+}
+
 export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -221,7 +231,7 @@ export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
   return (
     <aside className={`sidebar ${open ? "open" : ""} ${collapsed ? "collapsed" : ""}`} aria-label="Main navigation">
       <div className="brand">
-        <span className="brand-mark">IGB</span>
+        <BrandLogo />
         <span className="brand-name">IGB</span>
         <span className="brand-badge">v1.0</span>
       </div>

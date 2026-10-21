@@ -1512,26 +1512,58 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, onSearch, onJump, o
 
 function MsgMenu({ items, own }) {
     const [open, setOpen] = useState(false);
+    const [pos, setPos] = useState(null);                 // { left, top, vars }
     const ref = useRef(null);
+    const popRef = useRef(null);
     useEffect(() => {
         if (!open) return;
-        const onDown = (e) => !ref.current?.contains(e.target) && setOpen(false);
+        const onDown = (e) => !ref.current?.contains(e.target) && !popRef.current?.contains(e.target) && setOpen(false);
         const onKey = (e) => e.key === "Escape" && (e.stopPropagation(), setOpen(false));
+        const onScroll = (e) => !popRef.current?.contains(e.target) && setOpen(false);   // the chat scrolled → close
         document.addEventListener("mousedown", onDown);
         window.addEventListener("keydown", onKey, true);
-        return () => { document.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey, true); };
+        window.addEventListener("scroll", onScroll, true);
+        window.addEventListener("resize", onScroll);
+        return () => {
+            document.removeEventListener("mousedown", onDown);
+            window.removeEventListener("keydown", onKey, true);
+            window.removeEventListener("scroll", onScroll, true);
+            window.removeEventListener("resize", onScroll);
+        };
     }, [open]);
+
+    // the menu is drawn on top of everything (not inside the chat window, which cut it off):
+    // above the ⋯ button when there is room, else below; always kept inside the screen
+    useLayoutEffect(() => {
+        if (!open) { setPos(null); return; }
+        const btn = ref.current?.querySelector("button");
+        const pop = popRef.current;
+        if (!btn || !pop) return;
+        const r = btn.getBoundingClientRect();
+        const w = pop.offsetWidth, h = pop.offsetHeight, gap = 4, pad = 8;
+        let left = own ? r.right - w : r.left;
+        left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
+        let top = r.top - h - gap;
+        if (top < pad) top = Math.min(r.bottom + gap, window.innerHeight - h - pad);
+        // keep the chat's colours (theme / dark mode) on the menu
+        const cs = getComputedStyle(btn);
+        const vars = Object.fromEntries(["--ms-bg", "--ms-text", "--ms-hover", "--ms-muted", "--ms-shadow"].map((k) => [k, cs.getPropertyValue(k)]).filter(([, v]) => v));
+        setPos({ left, top, vars });
+    }, [open, own]);
+
     return (
         <span className={`ms-msgmenu${open ? " is-open" : ""}`} ref={ref}>
             <button type="button" className={open ? "is-on" : ""} onClick={() => setOpen(!open)} title="More" aria-label="More" aria-expanded={open}><Svg i="more" size={16} /></button>
-            {open && (
-                <div className={`ms-mmenu-pop ms-msgmenu-pop${own ? " is-me" : ""}`} role="menu">
+            {open && createPortal(
+                <div ref={popRef} className="ms-mmenu-pop ms-msgmenu-float" role="menu"
+                    style={{ position: "fixed", left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden", ...(pos?.vars || {}) }}>
                     {items.map((it) => (
                         <button key={it.label} role="menuitem" className={it.danger ? "is-red" : ""} onClick={() => { setOpen(false); it.run(); }}>
                             <Svg i={it.icon} size={16} /> {it.label}
                         </button>
                     ))}
-                </div>
+                </div>,
+                document.body
             )}
         </span>
     );
