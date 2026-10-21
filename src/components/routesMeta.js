@@ -165,6 +165,7 @@ export const NAV = [
           { to: "/administration/admin-ticket", label: "Ticket" },
           { to: "/administration/database-settings", label: "Database" },
           { to: "/administration/declared-month-settings", label: "Declared Month" },
+          { to: "/administration/archive", label: "Archive", icon: "layers" },
         ],
       },
     ],

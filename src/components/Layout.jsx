@@ -4,7 +4,7 @@ import Sidebar from "./Sidebar";
 import Header from "./Header";
 import OpenTabs, { KeepAliveOutlet } from "./OpenTabs";
 import { metaFor } from "./routesMeta";
-
+import SeasonTheme from "./SeasonTheme";
 export default function Layout() {
   const { pathname } = useLocation();
   const meta = metaFor(pathname) || { title: "Page not found", crumbs: ["Accounting", "Not found"] };
@@ -29,6 +29,7 @@ export default function Layout() {
   return (
     <div className="app">
       <Sidebar open={mobileOpen} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} onReady={setReady} />
+      <SeasonTheme />
       {mobileOpen && <div className="scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
 
       <div className="main">

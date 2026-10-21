@@ -122,7 +122,7 @@ import DeclaredMonthSettings from "./pages/administration/DeclaredMonthSettings"
 import UserLogs from "./pages/administration/UserLogs";
 import UserAccess from "./pages/administration/UserAccess";
 import DatabaseSettings from "./pages/administration/DatabaseSettings";
-
+import Archive from "./pages/administration/Archive";
 import { MessengerPage } from "./components/Messenger";
 
 // Built pages. Add new ones here as you make them;
@@ -256,6 +256,7 @@ const PAGES = {
   "/administration/user-logs": UserLogs,
   "/administration/user-access": UserAccess,
   "/administration/database-settings": DatabaseSettings,
+  "/administration/archive": Archive,
 };
 
 // Routes that are not in the sidebar (page tabs)
