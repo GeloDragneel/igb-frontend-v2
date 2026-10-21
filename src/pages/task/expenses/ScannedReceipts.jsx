@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SearchCard from "../../../components/SearchCard";
 import DataTable from "../../../components/DataTable";
@@ -11,6 +11,14 @@ import { useAuth, apiFetch, apiBlob } from "../../../context/AuthContext";
 
 const TABLE_HEIGHT = "calc(100vh - 375px)";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// search + status filter kept per browser tab: survive refresh (F5), going back to the list and switching tabs
+const KEY = "expenses-scanned";
+const readKept = (k) => { try { return sessionStorage.getItem(`${KEY}.${k}`) || ""; } catch { return ""; } };
+const keep = (k, v) => { try { v ? sessionStorage.setItem(`${KEY}.${k}`, v) : sessionStorage.removeItem(`${KEY}.${k}`); } catch { /* ignore */ } };
+
+// last loaded rows per account, kept while the app is open → coming back shows the table at once
+const rowsCache = new Map();
 
 const STATUS = {
     0: { label: "Pending", tone: "orange" },
@@ -34,26 +42,45 @@ export default function ScannedReceipts() {
     const location = useLocation();
     const notify = useToast();
 
-    const [rows, setRows] = useState([]);
+    const cacheKey = `${user?.id}:${user?.caid}`;
+    const [rows, setRows] = useState(() => rowsCache.get(cacheKey) || []);
     const [loading, setLoading] = useState(true);
+    // "Loading…" only until the first data has been shown
+    const [loadedOnce, setLoadedOnce] = useState(() => rowsCache.has(cacheKey));
     const [error, setError] = useState("");
-    const [query, setQuery] = useState("");
-    const [status, setStatus] = useState("");
+    const [query, setQueryState] = useState(() => readKept("search"));
+    const [status, setStatusState] = useState(() => readKept("status"));
+    const setQuery = useCallback((v) => setQueryState((cur) => {
+        const next = typeof v === "function" ? v(cur) : v;
+        keep("search", next);
+        return next;
+    }), []);
+    const setStatus = (v) => { keep("status", v); setStatusState(v); };
     const [preview, setPreview] = useState(null);
     const [scanningId, setScanningId] = useState(null);
 
+    const reqId = useRef(0);
     const load = useCallback(async () => {
+        const id = ++reqId.current;
+        if (rowsCache.has(cacheKey)) setRows(rowsCache.get(cacheKey));
         setLoading(true);
         setError("");
         try {
-            setRows(await apiFetch("/expenses/scanned"));
+            const data = await apiFetch("/expenses/scanned");
+            if (id !== reqId.current) return;
+            rowsCache.set(cacheKey, data);
+            setRows(data);
         } catch (e) {
+            if (id !== reqId.current) return;
             setError(e.message || "Couldn't load scanned receipts.");
-            setRows([]);
+            if (!rowsCache.has(cacheKey)) setRows([]);   // keep what's on screen if we had it
         } finally {
-            setLoading(false);
+            if (id === reqId.current) {
+                setLoading(false);
+                setLoadedOnce(true);
+            }
         }
-    }, []);
+    }, [cacheKey]);
 
     useEffect(() => { load(); }, [load, user?.id, user?.caid]);
 
@@ -179,11 +206,13 @@ export default function ScannedReceipts() {
                 <DataTable
                     bodyHeight={TABLE_HEIGHT}
                     columns={columns}
-                    rows={loading ? [] : filtered}
+                    rows={loading && !loadedOnce ? [] : filtered}
                     rowKey="id"
                     exportName="expenses-scanned-receipts"
                     showToolbar={false}
-                    emptyText={loading ? "Loading…" : "No scanned receipts."}
+                    emptyText={loading && !loadedOnce ? "Loading…" : "No scanned receipts."}
+                    stateKey={KEY}
+                    resetKey={`${query}|${status}`}
                     onRowClick={(r) => (r.reference_no ? openInvoice(r.reference_no) : setPreview(r))}
                     rowActions={rowActions}
                 />
