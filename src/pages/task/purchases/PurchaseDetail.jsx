@@ -97,6 +97,14 @@ const vatTypeOfAccount = (name) => {
     return "vatable";
 };
 
+// VAT type of a line: an account that says Exempt / Zero / Non-VAT decides;
+// otherwise the item's own Tax Type (NonVAT item → Non VAT column, not VATable)
+const lineVatType = (item, accountName) => {
+    const byAccount = accountName ? vatTypeOfAccount(accountName) : "vatable";
+    if (byAccount !== "vatable") return byAccount;
+    return item ? vatTypeOf(item.tax_type) : "vatable";
+};
+
 const blankLine = () => ({ itemId: "", unitTypeId: null, qty: 1, price: 0, discount: 0, vatType: "vatable", accountCode: "" });
 
 function lineCalc(l) {
@@ -263,7 +271,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             itemId: String(item.id),
             unitTypeId: item.unit_type_id,
             accountCode,
-            vatType: acc ? vatTypeOfAccount(acc.account_name) : vatTypeOf(item.tax_type),
+            vatType: lineVatType(item, acc?.account_name),
         };
     };
     // new purchase defaults: Accounts = Cash / Cash on Hand · first line = the "VARIOUS PURCHASE - VAT / VT" item
@@ -291,7 +299,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             unitTypeId: item.unit_type_id,
             price: Number(item.price) || 0,
             accountCode,
-            vatType: acc ? vatTypeOfAccount(acc.account_name) : vatTypeOf(item.tax_type),
+            vatType: lineVatType(item, acc?.account_name),
         };
     };
     const [f, setF] = useState(() =>
@@ -424,9 +432,9 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     ];
 
     /* ---------- lines ---------- */
-    const vatTypeForAccount = (code, fallback) => {
+    const vatTypeForAccount = (code, item) => {
         const acc = salesAccounts.find((a) => a.account_code === code);
-        return acc ? vatTypeOfAccount(acc.account_name) : fallback;
+        return lineVatType(item, acc?.account_name);
     };
 
     const applyItem = (i, item) => {
@@ -436,7 +444,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             unitTypeId: item.unit_type_id,
             price: Number(item.price) || 0,
             accountCode,
-            vatType: vatTypeForAccount(accountCode, vatTypeOf(item.tax_type)),
+            vatType: vatTypeForAccount(accountCode, item),
         });
     };
 
@@ -448,7 +456,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
 
     const changeLine = (i, patch) => {
         if ("accountCode" in patch) {
-            patch = { ...patch, vatType: vatTypeForAccount(patch.accountCode, f.lines[i]?.vatType || "vatable") };
+            patch = { ...patch, vatType: vatTypeForAccount(patch.accountCode, itemsById[f.lines[i]?.itemId]) };
         }
         setLine(i, patch);
     };
