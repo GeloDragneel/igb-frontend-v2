@@ -19,6 +19,18 @@ const MAX_WINDOWS = 3;
 const HEARTBEAT_MS = 20000;   // online status + badge
 const POLL_MS = 4000;         // only when Pusher is not set up
 
+/* ---------------- instant delivery (Pusher client events) ----------------
+   Every chat has its own channel private-conv.<id>. The sender's browser pushes the new message
+   straight to the other members over the open socket (~100 ms, no server in between);
+   the saved copy from the server follows and replaces it. Needs "Client events" ON in the Pusher app. */
+let livePusher = null;
+const convChannel = (id) => `private-conv.${id}`;
+function liveSend(cid, event, data) {
+    const ch = livePusher?.channel(convChannel(cid));
+    if (!ch?.subscribed) return false;
+    try { return ch.trigger(event, data); } catch { return false; }
+}
+
 /* ---------------- small helpers ---------------- */
 
 const TZ = "Asia/Manila";                               // every time is shown in Philippine time
@@ -304,7 +316,7 @@ function MessengerInner() {
     }, [openChat, putPayload, notify]);
 
     /* ---------- new messages arriving (Pusher or polling) ---------- */
-    const receive = useCallback((cid, msgs, { sound = true } = {}) => {
+    const receive = useCallback((cid, msgs, { sound = true, refresh = true } = {}) => {
         if (!msgs?.length) return;
         const meId = meRef.current;
         setChat(cid, (cur) => {
@@ -322,7 +334,7 @@ function MessengerInner() {
             const onScreen = (open && !open.min) || (onPageRef.current && pageRef.current === cid);
             if (!open && !onPageRef.current) openChat(cid, { focus: false });   // FB pops the chat open (not on the Messenger page)
             if (sound && (document.hidden || !onScreen)) ping();
-            loadSummary(); loadConvs();
+            if (refresh) { loadSummary(); loadConvs(); }
         }
     }, [setChat, openChat, loadSummary, loadConvs]);
 
@@ -342,11 +354,17 @@ function MessengerInner() {
                     },
                 },
             });
+            livePusher = pusher;
             const ch = pusher.subscribe(`private-emp.${r.me}`);
             ch.bind("pusher:subscription_succeeded", () => setRt(true));
             ch.bind("pusher:subscription_error", () => setRt(false));
             pusher.connection.bind("state_change", ({ current }) => setRt(current === "connected"));
-            ch.bind("message", (d) => receive(d.conversation_id, d.messages));
+            ch.bind("message", (d) => {
+                // the instant copy (client event) is replaced by the saved message
+                const had = !!d.client_id && !!chatsRef.current[d.conversation_id]?.messages.some((m) => String(m.id).startsWith(d.client_id));
+                if (had) setChat(d.conversation_id, (cur) => cur && ({ ...cur, messages: cur.messages.filter((m) => !String(m.id).startsWith(d.client_id)) }));
+                receive(d.conversation_id, d.messages, { sound: !had });   // already pinged for the instant copy
+            });
             ch.bind("read", (d) => setChat(d.conversation_id, (cur) => cur && ({
                 ...cur, members: cur.members.map((m) => (m.id === d.employee_id ? { ...m, last_read_id: Math.max(m.last_read_id, d.last_read_id) } : m)),
             })));
@@ -360,8 +378,25 @@ function MessengerInner() {
             ch.bind("conversation", (d) => { if (chatsRef.current[d.conversation_id]) loadChat(d.conversation_id); loadConvs(); loadSummary(); });
         })();
         const beat = setInterval(() => document.visibilityState === "visible" && loadSummary(), HEARTBEAT_MS);
-        return () => { alive = false; clearInterval(beat); pusher?.disconnect(); };
+        return () => { alive = false; clearInterval(beat); if (livePusher === pusher) livePusher = null; pusher?.disconnect(); };
     }, [loadSummary, receive, setChat, loadChat, loadConvs]);
+
+    // one channel per chat (first 100 in the list) for the instant messages + typing
+    const convIds = (convs || []).slice(0, 100).map((x) => x.id).join(",");
+    const liveSubs = useRef(new Set());
+    useEffect(() => {
+        if (!rt || !livePusher) return;
+        const want = new Set(convIds ? convIds.split(",").map(Number) : []);
+        liveSubs.current.forEach((id) => { if (!want.has(id)) { livePusher.unsubscribe(convChannel(id)); liveSubs.current.delete(id); } });
+        want.forEach((id) => {
+            if (liveSubs.current.has(id)) return;
+            liveSubs.current.add(id);
+            const ch = livePusher.subscribe(convChannel(id));
+            ch.bind("client-message", (d) => d?.message && receive(id, [{ ...d.message, live: true }], { refresh: false }));
+            ch.bind("client-typing", (d) => d?.employee_id && setChat(id, (cur) => cur && ({ ...cur, typing: { ...cur.typing, [d.employee_id]: { name: d.name, until: Date.now() + 4500 } } })));
+        });
+    }, [rt, convIds, receive, setChat]);
+    useEffect(() => { if (!rt) liveSubs.current.clear(); }, [rt]);
 
     // no Pusher → poll the open chats (and the list when the badge changes)
     const pollKey = [...wins.map((w) => w.id), onPage ? pageChat : null].filter(Boolean).join(",");
@@ -604,6 +639,14 @@ function ChatWindow({ win, page = false }) {
     const lastId = msgs.filter((m) => typeof m.id === "number").slice(-1)[0]?.id || 0;
     const mine = (m) => m.sender_id === me;
 
+    // the new message to the other members right away (they see it before the server has saved it)
+    const pushLive = (msg) => {
+        const meRow = c?.members?.find((m) => m.me);
+        liveSend(win.id, "client-message", {
+            message: { ...msg, sender_id: me, sender: meRow?.name || "", photo: meRow?.photo || null, mine: false, time: new Date().toISOString() },
+        });
+    };
+
     // stick to the bottom on new messages (unless reading older ones)
     useEffect(() => {
         const el = body.current;
@@ -679,7 +722,7 @@ function ChatWindow({ win, page = false }) {
         const total = files.reduce((a, f) => a + f.file.size, 0);
         if (total > totalMax) { setSizeError(`Too big: ${mb(total)} in this message. Max ${mb(totalMax)} – remove some files and send them separately.`); return; }
         setSizeError("");
-        const tempId = `t${Date.now()}`;
+        const tempId = `t${me}-${Date.now()}`;
         const reply = replyTo ? { id: replyTo.id, sender_id: replyTo.sender_id, sender: replyTo.sender, type: replyTo.type, body: replyTo.body, image: replyTo.image, file_name: replyTo.file_name } : null;
         const temps = [
             ...files.map((f, i) => (f.kind === "file"
@@ -689,6 +732,8 @@ function ChatWindow({ win, page = false }) {
         ];
         const sending = files;
         setChat(win.id, (cur) => cur && ({ ...cur, messages: [...cur.messages, ...temps] }));
+        // text goes to the others straight away (photos / files wait for the upload)
+        if (body_ && !files.length) pushLive({ id: tempId, type: "text", body: body_, reply });
         setText(""); setFiles([]); setReplyTo(null); setEmojiOpen(false);
         atBottom.current = true;
         try {
@@ -697,10 +742,11 @@ function ChatWindow({ win, page = false }) {
                 const form = new FormData();
                 if (body_) form.append("body", body_);
                 if (reply) form.append("reply_to_id", reply.id);
+                form.append("client_id", tempId);
                 sending.forEach((f) => form.append(f.kind === "file" ? "files[]" : "images[]", f.file));
                 r = await apiForm(`/messenger/conversations/${win.id}/messages`, form);
             } else {
-                r = await apiFetch(`/messenger/conversations/${win.id}/messages`, { method: "POST", body: JSON.stringify({ body: body_, reply_to_id: reply?.id || null }) });
+                r = await apiFetch(`/messenger/conversations/${win.id}/messages`, { method: "POST", body: JSON.stringify({ body: body_, reply_to_id: reply?.id || null, client_id: tempId }) });
             }
             setChat(win.id, (cur) => cur && ({ ...cur, messages: cur.messages.filter((m) => !String(m.id).startsWith(tempId)) }));
             receive(win.id, r.messages, { sound: false });
@@ -721,13 +767,14 @@ function ChatWindow({ win, page = false }) {
     const sendGif = (url) => sendSticker(url, "gif");
     const sendSticker = async (k, kind = "sticker") => {
         setStickerOpen(false); setGifOpen(false);
-        const tempId = `t${Date.now()}`;
+        const tempId = `t${me}-${Date.now()}`;
         const reply = replyTo ? { id: replyTo.id, sender_id: replyTo.sender_id, sender: replyTo.sender, type: replyTo.type, body: replyTo.body, image: replyTo.image, file_name: replyTo.file_name } : null;
         setChat(win.id, (cur) => cur && ({ ...cur, messages: [...cur.messages, { id: tempId, type: kind, body: k, sender_id: me, pending: true, time: new Date().toISOString(), reply }] }));
+        pushLive({ id: tempId, type: kind, body: k, ...(kind === "gif" ? { image: k } : {}), reply });
         setReplyTo(null);
         atBottom.current = true;
         try {
-            const r = await apiFetch(`/messenger/conversations/${win.id}/messages`, { method: "POST", body: JSON.stringify({ [kind]: k, reply_to_id: reply?.id || null }) });
+            const r = await apiFetch(`/messenger/conversations/${win.id}/messages`, { method: "POST", body: JSON.stringify({ [kind]: k, reply_to_id: reply?.id || null, client_id: tempId }) });
             setChat(win.id, (cur) => cur && ({ ...cur, messages: cur.messages.filter((m) => m.id !== tempId) }));
             receive(win.id, r.messages, { sound: false });
             loadConvs();
@@ -741,7 +788,11 @@ function ChatWindow({ win, page = false }) {
         setText(v);
         if (rt && v && Date.now() - lastTyping.current > 3000) {
             lastTyping.current = Date.now();
-            apiFetch(`/messenger/conversations/${win.id}/typing`, { method: "POST" }).catch(() => { });
+            const meRow = c?.members?.find((m) => m.me);
+            // straight over the socket; through the server only if that isn't possible
+            if (!liveSend(win.id, "client-typing", { employee_id: me, name: meRow?.name || "" })) {
+                apiFetch(`/messenger/conversations/${win.id}/typing`, { method: "POST" }).catch(() => { });
+            }
         }
     };
 

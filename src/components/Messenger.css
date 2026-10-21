@@ -1449,6 +1449,16 @@ body.ai-chat-open .ms-dock {
     gap: 12px;
     height: calc(100vh - 150px);
     min-height: 480px;
+    /* keep everything of the page in its own layer at 0, so header dropdowns
+     (branch switcher, notifications, profile …) always open ON TOP of the messenger */
+    position: relative;
+    z-index: 0;
+    isolation: isolate;
+}
+
+/* the chat-list column reuses .ms-list (z-index 1200 for the header dropdown) – not needed on the page */
+.ms-page .ms-page-side {
+    z-index: auto;
 }
 
 [data-theme="dark"] .ms-page {
