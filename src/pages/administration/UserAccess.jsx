@@ -1,6 +1,7 @@
 // Administration → User Access
 // Staff logins (m_user_staff) as cards · click a card → popup with the Staff pages that login can open
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { apiFetch } from "../../context/AuthContext";
@@ -40,6 +41,7 @@ export default function UserAccess() {
     const [paths, setPaths] = useState([]);
     const [busy, setBusy] = useState(false);
     const [openGroups, setOpenGroups] = useState(() => STAFF.map((g) => g.key));   // tree: every group open
+    const [tab, setTab] = useState("pages");           // popup: "pages" | "clients"
 
     const loadUsers = useCallback(async () => {
         setLoading(true);
@@ -81,7 +83,7 @@ export default function UserAccess() {
     const original = detail ? (detail.saved ? detail.paths : ALL_PATHS) : [];
     const dirty = detail && (original.length !== paths.length || original.some((p) => !paths.includes(p)));
 
-    const close = () => { if (!busy) { setSel(null); setDetail(null); } };
+    const close = () => { if (!busy) { setSel(null); setDetail(null); setTab("pages"); } };
 
     const save = async () => {
         setBusy(true);
@@ -160,17 +162,26 @@ export default function UserAccess() {
                     size="xlg"
                     footer={
                         <div className="ua-foot uac-mfoot">
-                            <span className="muted">{detail ? `${paths.length} of ${ALL_PATHS.length} pages` : ""}</span>
+                            <span className="muted">{tab === "pages" && detail ? `${paths.length} of ${ALL_PATHS.length} pages` : ""}</span>
                             <div className="ua-tools">
                                 <button className="btn" onClick={close} disabled={busy}>Close</button>
-                                <button className="btn" onClick={() => setPaths(original)} disabled={!dirty || busy}>Reset</button>
-                                <button className="btn btn-primary" onClick={save} disabled={!detail || busy || (detail.saved && !dirty)}>{busy ? "Saving…" : "Save access"}</button>
+                                {tab === "pages" && (
+                                    <>
+                                        <button className="btn" onClick={() => setPaths(original)} disabled={!dirty || busy}>Reset</button>
+                                        <button className="btn btn-primary" onClick={save} disabled={!detail || busy || (detail.saved && !dirty)}>{busy ? "Saving…" : "Save access"}</button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     }
                 >
-                    {!detail && <p className="ua-empty">Loading…</p>}
-                    {detail && (
+                    <div className="uac-tabs" role="tablist">
+                        <button role="tab" aria-selected={tab === "pages"} className={tab === "pages" ? "is-on" : ""} onClick={() => setTab("pages")}>Page access</button>
+                        <button role="tab" aria-selected={tab === "clients"} className={tab === "clients" ? "is-on" : ""} onClick={() => setTab("clients")}>Client logins</button>
+                    </div>
+                    {tab === "clients" && <ClientLogins staffId={sel.id} />}
+                    {tab === "pages" && !detail && <p className="ua-empty">Loading…</p>}
+                    {tab === "pages" && detail && (
                         <>
                             <div className="uac-mtools">
                                 {!detail.saved
@@ -239,6 +250,122 @@ export default function UserAccess() {
                         </>
                     )}
                 </Modal>
+            )}
+        </div>
+    );
+}
+
+/* ---------- popup tab: every client account + this employee's login there (m_user_client_staff) ---------- */
+function ClientLogins({ staffId }) {
+    const [data, setData] = useState(null);
+    const [error, setError] = useState("");
+    const [q, setQ] = useState("");
+    const [show, setShow] = useState("all");              // all | login | none | assigned
+    const [busyId, setBusyId] = useState(0);
+    const [made, setMade] = useState(null);               // { trade, username, password } just generated
+    const notify = useToast();
+
+    const generate = async (r) => {
+        setBusyId(r.caid);
+        try {
+            const res = await apiFetch(`/admin/user-access/${staffId}/clients/${r.caid}/login`, { method: "POST" });
+            setData((d) => ({
+                ...d,
+                rows: d.rows.map((x) => (x.caid === r.caid ? { ...x, login: res.login } : x)),
+                counts: { ...d.counts, login: (d.counts?.login || 0) + 1 },
+            }));
+            setMade({ trade: `${r.trade_name}${r.branch_code ? ` - ${r.branch_code}` : ""}`, username: res.login.username, password: res.password });
+        } catch (e) {
+            notify(e.message || "Couldn't generate the login.", "error");
+        } finally {
+            setBusyId(0);
+        }
+    };
+    const copy = (t) => navigator.clipboard?.writeText(t).then(() => notify("Copied."));
+
+    useEffect(() => {
+        let alive = true;
+        setData(null);
+        apiFetch(`/admin/user-access/${staffId}/clients`)
+            .then((d) => alive && setData(d))
+            .catch((e) => alive && setError(e.message || "Couldn't load the client accounts."));
+        return () => { alive = false; };
+    }, [staffId]);
+
+    const rows = useMemo(() => {
+        const s = q.trim().toLowerCase();
+        return (data?.rows || []).filter((r) =>
+            (show === "all" || (show === "login" ? r.login : show === "none" ? !r.login : r.role)) &&
+            (!s || [r.trade_name, r.client_name, r.client_num, r.branch_code, r.login?.username].some((v) => String(v || "").toLowerCase().includes(s))));
+    }, [data, q, show]);
+
+    if (error) return <div className="alert-error" role="alert">{error}</div>;
+    if (!data) return <p className="ua-empty">Loading…</p>;
+    const c = data.counts || {};
+
+    return (
+        <div className="ucl">
+            {!data.employee_id && <p className="ua-note">This staff login is not linked to an employee (m_user_staff.comid → m_employee.com_id), so it can't have client logins.</p>}
+            <div className="ucl-bar">
+                <input className="input" placeholder="Search client, branch, username" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search client accounts" />
+                <div className="ua-seg" role="tablist">
+                    {[["all", "All", c.all], ["login", "Has login", c.login], ["none", "No login", (c.all || 0) - (c.login || 0)], ["assigned", "Assigned", c.assigned]].map(([v, l, n]) => (
+                        <button key={v} role="tab" aria-selected={show === v} className={show === v ? "is-on" : ""} onClick={() => setShow(v)}>
+                            {l} <span className="uac-n">{n ?? 0}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div className="ucl-scroll">
+                <table className="table ucl-table">
+                    <thead>
+                        <tr><th>Client account</th><th>Login (user client staff)</th><th className="ucl-act">Login</th></tr>
+                    </thead>
+                    <tbody>
+                        {!rows.length && <tr><td colSpan={3} className="ua-empty">No client account matches.</td></tr>}
+                        {rows.map((r) => (
+                            <tr key={r.caid} className={r.login ? "has-login" : ""}>
+                                <td>
+                                    <b>{r.trade_name || "—"}{r.branch_code ? ` - ${r.branch_code}` : ""}</b>
+                                    <small>{r.client_num}{r.client_name ? ` · ${r.client_name}` : ""}{!r.active ? " · inactive account" : ""}</small>
+                                </td>
+                                <td>
+                                    {r.login ? (
+                                        <span className="ucl-login">
+                                            <i className={`ucl-dot${r.login.active ? " is-on" : ""}`} />
+                                            <span className="mono">{r.login.username}</span>
+                                            {!r.login.active && <span className="ucl-chip is-off">Inactive</span>}
+                                        </span>
+                                    ) : <span className="ucl-none">No login</span>}
+                                </td>
+                                <td className="ucl-act">
+                                    {r.login
+                                        ? <span className="ucl-done">✓ Generated</span>
+                                        : <button className="btn btn-sm btn-primary" onClick={() => generate(r)} disabled={!!busyId || !data.employee_id}>
+                                            {busyId === r.caid ? "Generating…" : "Generate"}
+                                        </button>}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <p className="muted small" style={{ marginTop: 8 }}>{rows.length} of {data.rows.length} client account(s)</p>
+
+            {made && createPortal(
+                <div className="ucl-made" role="dialog" aria-label="Login generated">
+                    <div className="ucl-made-box">
+                        <h4>Login generated</h4>
+                        <p className="muted small">{made.trade} · give these to the employee. The password is shown only now.</p>
+                        <div className="ucl-cred"><span>Username</span><b className="mono">{made.username}</b><button className="btn btn-sm" onClick={() => copy(made.username)}>Copy</button></div>
+                        <div className="ucl-cred"><span>Password</span><b className="mono">{made.password}</b><button className="btn btn-sm" onClick={() => copy(made.password)}>Copy</button></div>
+                        <div className="ucl-made-foot">
+                            <button className="btn" onClick={() => copy(`Username: ${made.username}\nPassword: ${made.password}`)}>Copy both</button>
+                            <button className="btn btn-primary" onClick={() => setMade(null)}>Done</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );
