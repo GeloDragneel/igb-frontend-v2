@@ -180,7 +180,7 @@ function PrintR1Modal({ onClose }) {
     }, [date]);
 
     return (
-        <Modal title="Print Preview · R1" onClose={onClose} size="lg"
+        <Modal title="Print Preview · R1" onClose={onClose} size="xxlg"
             footer={<>
                 {url && <a className="btn" href={url} download={`R1-${date}.pdf`}>Download</a>}
                 <button className="btn btn-dark" onClick={onClose}>Close</button>
