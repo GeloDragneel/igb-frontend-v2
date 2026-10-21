@@ -49,3 +49,79 @@
         color: #fb923c;
     }
 }
+
+/* E-BIR table, dark mode: Output VAT / Input VAT rows kept their light background
+   with light text → unreadable. Tinted rows + readable text instead. */
+[data-theme="dark"] .vs-ebir-table tr.is-out td,
+[data-theme="dark"] .vs-ebir-table tr.is-out th {
+    background: rgba(245, 158, 11, 0.14) !important;
+    color: #fcd34d !important;
+}
+
+[data-theme="dark"] .vs-ebir-table tr.is-in td,
+[data-theme="dark"] .vs-ebir-table tr.is-in th {
+    background: rgba(139, 92, 246, 0.16) !important;
+    color: #c4b5fd !important;
+}
+
+[data-theme="dark"] .vs-ebir-table tr.is-out .vs-amt,
+[data-theme="dark"] .vs-ebir-table tr.is-in .vs-amt {
+    color: inherit !important;
+}
+
+[data-theme="dark"] .vs-ebir-table tr.is-out .vs-tag,
+[data-theme="dark"] .vs-ebir-table tr.is-in .vs-tag {
+    font-weight: 700;
+}
+
+/* E-BIR table, dark mode: bold pure-white text glows / looks blurry on the dark navy.
+   Softer white, lighter weights, crisp font rendering. */
+[data-theme="dark"] .vs-ebir-table {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .vs-ebir-table td,
+[data-theme="dark"] .vs-ebir-table th {
+    text-shadow: none !important;
+}
+
+[data-theme="dark"] .vs-ebir-table thead th {
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+[data-theme="dark"] .vs-ebir-table .vs-tag {
+    color: #f1f5f9;
+    font-weight: 600;
+}
+
+[data-theme="dark"] .vs-ebir-table .vs-desc {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+[data-theme="dark"] .vs-ebir-table .vs-num {
+    color: #e2e8f0;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+[data-theme="dark"] .vs-ebir-table .vs-total,
+[data-theme="dark"] .vs-ebir-table tr.vs-sub td,
+[data-theme="dark"] .vs-ebir-table tr.vs-grand td {
+    color: #f8fafc;
+    font-weight: 600;
+}
+
+[data-theme="dark"] .vs-ebir-table .vs-amt {
+    color: #e2e8f0;
+    font-weight: 500;
+    text-decoration-color: rgba(148, 163, 184, .5);
+}
+
+[data-theme="dark"] .vs-ebir-table .vs-amt:hover {
+    color: #93c5fd;
+}

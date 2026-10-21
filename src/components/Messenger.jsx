@@ -4,7 +4,7 @@
 //   full page: <MessengerPage /> on /messenger (list · chat · info), shares the same live data.
 //   The open chat is kept in memory (not in the URL), so the app's tab bar shows ONE "Messenger" tab.
 // Real time: Pusher (private-emp.<employee id>) when the server has the keys, else polling.
-import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Pusher from "pusher-js";
@@ -172,6 +172,7 @@ const I = {
     more: <><circle cx="5" cy="12" r="1.4" fill="currentColor" /><circle cx="12" cy="12" r="1.4" fill="currentColor" /><circle cx="19" cy="12" r="1.4" fill="currentColor" /></>,
     back: <path d="M15 18l-6-6 6-6" />,
     plus: <path d="M12 5v14M5 12h14" />,
+    plusCircle: <><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none" /><path d="M12 7.5v9M7.5 12h9" stroke="#fff" /></>,
     smile: <><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8" /><path d="M9 9.5h.01M15 9.5h.01" strokeWidth="2.6" /></>,
     reply: <><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></>,
     clip: <path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />,
@@ -622,6 +623,9 @@ function ChatWindow({ win, page = false }) {
     const fileRef = useRef(null);
     const docRef = useRef(null);
     const [text, setText] = useState("");
+    const [showTools, setShowTools] = useState(false);   // ⊕ tapped while typing → icons back
+    const typingMode = !!text && !showTools;
+    useEffect(() => { if (!text) setShowTools(false); }, [text]);   // box empty again → normal icons
     const [files, setFiles] = useState([]);              // [{ file, url }]
     const [info, setInfo] = useState(() => page && window.innerWidth >= 1280);   // page: info panel open on wide screens
     const [loadingOld, setLoadingOld] = useState(false);
@@ -666,6 +670,16 @@ function ChatWindow({ win, page = false }) {
     }, [lastId, win.min, win.id, c, setChat, loadSummary, loadConvs]);
 
     // photos / GIFs get taller when they finish loading → stay at the bottom if we were there
+    // message box grows with the text (like Messenger), up to its max height, then scrolls
+    useLayoutEffect(() => {
+        const el = input.current;
+        if (!el) return;
+        el.style.height = "auto";
+        const max = parseFloat(getComputedStyle(el).maxHeight) || 140;
+        el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+        el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+    }, [text, win.min]);
+
     const keepBottom = () => { if (atBottom.current && body.current) body.current.scrollTop = body.current.scrollHeight; };
 
     const onScroll = async (e) => {
@@ -1099,37 +1113,49 @@ function ChatWindow({ win, page = false }) {
                 </div>
             )}
 
-            <form className="ms-win-foot" onSubmit={(e) => { e.preventDefault(); send(); }}>
-                <button type="button" className="ms-icon is-blue" onClick={() => fileRef.current?.click()} aria-label="Send photos" title="Send photos"><Svg i="image" size={20} /></button>
+            <form className={`ms-win-foot${typingMode ? " is-typing" : ""}`} onSubmit={(e) => { e.preventDefault(); send(); }}>
                 <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-                <button type="button" className="ms-icon is-blue" onClick={() => docRef.current?.click()} aria-label="Attach a file" title="Attach a file (PDF, Word, Excel…)"><Svg i="clip" size={19} /></button>
                 <input ref={docRef} type="file" accept={`image/*,${DOC_ACCEPT}`} multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-                <textarea
-                    ref={input}
-                    rows={1}
-                    value={text}
-                    maxLength={5000}
-                    placeholder="Aa"
-                    onChange={(e) => typing(e.target.value)}
-                    onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-                        if (e.key === "Escape" && replyTo) { e.stopPropagation(); setReplyTo(null); }
-                    }}
-                    aria-label="Message"
-                />
-                <span className="ms-emoji-anchor">
-                    <button type="button" className={`ms-icon is-blue ms-gif-btn${gifOpen ? " is-on" : ""}`} onClick={() => { setEmojiOpen(false); setStickerOpen(false); setGifOpen(!gifOpen); }} aria-label="GIFs" title="GIFs"><Svg i="gif" size={20} /></button>
-                    {gifOpen && <GifPicker className="is-input" onPick={sendGif} onClose={() => setGifOpen(false)} notify={notify} />}
-                </span>
-                <span className="ms-emoji-anchor">
-                    <button type="button" className={`ms-icon is-blue ms-sticker-btn${stickerOpen ? " is-on" : ""}`} onClick={() => { setEmojiOpen(false); setGifOpen(false); setStickerOpen(!stickerOpen); }} aria-label="Stickers" title="Stickers"><Svg i="sticker" size={20} /></button>
-                    {stickerOpen && <StickerPicker className="is-input" onPick={sendSticker} onClose={() => setStickerOpen(false)} />}
-                </span>
-                <span className="ms-emoji-anchor">
-                    <button type="button" className={`ms-icon is-blue ms-emoji-btn${emojiOpen ? " is-on" : ""}`} onClick={() => { setStickerOpen(false); setEmojiOpen(!emojiOpen); }} aria-label="Emoji" title="Emoji"><Svg i="smile" size={20} /></button>
-                    {emojiOpen && <EmojiPicker className="is-input" onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />}
-                </span>
+                {typingMode ? (
+                    // typing: the tools fold into one ⊕ so the box gets the whole width (like Messenger)
+                    <button type="button" className="ms-icon is-blue ms-tools-btn" onClick={() => setShowTools(true)} aria-label="Show more actions" title="More">
+                        <Svg i="plusCircle" size={22} />
+                    </button>
+                ) : (
+                    <>
+                        <button type="button" className="ms-icon is-blue" onClick={() => fileRef.current?.click()} aria-label="Send photos" title="Send photos"><Svg i="image" size={20} /></button>
+                        <button type="button" className="ms-icon is-blue" onClick={() => docRef.current?.click()} aria-label="Attach a file" title="Attach a file (PDF, Word, Excel…)"><Svg i="clip" size={19} /></button>
+                        <span className="ms-emoji-anchor">
+                            <button type="button" className={`ms-icon is-blue ms-gif-btn${gifOpen ? " is-on" : ""}`} onClick={() => { setEmojiOpen(false); setStickerOpen(false); setGifOpen(!gifOpen); }} aria-label="GIFs" title="GIFs"><Svg i="gif" size={20} /></button>
+                            {gifOpen && <GifPicker className="is-input" onPick={sendGif} onClose={() => setGifOpen(false)} notify={notify} />}
+                        </span>
+                        <span className="ms-emoji-anchor">
+                            <button type="button" className={`ms-icon is-blue ms-sticker-btn${stickerOpen ? " is-on" : ""}`} onClick={() => { setEmojiOpen(false); setGifOpen(false); setStickerOpen(!stickerOpen); }} aria-label="Stickers" title="Stickers"><Svg i="sticker" size={20} /></button>
+                            {stickerOpen && <StickerPicker className="is-input" onPick={sendSticker} onClose={() => setStickerOpen(false)} />}
+                        </span>
+                    </>
+                )}
+                {/* the box, with the emoji button inside it on the right */}
+                <div className="ms-input-wrap">
+                    <textarea
+                        ref={input}
+                        rows={1}
+                        value={text}
+                        maxLength={5000}
+                        placeholder="Aa"
+                        onChange={(e) => { typing(e.target.value); if (!e.target.value) setShowTools(false); }}
+                        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+                            if (e.key === "Escape" && replyTo) { e.stopPropagation(); setReplyTo(null); }
+                        }}
+                        aria-label="Message"
+                    />
+                    <span className="ms-emoji-anchor ms-emoji-in">
+                        <button type="button" className={`ms-icon is-blue ms-emoji-btn${emojiOpen ? " is-on" : ""}`} onClick={() => { setStickerOpen(false); setGifOpen(false); setEmojiOpen(!emojiOpen); }} aria-label="Emoji" title="Emoji"><Svg i="smile" size={20} /></button>
+                        {emojiOpen && <EmojiPicker className="is-input" onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />}
+                    </span>
+                </div>
                 {text.trim() || files.length
                     ? <button type="submit" className="ms-icon is-blue" aria-label="Send"><Svg i="send" size={20} /></button>
                     : <button type="button" className="ms-icon ms-like" onClick={() => send(conv?.emoji || "👍")} aria-label={`Send ${conv?.emoji || "👍"}`}>{conv?.emoji || "👍"}</button>}

@@ -20,6 +20,17 @@ const keep = (k, v) => { try { v ? sessionStorage.setItem(`${KEY}.${k}`, v) : se
 // last loaded rows per account, kept while the app is open → coming back shows the table at once
 const rowsCache = new Map();
 
+// receipts read ahead in the background (id → request), so Scan opens the invoice at once
+const preRead = new Map();
+const readScan = (id) => {
+    if (!preRead.has(id)) {
+        const p = apiFetch(`/purchases/scanned/${id}/read`, { method: "POST" });
+        preRead.set(id, p);
+        p.catch(() => preRead.delete(id));            // failed → try again on click
+    }
+    return preRead.get(id);
+};
+
 const STATUS = {
     0: { label: "Pending", tone: "orange" },
     1: { label: "Confirmed", tone: "green" },
@@ -84,6 +95,19 @@ export default function ScannedReceipts() {
 
     useEffect(() => { load(); }, [load, user?.id, user?.caid]);
 
+    // read the newest pending receipts ahead (one at a time, max 5); the server keeps the result
+    useEffect(() => {
+        let stop = false;
+        const todo = rows.filter((r) => !r.reference_no && Number(r.trans_status) === 0 && !preRead.has(r.id)).slice(0, 5);
+        (async () => {
+            for (const r of todo) {
+                if (stop) return;
+                try { await readScan(r.id); } catch { /* clicked Scan will show the error */ }
+            }
+        })();
+        return () => { stop = true; };
+    }, [rows]);
+
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         return rows.filter(
@@ -101,7 +125,7 @@ export default function ScannedReceipts() {
         if (r.reference_no) return openInvoice(r.reference_no);
         setScanningId(r.id);
         try {
-            const res = await apiFetch(`/purchases/scanned/${r.id}/read`, { method: "POST" });
+            const res = await readScan(r.id);          // already read in the background → instant
             if (res.reference_no) return openInvoice(res.reference_no);
             navigate("/task/purchases/new", { state: { from: location.pathname, scan: res } });
         } catch (e) {

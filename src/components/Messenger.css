@@ -692,7 +692,7 @@ body.ai-chat-open .ms-dock {
     flex: 1;
     min-width: 0;
     min-height: 36px;
-    max-height: 110px;
+    max-height: 140px;
     padding: 8px 12px;
     resize: none;
     border: 0;
@@ -703,7 +703,41 @@ body.ai-chat-open .ms-dock {
     font: inherit;
     font-size: 14.5px;
     line-height: 1.35;
-    field-sizing: content;
+    overflow-y: hidden;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    /* long words / numbers wrap to the next line */
+}
+
+.ms-page .ms-win-foot textarea {
+    max-height: 180px;
+}
+
+/* Messenger-style input: the box (with the emoji inside) grows; while typing the tools fold into ⊕ */
+.ms-input-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: flex-end;
+    border-radius: 18px;
+    background: var(--ms-soft);
+    transition: flex-basis .15s ease;
+}
+
+.ms-input-wrap textarea {
+    flex: 1;
+    background: transparent;
+    border-radius: 18px;
+    padding-right: 4px;
+}
+
+.ms-input-wrap .ms-emoji-in .ms-icon {
+    width: 36px;
+    height: 36px;
+}
+
+.ms-tools-btn {
+    animation: ms-pop .15s ease-out;
 }
 
 /* minimized chat head */

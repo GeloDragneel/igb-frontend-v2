@@ -70,6 +70,10 @@ function saveBlob(blob, name) {
 }
 const r2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
+/* TOTAL VAT PAYABLE / (EXCESS) of one month = VAT Due − 2307 (VT) of that month
+   (the 1st / 2nd month tax paid has no month of its own, so it is only taken off in the Total) */
+const payableOfMonth = (d, m) => r2((Number(d?.vat_due?.values?.[m]) || 0) - (Number(d?.vt_2307?.values?.[m]) || 0));
+
 /* "See adjustment": Adjustment = adjusted total − original total of a line.
    key: r|TAG|CODE (account row) · s|TAG (section total) · total_purchase_exp, net_total, output_vat, input_vat, vat_due, vt_2307,
    first_month, second_month, vat_payable.  Returns null in the original view. */
@@ -394,7 +398,7 @@ export default function VATSummary() {
     rowsOut.push(line("less", "Less : Tax Paid", "1ST MONTH", null, d.first_month, "first_month"));
     rowsOut.push(line("less", "", "2ND MONTH", null, d.second_month, "second_month"));
     rowsOut.push(line("less", "", "2307 (VT)", d.vt_2307.values, d.vt_2307.total, "vt_2307"));
-    rowsOut.push(line("grand", "TOTAL VAT PAYABLE/EXCESS", "", null, d.vat_payable, "vat_payable"));
+    rowsOut.push(line("grand", "TOTAL VAT PAYABLE/EXCESS", "", Object.fromEntries(m.map((x) => [x, payableOfMonth(d, x)])), d.vat_payable, "vat_payable"));
     const userId = Math.max(...String(ebir.row.user_ids || "0").split(",").map(Number).filter((n) => !Number.isNaN(n)));
     const file = `EBIR-${Number.isFinite(userId) ? userId : ebir.row.client_id}`;
     const blob = await printFile({
@@ -867,7 +871,10 @@ function EbirView({ state, range, busy, onMode, onCell, onApprove, onPrintEbir, 
               {line(d.vt_2307.values, d.vt_2307.total, { sub: "2307 (VT)", akey: "vt_2307" })}
               <tr className="vs-grand">
                 <td className="vs-tag" colSpan={2}>TOTAL VAT PAYABLE / (EXCESS)</td>
-                {months.map((m) => <td key={m} />)}
+                {months.map((m) => {
+                  const v = payableOfMonth(d, m);
+                  return <td key={m} className={`vs-num${v < 0 ? " is-neg" : ""}`}>{paren(v) === "-" ? "0.00" : paren(v)}</td>;
+                })}
                 <td className={`vs-num vs-total${d.vat_payable < 0 ? " is-neg" : ""}`}>{paren(d.vat_payable) === "-" ? "0.00" : paren(d.vat_payable)}</td>
                 {adjCell("vat_payable", d.vat_payable)}
               </tr>
