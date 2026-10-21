@@ -39,16 +39,27 @@ export default function SearchSelect({
     const pop = useRef(null);
     const list = useRef(null);
 
-    const selected = options.find((o) => String(o.value) === String(value));
+    // one option per value: duplicate values made React reuse old rows, so the list didn't follow the search
+    const unique = useMemo(() => {
+        const seen = new Set();
+        return (options || []).filter((o) => {
+            const k = String(o.value);
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
+    }, [options]);
+
+    const selected = unique.find((o) => String(o.value) === String(value));
 
     const filtered = useMemo(() => {
         const words = normalize(query).split(" ").filter(Boolean);
-        if (!words.length) return options;
-        return options.filter((o) => {
+        if (!words.length) return unique;
+        return unique.filter((o) => {
             const text = normalize(`${o.label} ${o.hint || ""} ${o.value}`);
             return words.every((w) => text.includes(w)); // every word, any order
         });
-    }, [options, query]);
+    }, [unique, query]);
 
     /* ---------- open / close ---------- */
     const place = () => {
@@ -67,7 +78,7 @@ export default function SearchSelect({
     const openWith = (text = "") => {
         if (disabled) return;
         setQuery(text);
-        const idx = options.findIndex((o) => String(o.value) === String(value));
+        const idx = unique.findIndex((o) => String(o.value) === String(value));
         setActive(text ? 0 : Math.max(0, idx));
         place();
         setOpen(true);
@@ -205,7 +216,7 @@ export default function SearchSelect({
                             {filtered.length === 0 && <li className="ss-empty">No results for “{query}”</li>}
                             {filtered.map((o, i) => (
                                 <li
-                                    key={o.value}
+                                    key={`${o.value}::${i}`}
                                     id={`${listId}-${i}`}
                                     data-i={i}
                                     role="option"
