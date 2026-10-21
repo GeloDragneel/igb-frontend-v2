@@ -125,3 +125,19 @@
 [data-theme="dark"] .vs-ebir-table .vs-amt:hover {
     color: #93c5fd;
 }
+
+/* E-BIR: TOTAL VAT PAYABLE / (EXCESS) always in view (Original and See adjustment),
+   pinned to the bottom of the table while the rows scroll */
+.vs-ebir-table tr.vs-grand td {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: #e8efff;
+    border-top: 2px solid #0f172a;
+    box-shadow: 0 -4px 8px rgba(15, 23, 42, .06);
+}
+
+[data-theme="dark"] .vs-ebir-table tr.vs-grand td {
+    background: #1e2a4a;
+    border-top-color: #93c5fd;
+}
