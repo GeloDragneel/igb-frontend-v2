@@ -193,14 +193,20 @@ const Svg = ({ i, size = 18 }) => (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{I[i]}</svg>
 );
 
-function Avatar({ name, photo, size = 36, online = false }) {
+/** onOpen → the photo is clickable (opens it big) */
+function Avatar({ name, photo, size = 36, online = false, onOpen }) {
     const [bad, setBad] = useState(false);
-    return (
-        <span className="ms-av" style={{ width: size, height: size, fontSize: size * 0.38 }}>
+    const canOpen = !!(onOpen && photo && !bad);
+    const inner = (
+        <>
             {photo && !bad ? <img src={photo} alt="" onError={() => setBad(true)} /> : <span className="ms-av-init" style={{ background: colorOf(name) }}>{initials(name)}</span>}
             {online && <i className="ms-online" style={{ width: Math.max(10, size * 0.28), height: Math.max(10, size * 0.28) }} />}
-        </span>
+        </>
     );
+    const style = { width: size, height: size, fontSize: size * 0.38 };
+    return canOpen
+        ? <button type="button" className="ms-av ms-av-open" style={style} onClick={(e) => { e.stopPropagation(); onOpen(); }} title={`View ${name}'s photo`} aria-label={`View ${name}'s photo`}>{inner}</button>
+        : <span className="ms-av" style={style}>{inner}</span>;
 }
 function ConvAvatar({ c, size = 40 }) {
     if (!c?.is_group) return <Avatar name={c?.other?.name || c?.name} photo={c?.other?.photo} size={size} online={c?.other?.online} />;
@@ -481,7 +487,14 @@ function MessengerInner() {
             {forwardMsg && createPortal(<ForwardModal msg={forwardMsg} onClose={() => setForwardMsg(null)} />, document.body)}
             {lightbox && createPortal(
                 <div className="ms-lightbox" onClick={() => setLightbox(null)} role="dialog" aria-label="Photo">
-                    <img src={lightbox} alt="" />
+                    {typeof lightbox === "object"
+                        ? (
+                            <figure className="ms-lightbox-fig" onClick={(e) => e.stopPropagation()}>
+                                <img src={lightbox.src} alt={lightbox.caption || ""} />
+                                {lightbox.caption && <figcaption>{lightbox.caption}</figcaption>}
+                            </figure>
+                        )
+                        : <img src={lightbox} alt="" />}
                     <button className="ms-lightbox-x" aria-label="Close"><Svg i="x" size={22} /></button>
                 </div>, document.body)}
         </Ctx.Provider>
@@ -1356,7 +1369,7 @@ function MemberMenu({ p, canManage, busy, onAdmin, onRemove, onMessage }) {
 }
 
 function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, onSearch, onJump, onUnpin, page = false }) {
-    const { notify, loadConvs, convs, togglePin, openDirect } = useMs();
+    const { notify, loadConvs, convs, togglePin, openDirect, setLightbox } = useMs();
     const [emojiOpen, setEmojiOpen] = useState(false);
     const conv = c.conversation;
     const pinned = !!(convs || []).find((x) => x.id === conv.id)?.pinned;
@@ -1387,7 +1400,10 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, onSearch, onJump, o
                 ? <button className="ms-info-back ms-info-close" onClick={onBack}><Svg i="x" size={16} /> Close</button>
                 : <button className="ms-info-back" onClick={onBack}><Svg i="back" size={18} /> Back to chat</button>}
             <div className="ms-intro">
-                <ConvAvatar c={conv} size={72} />
+                {conv.is_group
+                    ? <ConvAvatar c={conv} size={72} />
+                    : <Avatar name={conv.other?.name || conv.name} photo={conv.other?.photo} size={72} online={conv.other?.online}
+                        onOpen={() => setLightbox({ src: conv.other?.photo, caption: conv.other?.name || conv.name })} />}
                 <strong>{conv.name}</strong>
                 <small>{conv.is_group ? `${c.members.length} members` : activeText(conv.other)}</small>
             </div>
@@ -1461,7 +1477,8 @@ function ChatInfo({ c, onBack, onAdd, putPayload, closeChat, onSearch, onJump, o
                     <ul className="ms-members">
                         {c.members.map((p) => (
                             <li key={p.id}>
-                                <Avatar name={p.name} photo={p.photo} size={36} online={p.online} />
+                                <Avatar name={p.name} photo={p.photo} size={36} online={p.online}
+                                    onOpen={() => setLightbox({ src: p.photo, caption: p.name })} />
                                 <span className="ms-member-body">
                                     <strong>{p.name}{p.me && " (You)"}</strong>
                                     <small>{[p.is_admin && "Admin", activeText(p)].filter(Boolean).join(" · ")}</small>

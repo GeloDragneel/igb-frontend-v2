@@ -16,6 +16,9 @@ import "./OpenTabs.css";
 const MAX_TABS = 12;
 const SIDES = ["Accounting", "Admin", "Staff"]; // not shown in the tab
 const HOME = "/";
+// pages that are not in the sidebar menu: the name shown on their tab
+const PAGE_NAMES = { "/messenger": "Chat" };
+const nameOf = (pathname) => PAGE_NAMES[pathname.replace(/\/+$/, "")] || null;
 
 // every sidebar page as { to, label } (works whether routesMeta exports ALL_PAGES or only NAV)
 function listPages() {
@@ -60,7 +63,7 @@ function pageOf(pathname) {
     return (
         PAGES.find((p) => p.to !== HOME && (pathname === p.to || pathname.startsWith(p.to + "/"))) || {
             to: pathname,
-            label: metaFor(pathname)?.title || pathname.split("/").filter(Boolean).pop() || "Page",
+            label: nameOf(pathname) || metaFor(pathname)?.title || pathname.split("/").filter(Boolean).pop() || "Page",
         }
     );
 }
@@ -68,7 +71,10 @@ function pageOf(pathname) {
 const read = (key) => {
     try {
         const v = JSON.parse(sessionStorage.getItem(key) || "null");
-        return Array.isArray(v) ? v.filter((t) => t && t.key && t.path) : [];
+        // tabs saved before a rename (e.g. "messenger") get the new name (e.g. "iChat")
+        return Array.isArray(v)
+            ? v.filter((t) => t && t.key && t.path).map((t) => (nameOf(t.key) ? { ...t, label: nameOf(t.key), crumbs: [nameOf(t.key)] } : t))
+            : [];
     } catch {
         return [];
     }
@@ -277,7 +283,7 @@ export default function OpenTabs({ ready = true }) {
     const fullPath = pathname + search;
     const sub = pathname !== page.to ? metaFor(pathname)?.crumbs?.slice(-1)[0] : "";
     // the breadcrumbs now live inside the tab
-    const crumbs = metaFor(pathname)?.crumbs || [page.label];
+    const crumbs = (nameOf(pathname) && [nameOf(pathname)]) || metaFor(pathname)?.crumbs || [page.label];
     const crumbKey = crumbs.join("\u0000");
     // only show the tabs of the side you are on (FEMS tabs on FEMS, STAFF tabs on STAFF)
     const side = sideOf(pathname);
