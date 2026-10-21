@@ -9,6 +9,7 @@ import { apiFetch, apiBlob } from "../../context/AuthContext";
 import "./VATSummary.css";
 import "./VATSummaryPrint.css";
 import "./VATSummaryAdjust.css";
+import "./VATSummaryBulk.css";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const pad = (n) => String(n).padStart(2, "0");
@@ -228,17 +229,20 @@ export default function VATSummary() {
   };
 
   /* ---------- E-BIR ---------- */
-  const loadEbir = useCallback(async (row, mode) => {
-    setEbir((x) => ({ row, mode, data: x?.row === row ? x.data : null, base: x?.row === row ? x.base : null, loading: true }));
+  // quiet = refresh after undeclare / undo: keep the table on screen, no loading look
+  const loadEbir = useCallback(async (row, mode, quiet = false) => {
+    setEbir((x) => quiet && x?.row === row
+      ? { ...x, refreshing: true }
+      : { row, mode, data: x?.row === row ? x.data : null, base: x?.row === row ? x.base : null, loading: true });
     const get = (m) => apiFetch(`/reports/vat-clients/ebir?${new URLSearchParams({
       user_ids: row.user_ids, client_id: row.client_id, caid: row.caid || "", from: used.from, to: used.to, mode: m,
     })}`);
     try {
       // "See adjustment" also needs the original numbers for the Adjustment column (adjusted − original)
       const [data, base] = mode === "adjusted" ? await Promise.all([get("adjusted"), get("initial")]) : [await get(mode), null];
-      setEbir((x) => x && x.row === row ? { ...x, mode, data, base: mode === "adjusted" ? base : data, loading: false } : x);
+      setEbir((x) => x && x.row === row ? { ...x, mode, data, base: mode === "adjusted" ? base : data, loading: false, refreshing: false, error: "" } : x);
     } catch (e) {
-      setEbir((x) => x && { ...x, loading: false, error: e.message || "Couldn't load the E-BIR table." });
+      setEbir((x) => x && { ...x, loading: false, refreshing: false, error: e.message || "Couldn't load the E-BIR table." });
     }
   }, [used]);
 
@@ -248,21 +252,34 @@ export default function VATSummary() {
     loadEbir(ebir.row, mode);
   };
 
-  const openCell = useCallback(async (spec) => {
-    setCell({ ...spec, rows: [], loading: true });
+  const openCell = useCallback(async (spec, quiet = false) => {
+    // quiet = refresh after undeclare / undo: keep the rows on screen (the "Loading…" row is for the first load only)
+    setCell((c) => (quiet && c ? { ...c, refreshing: true } : { ...spec, rows: [], loading: true }));
     try {
       const list = await apiFetch(`/reports/vat-clients/ebir/details?${new URLSearchParams({
         user_ids: ebir.row.user_ids, month: spec.month, type: spec.type, code: spec.code,
       })}`);
-      setCell((c) => c && { ...c, rows: list, loading: false });
+      setCell((c) => c && { ...c, rows: list, loading: false, refreshing: false, error: "" });
     } catch (e) {
-      setCell((c) => c && { ...c, loading: false, error: e.message || "Couldn't load the documents." });
+      setCell((c) => c && { ...c, loading: false, refreshing: false, error: e.message || "Couldn't load the documents." });
     }
   }, [ebir]);
 
   const afterChange = async () => {
-    if (cell) await openCell(cell);
-    if (ebir) await loadEbir(ebir.row, ebir.mode);
+    await Promise.all([
+      cell ? openCell(cell, true) : null,
+      ebir ? loadEbir(ebir.row, ebir.mode, true) : null,
+    ]);
+  };
+
+  // run one request per document; returns how many worked + the first error
+  const eachDoc = async (items, send) => {
+    let ok = 0;
+    let firstError = "";
+    for (const it of items) {
+      try { await send(it); ok += 1; } catch (e) { firstError ||= `${it.reference}: ${e.message || "failed"}`; }
+    }
+    return { ok, firstError };
   };
 
   const saveUndeclare = async () => {
@@ -271,18 +288,20 @@ export default function VATSummary() {
     if ((ebir?.data?.locked_months || []).includes(u.newMonth)) return notify("Declared Month is disabled", "error");
     setBusy(true);
     try {
-      await apiFetch("/reports/vat-clients/undeclare", {
+      const { ok, firstError } = await eachDoc(u.items, (it) => apiFetch("/reports/vat-clients/undeclare", {
         method: "POST",
         body: JSON.stringify({
-          reference_no: u.reference, old_declared_month: u.oldMonth, new_declared_month: u.newMonth,
-          new_wh_declared_month: u.whMonth || null, client_id: ebir.row.client_id, caid: ebir.row.caid,
+          reference_no: it.reference, old_declared_month: it.oldMonth, new_declared_month: u.newMonth,
+          // VT / IT month: the one typed in, else each document keeps its own
+          new_wh_declared_month: u.whMonth || it.whMonth || null, client_id: ebir.row.client_id, caid: ebir.row.caid,
         }),
-      });
-      setUndeclare(null);
-      notify("Record successfully undeclared", "success");
-      await afterChange();
-    } catch (e) {
-      notify(e.message || "Couldn't undeclare the transaction.", "error");
+      }));
+      if (ok) {
+        setUndeclare(null);
+        notify(ok === 1 ? "Record successfully undeclared" : `${ok} records successfully undeclared`, "success");
+      }
+      if (firstError) notify(`${u.items.length - ok} not undeclared — ${firstError}`, "error");
+      if (ok) await afterChange();
     } finally {
       setBusy(false);
     }
@@ -293,12 +312,13 @@ export default function VATSummary() {
     setBusy(true);
     try {
       if (c.kind === "undo") {
-        const r = await apiFetch("/reports/vat-clients/undo", {
-          method: "POST", body: JSON.stringify({ reference_no: c.reference, old_declared_month: c.oldMonth }),
-        });
-        if (r.deleted > 0) notify("Record successfully updated", "success");
+        const { ok, firstError } = await eachDoc(c.items, (it) => apiFetch("/reports/vat-clients/undo", {
+          method: "POST", body: JSON.stringify({ reference_no: it.reference, old_declared_month: it.oldMonth }),
+        }));
+        if (ok) notify(ok === 1 ? "Record successfully updated" : `${ok} records successfully updated`, "success");
+        if (firstError) notify(`${c.items.length - ok} not undone — ${firstError}`, "error");
         setConfirm(null);
-        await afterChange();
+        if (ok) await afterChange();
       } else {
         await apiFetch("/reports/vat-clients/approve", {
           method: "POST", body: JSON.stringify({ client_id: ebir.row.client_id, from: used.from, to: used.to }),
@@ -584,24 +604,38 @@ export default function VATSummary() {
       {cell && (
         <Modal title={`Details : ${cell.name}`} onClose={closeCell} size="xlg">
           <CellList state={cell} busy={busy}
-            onUndeclare={(d) => setUndeclare({
-              reference: d.reference, oldMonth: d.declared_month, newMonth: nextMonth(d.declared_month), whMonth: d.wh_declared_month || "",
+            onUndeclare={(docs) => setUndeclare({
+              items: docs.map((d) => ({ reference: d.reference, oldMonth: d.declared_month, whMonth: d.wh_declared_month || "", amount: d.amount })),
+              newMonth: nextMonth(docs[0].declared_month),
+              // one document: start with its own VT / IT month · many: blank = each keeps its own
+              whMonth: docs.length === 1 ? docs[0].wh_declared_month || "" : "",
             })}
-            onUndo={(d) => setConfirm({ kind: "undo", reference: d.reference, oldMonth: d.declared_month })} />
+            onUndo={(docs) => setConfirm({
+              kind: "undo", items: docs.map((d) => ({ reference: d.reference, oldMonth: d.declared_month })),
+            })} />
         </Modal>
       )}
 
       {/* ---------- undeclare popup ---------- */}
       {undeclare && (
-        <Modal title="Undeclare Transaction" onClose={closeUndeclare}
+        <Modal title={undeclare.items.length > 1 ? `Undeclare ${undeclare.items.length} Transactions` : "Undeclare Transaction"} onClose={closeUndeclare}
           footer={(
             <div className="vs-foot">
               <button type="button" className="btn" onClick={closeUndeclare}>Close</button>
-              <button type="button" className="btn btn-primary" onClick={saveUndeclare} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+              <button type="button" className="btn btn-primary" onClick={saveUndeclare} disabled={busy}>
+                {busy ? "Saving…" : undeclare.items.length > 1 ? `Save (${undeclare.items.length})` : "Save"}
+              </button>
             </div>
           )}>
           <div className="vs-form">
-            <div className="vs-ref">Reference <b>{undeclare.reference}</b> · declared in <b>{monthLabel(undeclare.oldMonth)}</b></div>
+            {undeclare.items.length === 1 ? (
+              <div className="vs-ref">Reference <b>{undeclare.items[0].reference}</b> · declared in <b>{monthLabel(undeclare.items[0].oldMonth)}</b></div>
+            ) : (
+              <div className="vs-ref">
+                <b>{undeclare.items.length} documents</b> · total <b>{n2(undeclare.items.reduce((t, it) => t + (Number(it.amount) || 0), 0))}</b>
+                {" "}· declared in <b>{[...new Set(undeclare.items.map((it) => monthLabel(it.oldMonth)))].join(", ")}</b>
+              </div>
+            )}
             <label className="vs-field">
               <span>Declared month</span>
               <input type="month" className="input" value={undeclare.newMonth}
@@ -615,6 +649,9 @@ export default function VATSummary() {
               <input type="month" className="input" value={undeclare.whMonth}
                 onChange={(e) => setUndeclare((u) => ({ ...u, whMonth: e.target.value }))} />
             </label>
+            {undeclare.items.length > 1 && !undeclare.whMonth && (
+              <div className="vs-muted small">Leave VT / IT month blank to keep each document's own.</div>
+            )}
           </div>
         </Modal>
       )}
@@ -623,7 +660,9 @@ export default function VATSummary() {
         <ConfirmDialog
           title={confirm.kind === "undo" ? "Undo" : "Approve"}
           message={confirm.kind === "undo"
-            ? "Are you sure you want to undo this transaction ?"
+            ? (confirm.items.length > 1
+              ? `Are you sure you want to undo these ${confirm.items.length} transactions ?`
+              : "Are you sure you want to undo this transaction ?")
             : `Are you sure you want to approve this transaction ? ${ebir?.data?.pending_count || 0} undeclared document(s) will move to their new declared month.`}
           confirmLabel={busy ? "Please wait…" : "Yes"}
           onCancel={() => !busy && setConfirm(null)}
@@ -789,7 +828,7 @@ function EbirView({ state, range, busy, onMode, onCell, onApprove, onPrintEbir, 
       {state.error && <div className="alert-error" role="alert">{state.error}</div>}
       {!d && <div className="vs-empty vs-ebir-empty">{state.loading ? "Loading the E-BIR table…" : ""}</div>}
       {d && (
-        <div className={`vs-ebir-scroll${state.loading ? " is-loading" : ""}`}>
+        <div className={`vs-ebir-scroll${state.loading && !state.refreshing ? " is-loading" : ""}`}>
           <table className="vs-ebir-table">
             <thead>
               <tr>
@@ -846,43 +885,91 @@ function EbirView({ state, range, busy, onMode, onCell, onApprove, onPrintEbir, 
    ========================================================= */
 function CellList({ state, busy, onUndeclare, onUndo }) {
   const [q, setQ] = useState("");
+  const [picked, setPicked] = useState([]);            // keys of ticked documents
+  const keyOf = (r) => `${r.trans_type}|${r.reference}`;
   const list = state.rows.filter((r) => `${r.fullname} ${r.document_no} ${r.reference}`.toLowerCase().includes(q.trim().toLowerCase()));
-  const total = list.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const sum = (rows) => rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const total = sum(list);
+  const undeclaredTotal = sum(list.filter((r) => r.undeclared));
+
+  // after the list reloads (undeclare / undo done) the ticks are cleared
+  useEffect(() => { setPicked([]); }, [state.rows]);
+
+  const ticked = list.filter((r) => picked.includes(keyOf(r)));
+  const toUndeclare = ticked.filter((r) => !r.undeclared);
+  const toUndo = ticked.filter((r) => r.undeclared);
+  const allOn = list.length > 0 && list.every((r) => picked.includes(keyOf(r)));
+  const toggleAll = () => setPicked(allOn ? picked.filter((k) => !list.some((r) => keyOf(r) === k)) : [...new Set([...picked, ...list.map(keyOf)])]);
+  const toggle = (k) => setPicked((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
+
   return (
     <div className="vs-docs">
       <div className="vs-docs-bar">
         <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, doc # or reference" />
-        <span className="vs-muted">{list.length} document{list.length === 1 ? "" : "s"}</span>
+        {ticked.length > 0 && (
+          <div className="vs-bulk">
+            <span className="vs-muted">{ticked.length} selected · <b>{n2(sum(ticked))}</b></span>
+            {toUndeclare.length > 0 && (
+              <button type="button" className="btn btn-sm vs-undeclare" disabled={busy} onClick={() => onUndeclare(toUndeclare)}>
+                Undeclare ({toUndeclare.length})
+              </button>
+            )}
+            {toUndo.length > 0 && (
+              <button type="button" className="btn btn-sm vs-undo" disabled={busy} onClick={() => onUndo(toUndo)}>
+                Undo ({toUndo.length})
+              </button>
+            )}
+            <button type="button" className="btn btn-sm" onClick={() => setPicked([])}>Clear</button>
+          </div>
+        )}
+        <span className="vs-muted vs-docs-count">
+          {list.length} document{list.length === 1 ? "" : "s"}{state.refreshing ? " · updating…" : ""}
+        </span>
       </div>
       {state.error && <div className="alert-error" role="alert">{state.error}</div>}
       <div className="vs-docs-scroll">
         <table className="vs-mini">
           <thead>
-            <tr><th>Date</th><th>Doc #</th><th>Reference</th><th>Customer / Vendor</th><th>Module</th>
+            <tr>
+              <th className="vs-check">
+                <input type="checkbox" checked={allOn} onChange={toggleAll} disabled={!list.length} aria-label="Select all documents" />
+              </th>
+              <th>Date</th><th>Doc #</th><th>Reference</th><th>Customer / Vendor</th><th>Module</th>
               <th className="vs-num">VT / IT</th><th>VT / IT declared month</th><th className="vs-num">Amount</th><th className="vs-c">Action</th></tr>
           </thead>
           <tbody>
-            {state.loading && !state.rows.length && <tr><td colSpan={9} className="vs-empty">Loading…</td></tr>}
-            {!state.loading && !list.length && <tr><td colSpan={9} className="vs-empty">No documents.</td></tr>}
-            {list.map((r) => (
-              <tr key={`${r.trans_type}|${r.reference}`} className={r.undeclared ? "is-undeclared" : ""}>
-                <td>{fullDate(r.transaction_date)}</td>
-                <td className="vs-mono">{r.document_no}</td>
-                <td className="vs-mono">{r.reference}</td>
-                <td className="vs-name" title={r.fullname || ""}>{r.fullname || "N/A"}</td>
-                <td>{r.trans_type}</td>
-                <td className="vs-num">{n2(r.itvt_amount)}</td>
-                <td>{r.wh_declared_month ? monthLabel(r.wh_declared_month) : "N/A"}</td>
-                <td className="vs-num">{n2(r.amount)}</td>
-                <td className="vs-c">
-                  {r.undeclared
-                    ? <button type="button" className="btn btn-sm vs-undo" disabled={busy} onClick={() => onUndo(r)}>Undo</button>
-                    : <button type="button" className="btn btn-sm vs-undeclare" disabled={busy} onClick={() => onUndeclare(r)}>Undeclare</button>}
-                </td>
-              </tr>
-            ))}
+            {state.loading && !state.rows.length && <tr><td colSpan={10} className="vs-empty">Loading…</td></tr>}
+            {!state.loading && !list.length && <tr><td colSpan={10} className="vs-empty">No documents.</td></tr>}
+            {list.map((r) => {
+              const k = keyOf(r);
+              return (
+                <tr key={k} className={`${r.undeclared ? "is-undeclared" : ""}${picked.includes(k) ? " is-picked" : ""}`}>
+                  <td className="vs-check">
+                    <input type="checkbox" checked={picked.includes(k)} onChange={() => toggle(k)} aria-label={`Select ${r.reference}`} />
+                  </td>
+                  <td>{fullDate(r.transaction_date)}</td>
+                  <td className="vs-mono">{r.document_no}</td>
+                  <td className="vs-mono">{r.reference}</td>
+                  <td className="vs-name" title={r.fullname || ""}>{r.fullname || "N/A"}</td>
+                  <td>{r.trans_type}</td>
+                  <td className="vs-num">{n2(r.itvt_amount)}</td>
+                  <td>{r.wh_declared_month ? monthLabel(r.wh_declared_month) : "N/A"}</td>
+                  <td className="vs-num">{n2(r.amount)}</td>
+                  <td className="vs-c">
+                    {r.undeclared
+                      ? <button type="button" className="btn btn-sm vs-undo" disabled={busy} onClick={() => onUndo([r])}>Undo</button>
+                      : <button type="button" className="btn btn-sm vs-undeclare" disabled={busy} onClick={() => onUndeclare([r])}>Undeclare</button>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
-          <tfoot><tr><th colSpan={7}>Total</th><th className="vs-num">{n2(total)}</th><th /></tr></tfoot>
+          <tfoot>
+            <tr><th /><th colSpan={7}>Total</th><th className="vs-num">{n2(total)}</th><th /></tr>
+            <tr className="vs-undeclared-total">
+              <th /><th colSpan={7}>Total undeclared</th><th className="vs-num">{n2(undeclaredTotal)}</th><th />
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>

@@ -1,10 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "./Icons";
 import RowMenu from "./RowMenu";
 import { downloadCSV } from "../utils/format";
 
+// page / rows per page / sort kept per browser tab (only for tables given a stateKey)
+const readState = (key) => {
+  if (!key) return {};
+  try { return JSON.parse(sessionStorage.getItem(`dt.${key}`) || "{}") || {}; } catch { return {}; }
+};
+const saveState = (key, v) => {
+  if (!key) return;
+  try { sessionStorage.setItem(`dt.${key}`, JSON.stringify(v)); } catch { /* ignore */ }
+};
+
 /*
   columns: [{ key, label, render?, value?, align?, sortable? }]
+  stateKey: e.g. "sales" – remember page, rows per page and sort (refresh, back to list, switch tab)
+  resetKey: with stateKey, go back to page 1 when this changes (e.g. the parent's search text)
 */
 export default function DataTable({
   title,
@@ -25,11 +37,16 @@ export default function DataTable({
   onSelectionChange,   // (keys) => void
   bodyHeight,          // e.g. "calc(100vh - 360px)" – only the rows scroll
   resetSelection,      // change to clear ticks
+  stateKey,            // remember page / rows per page / sort under this name
+  resetKey,            // with stateKey: back to page 1 when it changes
 }) {
-  const [pageSize, setPageSize] = useState(10);
-  const [page, setPage] = useState(1);
+  const [saved] = useState(() => readState(stateKey));
+  const [pageSize, setPageSize] = useState(() => Number(saved.pageSize) || 10);
+  const [page, setPage] = useState(() => Number(saved.page) || 1);
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const [sort, setSort] = useState(() => saved.sort || { key: null, dir: "asc" });
+
+  useEffect(() => { saveState(stateKey, { page, pageSize, sort }); }, [stateKey, page, pageSize, sort]);
   const [selected, setSelected] = useState([]);
 
   const showChecks = selectable || !!onBulkDelete;
@@ -70,7 +87,16 @@ export default function DataTable({
   const start = (current - 1) * pageSize;
   const pageRows = filtered.slice(start, start + pageSize);
 
-  useEffect(() => setPage(1), [search, pageSize, rows.length]);
+  // back to page 1 when the search / page size changes – but not on the first render,
+  // so a remembered page survives. With stateKey, a quiet data refresh doesn't reset the page
+  // (it is only kept inside the last page); the parent's resetKey does.
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    setPage(1);
+  }, [search, pageSize, stateKey ? resetKey : rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // remembered page beyond the end (fewer rows now) → last page
+  useEffect(() => { if (rows.length > 0 && page > pages) setPage(pages); }, [page, pages, rows.length]);
 
   const allOnPage = pageRows.length > 0 && pageRows.every((r) => selected.includes(keyOf(r)));
   const togglePage = () => {

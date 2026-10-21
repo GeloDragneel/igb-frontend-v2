@@ -12,6 +12,15 @@ import { TicketViewModal } from "./purchases/PurchaseDetail";
 import Form2307Modal from "../../components/invoice/Form2307Modal";
 import InvoiceLogsModal from "../../components/invoice/InvoiceLogsModal";
 import Icon from "../../components/Icons";
+// search text kept per browser tab: survives refresh (F5), going back to the list and switching tabs
+const SEARCH_KEY = "purchases.search";
+const readSearch = () => { try { return sessionStorage.getItem(SEARCH_KEY) || ""; } catch { return ""; } };
+const saveSearch = (v) => { try { v ? sessionStorage.setItem(SEARCH_KEY, v) : sessionStorage.removeItem(SEARCH_KEY); } catch { /* ignore */ } };
+
+// last loaded rows per account + period, kept while the app is open,
+// so coming back to the list shows the table right away (no skeleton) and refreshes quietly
+const rowsCache = new Map();
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const TABLE_HEIGHT = "calc(100vh - 375px)";
 
@@ -53,10 +62,23 @@ export default function Purchases() {
   const location = useLocation();
   const notify = useToast();
 
-  const [rows, setRows] = useState([]);
+  const fromMonth = from.slice(0, 7);
+  const toMonth = to.slice(0, 7);
+  const cacheKey = `${user?.id}:${user?.caid}:${fromMonth}:${toMonth}`;
+
+  const [rows, setRows] = useState(() => rowsCache.get(cacheKey) || []);
   const [loading, setLoading] = useState(true);
+  // skeleton only until the first data has been shown
+  const [loadedOnce, setLoadedOnce] = useState(() => rowsCache.has(cacheKey));
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
+  const [query, setQueryState] = useState(readSearch);
+  const setQuery = useCallback((v) => {
+    setQueryState((cur) => {
+      const next = typeof v === "function" ? v(cur) : v;
+      saveSearch(next);
+      return next;
+    });
+  }, []);
   const [selected, setSelected] = useState([]);
   const [clearTicks, setClearTicks] = useState(0);
   const [showMonth, setShowMonth] = useState(false);
@@ -64,21 +86,29 @@ export default function Purchases() {
   const [ticketFor, setTicketFor] = useState(null);
   const [form2307For, setForm2307For] = useState(null);
   const [logsFor, setLogsFor] = useState(null);
-  const fromMonth = from.slice(0, 7);
-  const toMonth = to.slice(0, 7);
-
+  const reqId = useRef(0);
   const load = useCallback(async () => {
+    const id = ++reqId.current;
+    // another period / account already seen → show it straight away while it refreshes
+    if (rowsCache.has(cacheKey)) setRows(rowsCache.get(cacheKey));
     setLoading(true);
     setError("");
     try {
-      setRows(await apiFetch(`/purchases?from=${fromMonth}&to=${toMonth}&trans_type=posted`));
+      const data = await apiFetch(`/purchases?from=${fromMonth}&to=${toMonth}&trans_type=posted`);
+      if (id !== reqId.current) return;           // an older request finished late
+      rowsCache.set(cacheKey, data);
+      setRows(data);
     } catch (e) {
+      if (id !== reqId.current) return;
       setError(e.message || "Couldn't load purchases.");
-      setRows([]);
+      if (!rowsCache.has(cacheKey)) setRows([]);  // keep what's on screen if we had it
     } finally {
-      setLoading(false);
+      if (id === reqId.current) {
+        setLoading(false);
+        setLoadedOnce(true);
+      }
     }
-  }, [fromMonth, toMonth]);
+  }, [fromMonth, toMonth, cacheKey]);
 
   // reload when the period or the account (branch switch) changes
   useEffect(() => { load(); }, [load, user?.id, user?.caid]);
@@ -169,7 +199,7 @@ export default function Purchases() {
         </div>
       )}
 
-      {loading ? (
+      {loading && !loadedOnce ? (
         <SalesTableSkeleton columns={columns} bodyHeight={TABLE_HEIGHT} />
       ) : (
         <div className="sales-table">
@@ -180,6 +210,8 @@ export default function Purchases() {
             rowKey="id"
             exportName={`purchases-${fromMonth}-to-${toMonth}`}
             showToolbar={false}
+            stateKey="purchases"
+            resetKey={query}
             emptyText="No purchases for this period."
             selectable
             onSelectionChange={setSelected}

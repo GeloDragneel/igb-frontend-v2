@@ -1,0 +1,51 @@
+/* VAT Summary → Details popup: checkboxes, bulk Undeclare / Undo, total undeclared */
+.vs-mini .vs-check {
+    width: 36px;
+    text-align: center;
+}
+
+.vs-mini .vs-check input {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #2563eb;
+}
+
+.vs-mini tr.is-picked td {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.vs-docs-bar {
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.vs-docs-bar .vs-docs-count {
+    margin-left: auto;
+}
+
+.vs-bulk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.vs-bulk b {
+    font-variant-numeric: tabular-nums;
+}
+
+.vs-mini tfoot tr.vs-undeclared-total th {
+    color: #c2410c;
+    font-weight: 600;
+}
+
+:root[data-theme="dark"] .vs-mini tfoot tr.vs-undeclared-total th {
+    color: #fb923c;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .vs-mini tfoot tr.vs-undeclared-total th {
+        color: #fb923c;
+    }
+}
