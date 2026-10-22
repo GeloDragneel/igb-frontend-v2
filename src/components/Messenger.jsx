@@ -382,6 +382,8 @@ function MessengerInner() {
                 ...cur, messages: cur.messages.map((m) => (m.id === d.message_id ? { ...m, reactions: d.reactions } : m)),
             })));
             ch.bind("typing", (d) => setChat(d.conversation_id, (cur) => cur && ({ ...cur, typing: { ...cur.typing, [d.employee_id]: { name: d.name, until: Date.now() + 4500 } } })));
+            // notifications use the same private channel: hand them to the bell (NotificationBell listens for this)
+            ch.bind("notification", (d) => window.dispatchEvent(new CustomEvent("notifications:push", { detail: d })));
             ch.bind("conversation", (d) => { if (chatsRef.current[d.conversation_id]) loadChat(d.conversation_id); loadConvs(); loadSummary(); });
         })();
         const beat = setInterval(() => document.visibilityState === "visible" && loadSummary(), HEARTBEAT_MS);

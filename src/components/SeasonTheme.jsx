@@ -232,24 +232,51 @@ const readChoice = () => {
     } catch { return "auto"; }
 };
 
-// pages where the theme stays completely out of the way (add a pattern here if a page ever needs it)
-const NO_THEME = [];
-
-// Animations are OFF unless turned on in Theme settings: the moving parts (snow, bats, blinking lights…) kept the
-// browser redrawing all the time and made heavy pages like Billing slow. Standing still costs nothing.
-const readMotion = () => { try { return localStorage.getItem(KEY + "-anim") === "on"; } catch { return false; } };
+/* ---------------- full-height grid pages: NO theme there at all ----------------
+   Billing, Reconciliation, Audit, Efficiency, Scan, Collection, Retainers Fee, VAT Summary, Reports…
+   ("the page never scrolls, only the grid does"). With the theme on, those pages hung – even with the theme standing
+   still – and they were fine as soon as the theme was not there. So on those pages the theme removes itself
+   completely (nothing added, nothing changed – exactly like having no <SeasonTheme /> in Layout) and comes back on
+   every other page. Nothing in the pages' CSS is touched. */
+let lockSels = [], sheetsSeen = -1;
+function lockSelectors() {                                          // read-only: html:has(X) { overflow: hidden } rules
+    if (sheetsSeen === document.styleSheets.length) return lockSels;
+    sheetsSeen = document.styleSheets.length;
+    const out = new Set();
+    const walk = (rules) => [...rules].forEach((r) => {
+        if (r.cssRules && !r.selectorText) { walk(r.cssRules); return; }
+        if (!r.selectorText || !r.style || !/hidden|clip/.test(`${r.style.overflow} ${r.style.overflowY}`)) return;
+        r.selectorText.split(",").map((x) => x.trim()).forEach((x) => {
+            const m = /^(?:html|body)\s*:has\((.+)\)\s*$/.exec(x);
+            if (m) out.add(m[1]);
+        });
+    });
+    [...document.styleSheets].forEach((sh) => { try { walk(sh.cssRules); } catch { /* other-origin sheet */ } });
+    return (lockSels = [...out]);
+}
+function visibleBigGrid() {
+    const page = document.querySelector(".ka-page:not([data-hidden])") || document.querySelector("main.content, .content");
+    if (!page) return false;
+    // only pages whose CSS still has the "html:has(...) { overflow: hidden }" rule – a page whose CSS no longer has it
+    // (Billing, Collection, Reconciliation, Audit… once updated) gets the theme like every other page
+    return lockSelectors().some((sel) => { try { return !!page.querySelector(sel); } catch { return false; } });
+}
 
 export default function SeasonTheme() {
     const { pathname } = useLocation();
-    return NO_THEME.some((r) => r.test(pathname)) ? null : <SeasonThemeOn />;
+    const [grid, setGrid] = useState(false);
+    useEffect(() => {
+        const check = () => setGrid(visibleBigGrid());
+        check();
+        const t1 = setTimeout(check, 0), t2 = setTimeout(check, 250);
+        const t = setInterval(check, 700);
+        return () => { clearTimeout(t1); clearTimeout(t2); clearInterval(t); };
+    }, [pathname]);
+    return grid ? null : <SeasonThemeOn />;
 }
 
 function SeasonThemeOn() {
     const [choice, setChoice] = useState(readChoice);
-    const [motion, setMotion] = useState(readMotion);
-    useEffect(() => {
-        try { localStorage.setItem(KEY + "-anim", motion ? "on" : "off"); } catch { /* ignore */ }
-    }, [motion]);
     const [today, setToday] = useState(() => seasonFor());
     useEffect(() => {                                                 // date may change while the app stays open
         const t = setInterval(() => setToday(seasonFor()), 60 * 60 * 1000);
@@ -266,20 +293,13 @@ function SeasonThemeOn() {
     // The theme classes go on the header and the sidebar themselves – NOT on <html>.
     // Pages like Billing use "html:has(.bd) { overflow: hidden }": every hover / change inside the page makes the browser
     // re-check <html>, and with theme rules hanging off <html> it had to restyle the whole app each time → Billing hung.
-    // Full-height pages (Billing, VAT Summary, Monitoring…) lock the page with "html:has(...) { overflow: hidden }".
-    // On those, any animation makes the browser re-check the whole page many times a second → they stand still there.
-    const [lockedPage, setLockedPage] = useState(false);
-    useEffect(() => {
-        const check = () => setLockedPage(/hidden|clip/.test(getComputedStyle(document.documentElement).overflowY));
-        check();
-        const t = setInterval(check, 1000);
-        return () => clearInterval(t);
-    }, []);
-    const still = !motion || lockedPage;
-    const classes = useMemo(() => (active ? ["sx-season", `sx-${active}`] : []).concat(still ? ["sx-still"] : []), [active, still]);
+    const classes = useMemo(() => (active ? ["sx-season", `sx-${active}`] : []), [active]);
     useEffect(() => {
         const els = [top, side].filter(Boolean);
-        const put = () => els.forEach((el) => classes.length && el.classList.add(...classes));
+        // add only the classes that are MISSING: classList.add() of a class that is already there still counts as a
+        // class change for the browser – every second on the header + sidebar, and on pages with html:has(...) rules
+        // each one made the browser restyle the whole app (that was the hang)
+        const put = () => els.forEach((el) => classes.forEach((c) => { if (!el.classList.contains(c)) el.classList.add(c); }));
         put();
         const t = setInterval(put, 1000);        // the sidebar re-sets its className when opened / collapsed
         return () => { clearInterval(t); els.forEach((el) => classes.length && el.classList.remove(...classes)); };
@@ -293,8 +313,8 @@ function SeasonThemeOn() {
                     {t && <t.header key={active} />}
                     <Switcher active={active} choice={choice} today={today} onPick={setChoice} />
                 </>, top)}
-            {side && t && createPortal(<t.sidebar key={active} />, side)}
-            <SettingsDock choice={choice} today={today} onPick={setChoice} motion={motion} onMotion={setMotion} classes={classes} />
+            {side && t && createPortal(<SidePin side={side}><t.sidebar key={active} /></SidePin>, side)}
+            <SettingsDock choice={choice} today={today} onPick={setChoice} classes={classes} />
         </>
     );
 }
@@ -364,7 +384,7 @@ function ThemeOptions({ choice, today, onPick }) {
 }
 
 /* ---------- floating settings button (right edge): open the theme panel any time ---------- */
-function SettingsDock({ choice, today, onPick, motion, onMotion, classes = [] }) {
+function SettingsDock({ choice, today, onPick, classes = [] }) {
     const [open, setOpen] = useState(false);
     const box = useRef(null);
     useEffect(() => {
@@ -393,10 +413,6 @@ function SettingsDock({ choice, today, onPick, motion, onMotion, classes = [] })
                     <div role="menu" className="sn-panel-list">
                         <ThemeOptions choice={choice} today={today} onPick={onPick} />
                     </div>
-                    <label className="sn-motion">
-                        <span><b>Animations</b><small>Falling snow, bats, fireworks… (uses more CPU)</small></span>
-                        <input type="checkbox" role="switch" checked={motion} onChange={(e) => onMotion(e.target.checked)} />
-                    </label>
                     <p className="sn-menu-note">Only changes this browser. Auto follows the calendar.</p>
                 </div>
             )}
@@ -406,3 +422,34 @@ function SettingsDock({ choice, today, onPick, motion, onMotion, classes = [] })
 }
 
 const RANGES = { halloween: "Oct 19 – Nov 16", christmas: "Dec 1 – 27", newyear: "Dec 28 – Jan 5", valentines: "Feb 10 – 14" };
+
+/* Sidebar pictures pinned to what you SEE of the sidebar: the sidebar scrolls (long menus), and pictures placed
+   "at the bottom" used to scroll up with the menu. A sticky 0-height pin at the end of the sidebar stays at the
+   bottom of the visible sidebar; the pictures hang from it, as tall and wide as the visible sidebar. */
+function SidePin({ side, children }) {
+    const pin = useRef(null);
+    useLayoutEffect(() => {
+        const fit = () => {
+            const p = pin.current;
+            if (!p || !side) return;
+            const sr = side.getBoundingClientRect(), pr = p.getBoundingClientRect();
+            const cs = getComputedStyle(side);
+            const bl = parseFloat(cs.borderLeftWidth) || 0, bb = parseFloat(cs.borderBottomWidth) || 0;
+            const next = {
+                "--sx-h": `${side.clientHeight}px`,
+                "--sx-w": `${side.clientWidth}px`,
+                "--sx-l": `${Math.round(pr.left - sr.left - bl)}px`,
+                "--sx-b": `${Math.round(sr.bottom - bb - pr.bottom)}px`,      // gap under the pin (sidebar padding)
+            };
+            // write only what changed – a style change every few seconds made pages with html:has(...) rules re-check everything
+            Object.entries(next).forEach(([k, v]) => { if (p.style.getPropertyValue(k) !== v) p.style.setProperty(k, v); });
+        };
+        fit();
+        const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
+        ro?.observe(side);
+        window.addEventListener("resize", fit);
+        const t = setInterval(fit, 1500);
+        return () => { ro?.disconnect(); window.removeEventListener("resize", fit); clearInterval(t); };
+    }, [side]);
+    return <span ref={pin} className="sx-pin" aria-hidden="true">{children}</span>;
+}

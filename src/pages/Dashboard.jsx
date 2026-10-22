@@ -4,7 +4,7 @@
 //   Auditor → my assigned clients (for audit, audited, reverted, scan monitoring, deadlines)
 //   Liaison Officer · Billing & Collection Officer → Billing
 //   anything else → nothing
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
@@ -14,6 +14,7 @@ import { apiFetch } from "../context/AuthContext";
 import { exportCsv } from "../utils/exportRows";
 import "./Dashboard.css";
 import "./DashboardRoles.css";
+import "./DashboardLoading.css";
 
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n0 = (v) => (Number(v) || 0).toLocaleString("en-PH");
@@ -21,6 +22,7 @@ const compact = (v) => new Intl.NumberFormat("en-PH", { notation: "compact", max
 const short = (v) => (String(v).length > 22 ? `${String(v).slice(0, 21)}…` : String(v));
 const dayLabel = (d) => String(Number(String(d).slice(8, 10)));
 const monthLabel = (m) => new Date(`${m}-01T00:00:00`).toLocaleString("en-PH", { month: "short" });
+const monthShort = (m) => (m ? new Date(`${m}-01T00:00:00`).toLocaleString("en-PH", { month: "short", year: "numeric" }) : "");
 const monthTitle = (m) => (m ? new Date(`${m}-01T00:00:00`).toLocaleString("en-PH", { month: "long", year: "numeric" }) : "");
 const sumBy = (rows, k) => (rows || []).reduce((s, r) => s + (Number(r[k]) || 0), 0);
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
@@ -35,33 +37,50 @@ export default function Dashboard() {
     const [info, setInfo] = useState(null); // { is_ceo, role, tabs, user_type_id, employee_id, month }
     const [month, setMonth] = useState("");
     const [tab, setTab] = useState("billing");
+    // Billing tab: a month range (From – To) or all data
+    const [bMode, setBMode] = useState("range");        // "range" | "all"
+    const [bFrom, setBFrom] = useState("");
+    const [bTo, setBTo] = useState("");
+    // what is shown = what you last SEARCHED (changing From / To / Period alone does not load anything)
+    const [applied, setApplied] = useState({ mode: "range", from: "", to: "" });
     const [data, setData] = useState({});   // "tab|month" → response
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
     useEffect(() => {
         apiFetch("/ims_dashboard")
-            .then((r) => { setInfo(r); setMonth(r.month); setTab(r.tabs?.[0] || ""); })
+            .then((r) => { setInfo(r); setMonth(r.month); setBFrom(r.month); setBTo(r.month); setApplied({ mode: "range", from: r.month, to: r.month }); setTab(r.tabs?.[0] || ""); })
             .catch((e) => setError(e.message || "Couldn't load the dashboard."));
     }, []);
 
-    const key = `${tab}|${month}`;
+    // billing: ?mode=range&from=&to= | ?mode=all · every other tab: ?month=
+    const [from, to] = applied.from <= applied.to ? [applied.from, applied.to] : [applied.to, applied.from];
+    const billingQs = applied.mode === "all" ? "mode=all" : `mode=range&from=${from}&to=${to}`;
+    const period = useMemo(() => ({
+        mode: applied.mode, from, to, qs: billingQs,
+        label: applied.mode === "all" ? "All data" : from === to ? monthTitle(from) : `${monthShort(from)} – ${monthShort(to)}`,
+        file: applied.mode === "all" ? "All" : from === to ? from : `${from}-to-${to}`,
+    }), [applied.mode, from, to, billingQs]);
+    const lastBilling = useRef(null);       // charts keep showing while the tiles load
+    const key = tab === "billing" ? `billing|${billingQs}` : `${tab}|${month}`;
     const load = useCallback(async (force = false) => {
         if (!info || !month || !tab || tab === "calendar") return;   // the calendar loads itself (HR dashboard)
+        if (tab === "billing" && applied.mode === "range" && (!applied.from || !applied.to)) return;
         if (!force && data[key]) return;
         setLoading(true);
         setError("");
         try {
-            const res = await apiFetch(`/ims_dashboard/${tab}?month=${month}`);
+            const res = await apiFetch(tab === "billing" ? `/ims_dashboard/billing?${billingQs}` : `/ims_dashboard/${tab}?month=${month}`);
             setData((d) => ({ ...d, [key]: res }));
+            if (tab === "billing") lastBilling.current = res;
         } catch (e) {
             setError(e.message || "Couldn't load the dashboard.");
         } finally {
             setLoading(false);
         }
-    }, [info, month, tab, key, data]);
+    }, [info, month, tab, key, data, applied, billingQs]);
 
-    useEffect(() => { load(); }, [info, month, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { load(); }, [info, month, tab, billingQs]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!info) return <div className="dsh">{error ? <div className="alert-error" role="alert">{error}</div> : <p className="dsh-muted">Loading…</p>}</div>;
 
@@ -69,8 +88,18 @@ export default function Dashboard() {
     // no dashboard for this user type
     if (!tabs.length) return <div className="dsh" />;
 
-    const d = data[key];
+    const fresh = data[key];
+    // Billing: while a new period loads, the charts keep the last result and only the tiles show placeholders
+    const d = fresh || (tab === "billing" && loading ? lastBilling.current : undefined);
     const busy = loading && !d;
+    const tilesLoading = tab === "billing" && loading && !fresh;
+    const search = () => {
+        if (tab !== "billing") return load(true);
+        const next = { mode: bMode, from: bFrom, to: bTo };
+        if (next.mode === applied.mode && next.from === applied.from && next.to === applied.to) return load(true);
+        setApplied(next);                    // → the effect loads the new period
+    };
+    const draftChanged = tab === "billing" && (bMode !== applied.mode || (bMode === "range" && (bFrom !== applied.from || bTo !== applied.to)));
     const needsEmployee = (tab === "da" || tab === "auditor") && !info.employee_id;
     return (
         <div className="dsh">
@@ -78,13 +107,40 @@ export default function Dashboard() {
                 <section className="card dsh-hero">
                     <div className="dsh-title">
                         <h4>Dashboard</h4>
-                        <span>{monthTitle(month)}</span>
+                        <span>{tab === "billing" ? period.label : monthTitle(month)}</span>
                     </div>
-                    <label className="dsh-field">
-                        <span className="field-label">Month</span>
-                        <input type="month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} />
-                    </label>
-                    <button type="button" className="btn btn-primary" onClick={() => load(true)} disabled={loading}>{loading ? "Loading…" : "Refresh"}</button>
+                    {tab === "billing" ? (
+                        <>
+                            <label className="dsh-field">
+                                <span className="field-label">Period</span>
+                                <select className="input" value={bMode} onChange={(e) => setBMode(e.target.value)}>
+                                    <option value="range">Month range</option>
+                                    <option value="all">All data</option>
+                                </select>
+                            </label>
+                            {bMode === "range" && (
+                                <>
+                                    <label className="dsh-field">
+                                        <span className="field-label">From</span>
+                                        <input type="month" className="input" value={bFrom} max={bTo || undefined} onChange={(e) => e.target.value && setBFrom(e.target.value)} />
+                                    </label>
+                                    <label className="dsh-field">
+                                        <span className="field-label">To</span>
+                                        <input type="month" className="input" value={bTo} min={bFrom || undefined} onChange={(e) => e.target.value && setBTo(e.target.value)} />
+                                    </label>
+                                </>
+                            )}
+                        </>
+                    ) : (
+                        <label className="dsh-field">
+                            <span className="field-label">Month</span>
+                            <input type="month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} />
+                        </label>
+                    )}
+                    <button type="button" className={`btn btn-primary${draftChanged ? " dsh-pulse" : ""}`} onClick={search} disabled={loading}>
+                        {loading ? <><span className="dsh-spin" aria-hidden="true" /> Loading…</> : tab === "billing" ? "Search" : "Refresh"}
+                    </button>
+                    {loading && <span className="dsh-progress" role="progressbar" aria-label="Loading" />}
                 </section>
             )}
 
@@ -104,7 +160,7 @@ export default function Dashboard() {
 
             {error && <div className="alert-error" role="alert">{error}</div>}
 
-            {tab === "billing" && <BillingTab b={d} busy={busy} month={month} />}
+            {tab === "billing" && <BillingTab b={d} busy={busy} period={period} tilesLoading={tilesLoading} />}
             {tab === "clients" && <ClientTab c={d} busy={busy} month={month} />}
             {tab === "employees" && <EmployeesTab e={d} busy={busy} month={month} ceo={info.is_ceo} />}
             {tab === "calendar" && <HRDashboard />}
@@ -129,7 +185,7 @@ const UNPAID_COLS = [
     { key: "total", label: "Total", cls: "n", money: true, sum: true },
 ];
 
-function BillingTab({ b, busy, month }) {
+function BillingTab({ b, busy, period, tilesLoading }) {
     const [open, setOpen] = useState(null); // kpi key of the popup
     const sm = b?.summary;
     const undeposited = Math.max(0, (sm?.collected || 0) - (sm?.deposited || 0));
@@ -141,9 +197,16 @@ function BillingTab({ b, busy, month }) {
         arrears: b?.billing?.[t.key]?.forwarding || 0,
     })), [b]);
     const trend = useMemo(() => (b?.trend || []).map((t) => ({ month: t.month, billed: t.billed, collected: t.PF + t.Return + t.EO + t.Others })), [b]);
+    const perMonth = b?.bucket === "month";
+    // only the 5 tiles follow the period; charts + table = one month (last month of the range · All data → this month)
+    const chartMonth = b?.month || (period.mode === "all" ? "" : period.to);
+    const chartWhen = chartMonth ? monthTitle(chartMonth) : "";
+    const multiYear = (b?.trend || []).some((t, i, a) => i && t.month.slice(0, 4) !== a[0].month.slice(0, 4));
+    const trendTick = (m) => (multiYear ? monthShort(m) : monthLabel(m));
     const top = useMemo(() => (b?.unpaid?.rows || []).slice(0, 10).map((r) => ({ ...r, label: r.branch || r.client_name })), [b]);
     const kpi = (key, label, value, sub) => (
-        <Kpi key={key} label={label} value={sm ? n2(value) : "—"} sub={sm ? sub : ""} onClick={sm ? () => setOpen(key) : undefined} />
+        <Kpi key={key} label={label} value={sm ? n2(value) : "—"} sub={sm ? sub : ""} loading={tilesLoading || (busy && !sm)}
+            onClick={sm && !tilesLoading ? () => setOpen(key) : undefined} />
     );
 
     return (
@@ -155,20 +218,21 @@ function BillingTab({ b, busy, month }) {
                 {kpi("outstanding", "Outstanding", sm?.outstanding, `billed − collected · ${n0(sm?.outstanding_count)} bill(s)`)}
                 {kpi("arrears", "Total arrears", sm?.arrears, `${n0(sm?.arrears_count)} unpaid bill(s) · ${n0(sm?.arrears_clients)} client(s)`)}
             </div>
-            {open && <KpiPopup kpi={open} month={month} onClose={() => setOpen(null)} />}
+            {open && <KpiPopup kpi={open} period={period} onClose={() => setOpen(null)} />}
 
             <div className="dsh-grid">
-                <ChartCard span={8} title="Daily collection" sub="Payments per day, by service type" keys={SVC} busy={busy}>
+                <ChartCard span={8} title={perMonth ? "Monthly collection" : "Daily collection"}
+                    sub={`${chartWhen} · payments per ${perMonth ? "month" : "day"}, by service type`} keys={SVC} busy={busy}>
                     <BarChart data={b?.daily || []} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                         <CartesianGrid vertical={false} />
-                        <XAxis dataKey="day" tickFormatter={dayLabel} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                        <XAxis dataKey="day" tickFormatter={perMonth ? monthShort : dayLabel} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                         <YAxis tickFormatter={compact} axisLine={false} tickLine={false} width={48} />
-                        <Tooltip content={<Tip money />} />
+                        <Tooltip content={<Tip money labelFmt={perMonth ? monthTitle : undefined} />} />
                         {SVC.map((t, i) => stackBar({ k: t.key, name: t.label, c: t.c, last: i === SVC.length - 1 }))}
                     </BarChart>
                 </ChartCard>
 
-                <ChartCard span={4} title="Deposit" sub="PF / EO collected: deposited vs not yet" busy={busy}
+                <ChartCard span={4} title="Deposit" sub={`${period.label} · PF / EO collected: deposited vs not yet`} busy={busy}
                     keys={[{ key: "d", label: "Deposited", c: 1 }, { key: "u", label: "Not deposited", c: 2 }]}
                     center={sm ? <><b>{depPct}%</b><small>deposited</small></> : null}>
                     <PieChart>
@@ -181,11 +245,12 @@ function BillingTab({ b, busy, month }) {
                     </PieChart>
                 </ChartCard>
 
-                <ChartCard span={6} title="Billed vs collected" sub="Last 6 months · billed = PF + Return of the month" busy={busy}
+                <ChartCard span={6} title="Billed vs collected"
+                    sub={`Last 6 months up to ${chartWhen} · billed = PF + Return of the month`} busy={busy}
                     keys={[{ key: "b", label: "Billed", c: 1 }, { key: "c", label: "Collected", c: 3 }]}>
                     <BarChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={2}>
                         <CartesianGrid vertical={false} />
-                        <XAxis dataKey="month" tickFormatter={monthLabel} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="month" tickFormatter={trendTick} axisLine={false} tickLine={false} />
                         <YAxis tickFormatter={compact} axisLine={false} tickLine={false} width={48} />
                         <Tooltip content={<Tip money labelFmt={monthTitle} />} />
                         <Bar dataKey="billed" name="Billed" fill={S(1)} maxBarSize={22} radius={[4, 4, 0, 0]} />
@@ -193,7 +258,7 @@ function BillingTab({ b, busy, month }) {
                     </BarChart>
                 </ChartCard>
 
-                <ChartCard span={6} title="By service type" sub="Collected · outstanding · arrears" busy={busy}
+                <ChartCard span={6} title="By service type" sub={`${chartWhen} · collected · outstanding · arrears`} busy={busy}
                     keys={[{ key: "c", label: "Collected", c: 3 }, { key: "o", label: "Outstanding", c: 4 }, { key: "a", label: "Arrears", c: 2 }]}>
                     <BarChart data={types} layout="vertical" margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                         <CartesianGrid horizontal={false} />
@@ -206,7 +271,7 @@ function BillingTab({ b, busy, month }) {
                     </BarChart>
                 </ChartCard>
 
-                <ChartCard span={12} title="Top 10 clients owing" sub="Arrears + outstanding" busy={busy} empty={!top.length} tall
+                <ChartCard span={12} title="Top 10 clients owing" sub={`${chartWhen} · arrears + outstanding`} busy={busy} empty={!top.length} tall
                     keys={[{ key: "a", label: "Arrears", c: 2 }, { key: "o", label: "Outstanding", c: 4 }]}>
                     <BarChart data={top} layout="vertical" margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                         <CartesianGrid horizontal={false} />
@@ -219,8 +284,9 @@ function BillingTab({ b, busy, month }) {
                 </ChartCard>
             </div>
 
-            <TableSection title="Clients with outstanding / arrears" sub="Arrears = unpaid before this month · Outstanding = unpaid bills of the month"
-                cols={UNPAID_COLS} rows={b?.unpaid?.rows} busy={busy} rowKey="ca_id" file={`Dashboard-Billing-${month}`} />
+            <TableSection title="Clients with outstanding / arrears"
+                sub={`${chartWhen} · Arrears = unpaid before this month · Outstanding = unpaid bills of the month`}
+                cols={UNPAID_COLS} rows={b?.unpaid?.rows} busy={busy} rowKey="ca_id" file={`Dashboard-Billing-${chartMonth}`} />
         </>
     );
 }
@@ -585,14 +651,22 @@ function stackBar({ k, name, c, vertical = false, last = false }) {
     );
 }
 
-function Kpi({ label, value, sub, onClick }) {
-    const body = (
+function Kpi({ label, value, sub, onClick, loading = false }) {
+    const body = loading ? (
+        <>
+            <small>{label}</small>
+            <b className="dsh-sk dsh-sk-num" aria-hidden="true" />
+            <span className="dsh-sk dsh-sk-sub" aria-hidden="true" />
+            <span className="sr-only">Loading…</span>
+        </>
+    ) : (
         <>
             <small>{label}</small>
             <b>{value}</b>
             {sub && <span>{sub}</span>}
         </>
     );
+    if (loading) return <section className="card dsh-kpi is-loading" aria-busy="true">{body}</section>;
     return onClick
         ? <button type="button" className="card dsh-kpi is-click" onClick={onClick} aria-label={`${label}: show details`}>{body}</button>
         : <section className="card dsh-kpi">{body}</section>;
@@ -600,11 +674,11 @@ function Kpi({ label, value, sub, onClick }) {
 
 /* popup behind a Billing tile */
 const KPI_INFO = {
-    billed: { title: "Total billed", note: "PF bills of the month + EO bills of the year (void bills left out).", sumKey: "amount" },
-    collected: { title: "Collected", note: "Payments made on this month's PF / EO bills.", sumKey: "amount" },
-    deposited: { title: "Deposited", note: "Payments on this month's PF / EO bills that are deposited.", sumKey: "amount" },
-    outstanding: { title: "Outstanding", note: "Total billed − collected: this month's PF / EO bills with a balance.", sumKey: "balance" },
-    arrears: { title: "Total arrears", note: "Earlier PF / EO bills with no payment at all on their SOA (no t_payment for the trans number).", sumKey: "amount" },
+    billed: { title: "Total billed", note: "PF bills of the period's months + EO bills of its years (void bills left out).", sumKey: "amount" },
+    collected: { title: "Collected", note: "Payments made on the period's PF / EO bills.", sumKey: "amount" },
+    deposited: { title: "Deposited", note: "Payments on the period's PF / EO bills that are deposited.", sumKey: "amount" },
+    outstanding: { title: "Outstanding", note: "Total billed − collected: the period's PF / EO bills with a balance.", sumKey: "balance" },
+    arrears: { title: "Total arrears", note: "PF / EO bills from before the period with no payment at all on their SOA (none for All data).", sumKey: "amount" },
 };
 const BILL_COLS = [
     CLIENT,
@@ -655,7 +729,7 @@ const ARREARS_COLS = [
 ];
 const KPI_COLS = { billed: BILL_COLS, outstanding: BILL_COLS, collected: COLLECTED_COLS, deposited: DEPOSITED_COLS, arrears: ARREARS_COLS };
 
-function KpiPopup({ kpi, month, onClose }) {
+function KpiPopup({ kpi, period, onClose }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
     const [q, setQ] = useState("");
@@ -665,11 +739,11 @@ function KpiPopup({ kpi, month, onClose }) {
 
     useEffect(() => {
         let alive = true;
-        apiFetch(`/ims_dashboard/billing/detail?month=${month}&kpi=${kpi}`)
+        apiFetch(`/ims_dashboard/billing/detail?${period.qs}&kpi=${kpi}`)
             .then((r) => alive && setData(r))
             .catch((e) => alive && setError(e.message || "Couldn't load the details."));
         return () => { alive = false; };
-    }, [kpi, month]);
+    }, [kpi, period.qs]);
 
     const rows = useMemo(() => {
         const term = q.trim().toLowerCase();
@@ -681,11 +755,11 @@ function KpiPopup({ kpi, month, onClose }) {
     const filters = [{ type: "All", amount: sumBy(all, info.sumKey), count: all.length }, ...(data?.by_type || [])];
 
     return (
-        <Modal title={`${info.title} · ${monthTitle(month)}`} onClose={onClose} size="xxlg"
+        <Modal title={`${info.title} · ${period.label}`} onClose={onClose} size="xxlg"
             footer={(
                 <>
                     <button type="button" className="btn" disabled={!rows.length}
-                        onClick={() => csv(`Dashboard-${info.title.replace(/\s+/g, "-")}-${type}-${month}`, cols, rows)}>CSV</button>
+                        onClick={() => csv(`Dashboard-${info.title.replace(/\s+/g, "-")}-${type}-${period.file}`, cols, rows)}>CSV</button>
                     <button type="button" className="btn btn-primary" onClick={onClose}>Close</button>
                 </>
             )}>

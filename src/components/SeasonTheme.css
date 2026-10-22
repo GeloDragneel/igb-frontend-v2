@@ -316,6 +316,7 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
     position: absolute;
     right: 18px;
     bottom: 14px;
+    filter: drop-shadow(0 0 12px rgba(250, 204, 21, .35));
 }
 
 .sn-tree .sn-star {
@@ -461,6 +462,7 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
     background-clip: text;
     color: transparent;
     animation: sn-shine 4s linear infinite;
+    filter: drop-shadow(0 0 10px rgba(253, 224, 71, .35));
 }
 
 .sn-glasses {
@@ -520,6 +522,7 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
     position: absolute;
     top: 14px;
     right: 18px;
+    filter: drop-shadow(0 0 16px rgba(251, 113, 133, .6));
     animation: sn-beat 1.6s ease-in-out infinite;
 }
 
@@ -741,11 +744,10 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
     cursor: pointer;
 }
 
-.sn-dock-btn:hover svg {
-    animation: sn-spin 2s linear infinite;
+.sn-dock-btn svg {
+    animation: sn-spin 6s linear infinite;
 }
 
-/* spins only while you point at it */
 .sn-dock-btn:hover {
     width: 50px;
 }
@@ -947,13 +949,122 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
 
 /* the small icons in the header title, the menu and the settings panel never animate
    (the flickering pumpkin there kept restyling the page – that is what hung Billing) */
-.sn-switch *,
-.sn-menu *,
-.sn-panel * {
-    animation: none !important;
-}
-
 .sx-still .sn-switch,
 .sx-still .sn-switch * {
     animation: none !important;
+}
+
+.sn-test {
+    margin: 6px 4px 0;
+    border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.sn-test-head {
+    width: 100%;
+    padding: 10px;
+    border: 0;
+    background: none;
+    color: var(--muted, #64748b);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sn-test .sn-motion {
+    border-top: 0;
+    margin-top: 0;
+    padding: 6px 10px;
+}
+
+.sn-panel {
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+
+/* ---------- sidebar pictures stay on screen while the menu scrolls ---------- */
+.sx-pin {
+    position: sticky;
+    bottom: 0;
+    z-index: -1;
+    display: block;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+}
+
+.sx-pin>.hw-side {
+    inset: auto;
+    left: calc(-1 * var(--sx-l, 0px));
+    bottom: calc(-1 * var(--sx-b, 0px));
+    width: var(--sx-w, 100%);
+    height: var(--sx-h, 100vh);
+}
+
+/* ---------- every animation runs on the graphics card only ----------
+   Only "transform" and "opacity" on their own layers: the browser moves them without redoing anything on the page.
+   (Animations that changed colours / glows / gradient positions made big grids like Reconciliation hang.) */
+.hw-bat,
+.hw-bat svg,
+.hw-spider,
+.hw-fog,
+.hw-pumpkin,
+.sn-fall i,
+.sn-lights i,
+.sn-bigstar,
+.sn-burst,
+.sn-bigheart,
+.sn-balloon,
+.sn-dock-btn svg {
+    will-change: transform, opacity;
+}
+
+.hw-pumpkin .hw-glow {
+    animation: none;
+}
+
+/* flicker the whole pumpkin instead of the face inside the picture */
+.hw-top .hw-pumpkin,
+.hw-side .hw-pumpkin {
+    animation: hw-pumpkin-flicker 2.6s infinite;
+}
+
+@keyframes hw-pumpkin-flicker {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    45% {
+        opacity: .82;
+    }
+
+    50% {
+        opacity: .97;
+    }
+
+    70% {
+        opacity: .78;
+    }
+}
+
+.sn-tree .sn-star,
+.sn-tree .sn-balls circle {
+    animation: none;
+}
+
+/* the big star in the corner twinkles instead */
+.sn-title.is-newyear,
+.sn-gold,
+.sn-year {
+    animation: none;
+}
+
+.sx-still .hw-top *,
+.sx-still .hw-side *,
+.sx-still .sn-dock-btn svg {
+    will-change: auto !important;
 }

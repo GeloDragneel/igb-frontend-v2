@@ -168,6 +168,7 @@ export const NAV = [
           { to: "/administration/archive", label: "Archive", icon: "layers" },
         ],
       },
+      { to: "/notifications", label: "Notifications", crumbs: ["Staff", "Notifications"] },
     ],
   },
 ];

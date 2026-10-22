@@ -124,7 +124,7 @@ import UserAccess from "./pages/administration/UserAccess";
 import DatabaseSettings from "./pages/administration/DatabaseSettings";
 import Archive from "./pages/administration/Archive";
 import { MessengerPage } from "./components/Messenger";
-
+import Notifications from "./pages/Notifications";
 // Built pages. Add new ones here as you make them;
 // everything else in the sidebar shows "Coming soon".
 const PAGES = {
@@ -257,6 +257,8 @@ const PAGES = {
   "/administration/user-access": UserAccess,
   "/administration/database-settings": DatabaseSettings,
   "/administration/archive": Archive,
+
+  "/notifications": Notifications,
 };
 
 // Routes that are not in the sidebar (page tabs)

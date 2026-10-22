@@ -12,10 +12,8 @@
     overflow: hidden;
 }
 
-html:has(.aum),
-body:has(.aum) {
-    overflow: hidden;
-}
+/* (removed) "html:has(.aum), body:has(.aum) { overflow: hidden }" – it made the browser re-check the whole app on every
+   change; .aum already fits the screen exactly (height above). */
 
 .aum-bar {
     flex-shrink: 0;
@@ -74,6 +72,9 @@ body:has(.aum) {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
+    /* the grid is measured and painted on its own: nothing outside it (header, sidebar, theme animations)
+       makes the browser redo its cells */
+    contain: content;
 }
 
 .aum-table {

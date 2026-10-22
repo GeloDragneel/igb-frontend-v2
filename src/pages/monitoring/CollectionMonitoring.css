@@ -10,10 +10,9 @@
     overflow: hidden;
 }
 
-html:has(.cmo),
-body:has(.cmo) {
-    overflow: hidden;
-}
+/* (removed) "html:has(.cmo), body:has(.cmo) { overflow: hidden }" – that rule makes the browser re-check the WHOLE app on
+   every little change while this page is open (with the season theme on, the page hung). .cmo already fits the screen
+   exactly (height above), so the page does not scroll anyway. */
 
 .cmo-bar {
     flex-shrink: 0;
@@ -78,6 +77,8 @@ body:has(.cmo) {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
+    /* the table is measured and painted on its own (the column filter panel is placed on <body>, so it is not affected) */
+    contain: content;
 }
 
 .cmo-table {

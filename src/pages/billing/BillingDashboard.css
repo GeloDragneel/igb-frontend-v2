@@ -15,11 +15,8 @@
   overflow: hidden;
 }
 
-/* hide the page scrollbar while this screen is open */
-html:has(.bd),
-body:has(.bd) {
-  overflow: hidden;
-}
+/* (removed) "html:has(.bd), body:has(.bd) { overflow: hidden }" – that rule made the browser re-check the WHOLE app
+   on every small change on this page; with the season theme on, Billing hung. .bd already fits the screen exactly. */
 
 /* fixed-size sections never shrink */
 .bd-filters,
@@ -154,6 +151,8 @@ body:has(.bd) {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  /* the big table is measured / painted on its own: changes outside it never make the browser redo it */
+  contain: content;
 }
 
 .bd-table {
@@ -484,10 +483,6 @@ body:has(.bd) {
     overflow: visible;
   }
 
-  html:has(.bd),
-  body:has(.bd) {
-    overflow: auto;
-  }
 
   .bd-body {
     flex: none;

@@ -9,7 +9,8 @@ import { useAuth, apiFetch } from "../context/AuthContext";
 import "./NotificationBell.css";
 
 const EMPLOYEE_TYPES = ["Staff", "ClientStaff"];
-const REFRESH_MS = 60000;
+const REFRESH_MS = 60000;   // full reload
+const PULSE_MS = 15000;     // tiny change check (/notifications/pulse) – real time without a hook in every module
 
 function ago(t) {
     if (!t) return "";
@@ -45,8 +46,47 @@ export default function NotificationBell({ alerts = [], open, setOpen, onOpen })
         if (!isEmployee) { setItems([]); setUnread(0); return; }
         load();
         const t = setInterval(() => document.visibilityState === "visible" && load(), REFRESH_MS);
-        return () => clearInterval(t);
+        window.addEventListener("notifications:changed", load);           // the Notifications page changed something
+        return () => { clearInterval(t); window.removeEventListener("notifications:changed", load); };
     }, [isEmployee, load, user?.caid]);
+
+    /* ---------- real time ----------
+       1) instant: a saved notification is pushed on my Pusher channel (the Messenger relays it as "notifications:push")
+       2) within 15 s: /notifications/pulse says something changed (tickets, reverted, EO, scans … counted from the data) */
+    const sigRef = useRef("");
+    const unreadRef = useRef(0);
+    unreadRef.current = unread;
+    const fresh = useCallback(async (toastText) => {
+        const before = unreadRef.current;
+        try {
+            const r = await apiFetch("/notifications");
+            setItems(r.items || []);
+            setUnread(r.unread || 0);
+            window.dispatchEvent(new Event("notifications:page"));          // the Notifications page reloads too
+            const firstNew = (r.items || []).find((x) => x.unread);
+            if ((r.unread || 0) > before && (toastText || firstNew)) notify(`🔔 ${toastText || firstNew.text}`);
+        } catch { /* next pulse */ }
+    }, [notify]);
+    useEffect(() => {
+        if (!isEmployee) return;
+        let alive = true;
+        const pulse = async () => {
+            if (document.visibilityState !== "visible") return;
+            try {
+                const r = await apiFetch("/notifications/pulse");
+                if (!alive || !r?.sig) return;
+                if (sigRef.current && sigRef.current !== r.sig) fresh();
+                sigRef.current = r.sig;
+            } catch { /* offline – try again */ }
+        };
+        pulse();
+        const t = setInterval(pulse, PULSE_MS);
+        const onPush = (e) => { sigRef.current = ""; fresh(e.detail?.message || ""); };
+        const onVisible = () => document.visibilityState === "visible" && pulse();
+        window.addEventListener("notifications:push", onPush);
+        document.addEventListener("visibilitychange", onVisible);
+        return () => { alive = false; clearInterval(t); window.removeEventListener("notifications:push", onPush); document.removeEventListener("visibilitychange", onVisible); };
+    }, [isEmployee, fresh, user?.caid]);
 
     // close on outside click / Escape
     useEffect(() => {
@@ -69,7 +109,9 @@ export default function NotificationBell({ alerts = [], open, setOpen, onOpen })
         if (!n.unread) return;
         setItems((list) => list.map((x) => (x.key === n.key ? { ...x, unread: false } : x)));
         setUnread((u) => Math.max(0, u - 1));
-        apiFetch("/notifications/read", { method: "PUT", body: JSON.stringify({ key: n.key }) }).catch(() => load());
+        apiFetch("/notifications/read", { method: "PUT", body: JSON.stringify({ key: n.key }) })
+            .then(() => window.dispatchEvent(new Event("notifications:page")))
+            .catch(() => load());
     };
 
     const markAll = async () => {
@@ -110,6 +152,11 @@ export default function NotificationBell({ alerts = [], open, setOpen, onOpen })
                         <span>Notifications</span>
                         {isEmployee && unread > 0 && <button className="nb-link" onClick={markAll}>Mark all read</button>}
                     </div>
+                    {isEmployee && (
+                        <button type="button" className="nb-all" onClick={() => { setOpen(false); navigate("/notifications"); }}>
+                            See all notifications →
+                        </button>
+                    )}
 
                     {!isEmployee && (alerts.length === 0
                         ? <div className="popover-empty">You're all caught up.</div>

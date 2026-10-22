@@ -111,3 +111,23 @@
 .dot-blue {
     background: #2563eb;
 }
+
+/* "See all notifications" → the Notifications page */
+.nb-all {
+    display: block;
+    width: 100%;
+    padding: 9px 14px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: none;
+    color: var(--brand, #2563eb);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.nb-all:hover {
+    background: var(--card-2);
+}
