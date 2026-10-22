@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { useAuth, apiFetch, apiBlob } from "../../context/AuthContext";
@@ -76,6 +76,9 @@ export default function EsubReport() {
     const [pdf, setPdf] = useState(null);                    // { url, name } for the preview
     const [per, setPer] = useState(25);                      // 5 | 25 | 50 | 0 (All)
     const [page, setPage] = useState(1);
+    const [check, setCheck] = useState(null);                // validation popup: { data, mode: "errors" | "warnings" }
+    const [flash, setFlash] = useState(0);                   // line number to highlight
+    const reqId = useRef(0);                                 // only the latest request fills the screen
     // long text columns that get cut off with "…"
     const CLIP = { name: "es-clip-name", address: "es-clip-addr", city: "es-clip-city" };
     const report = REPORTS.find((r) => r.id === type);
@@ -97,33 +100,57 @@ export default function EsubReport() {
     const load = async () => {
         if (report.disabled) return null;
         if (!report.yearly && (!from || !to)) { setError("Choose both months."); return null; }
+        const id = ++reqId.current;
         setLoading(true);
         setError("");
         try {
             const params = report.yearly ? { type, year } : { type, from, to };
             const r = await apiFetch(`/reports/esub?${new URLSearchParams(params)}`);
+            if (id !== reqId.current) return null;            // another report was picked meanwhile
             const withKey = { ...r, key: JSON.stringify(params) };
             setData(withKey);
             setPage(1);
             return withKey;
         } catch (e) {
-            setError(e.message || "Couldn't load the report.");
+            if (id === reqId.current) setError(e.message || "Couldn't load the report.");
             return null;
         } finally {
-            setLoading(false);
+            if (id === reqId.current) setLoading(false);
         }
     };
+
+    // picking a report (and opening the page) shows its data right away
+    useEffect(() => {
+        if (!report.disabled) load();
+    }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // reuse what's on screen if it's for the same report and period
     const paramsKey = JSON.stringify(report.yearly ? { type, year } : { type, from, to });
     const current = async () => (data?.key === paramsKey ? data : await load());
 
-    const downloadDat = async () => {
-        const r = await current();
-        if (!r) return;
+    const saveDat = async (r) => {
         const res = await saveWithDialog(r.dat.filename, r.dat.content);
         if (res.status === "saved") notify(`Saved ${res.name}`);
         else if (res.status === "downloaded") notify(`Downloaded ${res.name} to your Downloads folder`);
+    };
+
+    // DAT: validated first (like the BIR RELIEF Validation Module) – errors stop it, warnings ask first
+    const downloadDat = async () => {
+        const r = await current();
+        if (!r) return;
+        const v = r.validation;
+        if (v && (!v.ok || !r.dat.content)) { setCheck({ data: r, mode: "errors" }); return; }
+        if (v?.warnings?.length) { setCheck({ data: r, mode: "warnings" }); return; }
+        await saveDat(r);
+    };
+
+    // jump to a line of the table and light it up
+    const goLine = (line) => {
+        if (!line) return;
+        setCheck(null);
+        if (per) setPage(Math.ceil(line / per));
+        setFlash(line);
+        setTimeout(() => setFlash(0), 2400);
     };
 
     // old Print: File Type Excel → xlsx from the template, PDF → shown in a popup
@@ -178,6 +205,14 @@ export default function EsubReport() {
     const curPage = Math.min(page, pages);
     const start = per ? (curPage - 1) * per : 0;
     const pageRows = per ? allRows.slice(start, start + per) : allRows;
+    const v = shown?.validation;
+    // line number → "err" | "warn"
+    const marks = useMemo(() => {
+        const m = {};
+        (v?.warnings || []).forEach((x) => { if (x.line) m[x.line] = "warn"; });
+        (v?.errors || []).forEach((x) => { if (x.line) m[x.line] = "err"; });
+        return m;
+    }, [v]);
 
     return (
         <section className="br-page">
@@ -256,6 +291,28 @@ export default function EsubReport() {
                                 <div>{shown.period}</div>
                             </header>
 
+                            {v && (
+                                <div className={`es-check no-print ${!v.ok ? "is-err" : v.warnings.length ? "is-warn" : "is-ok"}`} role="status">
+                                    <span className="es-check-ico" aria-hidden="true">{!v.ok ? "!" : v.warnings.length ? "!" : "✓"}</span>
+                                    <div className="es-check-text">
+                                        <b>
+                                            {!v.ok
+                                                ? `${v.errors.length} problem${v.errors.length === 1 ? "" : "s"} – the DAT can't be made yet`
+                                                : v.warnings.length
+                                                    ? `Ready for RELIEF, with ${v.warnings.length} warning${v.warnings.length === 1 ? "" : "s"}`
+                                                    : "Passed the RELIEF checks – the DAT is ready"}
+                                        </b>
+                                        <small>
+                                            {!v.ok ? "Fix them in the vendor / customer or client records, then View again." : "TIN, names, amounts, period and header were checked."}
+                                            {v.fixed?.length ? ` ${v.fixed.length} thing${v.fixed.length === 1 ? " was" : "s were"} fixed automatically.` : ""}
+                                        </small>
+                                    </div>
+                                    {(v.errors.length > 0 || v.warnings.length > 0 || v.fixed?.length > 0) && (
+                                        <button className="btn btn-sm" onClick={() => setCheck({ data: shown, mode: v.ok ? "warnings" : "errors", view: true })}>See details</button>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="es-meta no-print">
                                 <span>{shown.rows.length} line{shown.rows.length === 1 ? "" : "s"}</span>
                                 <span className="mono">{shown.dat.filename}</span>
@@ -278,7 +335,7 @@ export default function EsubReport() {
                                             <tr><td colSpan={shown.columns.length + 1} className="empty">No transactions for this period.</td></tr>
                                         )}
                                         {pageRows.map((row, i) => (
-                                            <tr key={start + i}>
+                                            <tr key={start + i} className={[marks[start + i + 1] ? `es-row-${marks[start + i + 1]}` : "", flash === start + i + 1 ? "es-row-flash" : ""].join(" ").trim() || undefined}>
                                                 <td className="ta-right muted">{start + i + 1}</td>
                                                 {shown.columns.map((c) => {
                                                     const text = row[c.key] ?? "";
@@ -344,11 +401,20 @@ export default function EsubReport() {
                     {!loading && !shown && !error && !report.disabled && (
                         <div className="br-empty">
                             <p className="br-empty-title">{report.code} · {report.name}</p>
-                            <p className="br-empty-sub">Choose the period on the left, then press View, DAT or Print.</p>
+                            <p className="br-empty-sub">Choose the period on the left, then press View. DAT checks the file the same way BIR RELIEF does before it downloads.</p>
                         </div>
                     )}
                 </div>
             </div>
+
+            {check && (
+                <DatCheck
+                    check={check}
+                    onClose={() => setCheck(null)}
+                    onLine={goLine}
+                    onDownload={async () => { const r = check.data; setCheck(null); await saveDat(r); }}
+                />
+            )}
 
             {pdf && (
                 <Modal
@@ -366,5 +432,73 @@ export default function EsubReport() {
                 </Modal>
             )}
         </section>
+    );
+}
+/* ---------- the RELIEF check popup: errors (no DAT), warnings (download anyway), what was fixed ---------- */
+function DatCheck({ check, onClose, onLine, onDownload }) {
+    const v = check.data.validation || { errors: [], warnings: [], fixed: [] };
+    const canDownload = v.ok && !!check.data.dat?.content;
+    const [tab, setTab] = useState(v.errors.length ? "errors" : v.warnings.length ? "warnings" : "fixed");
+    const list = tab === "errors" ? v.errors : tab === "warnings" ? v.warnings : [];
+
+    return (
+        <Modal
+            title={canDownload ? (check.view ? "RELIEF check" : "Download with warnings?") : "The DAT can't be made yet"}
+            onClose={onClose}
+            size="xlg"
+            footer={
+                <>
+                    <span className="muted small es-chk-foot">{check.data.dat?.filename}</span>
+                    <button className="btn" onClick={onClose}>Close</button>
+                    {canDownload && <button className="btn btn-primary" onClick={onDownload}>{v.warnings.length ? "Download anyway" : "Download DAT"}</button>}
+                </>
+            }
+        >
+            <p className={`es-chk-lead ${canDownload ? "" : "is-err"}`}>
+                {canDownload
+                    ? "These won't stop the BIR RELIEF Validation Module, but check them before you file."
+                    : "The BIR RELIEF Validation Module would reject this file. Fix these first – the DAT is made once there are no problems left."}
+            </p>
+
+            <div className="es-chk-tabs" role="tablist">
+                <button role="tab" aria-selected={tab === "errors"} className={`is-err ${tab === "errors" ? "is-on" : ""}`} onClick={() => setTab("errors")}>
+                    Problems <span>{v.errors.length}</span>
+                </button>
+                <button role="tab" aria-selected={tab === "warnings"} className={`is-warn ${tab === "warnings" ? "is-on" : ""}`} onClick={() => setTab("warnings")}>
+                    Warnings <span>{v.warnings.length}</span>
+                </button>
+                <button role="tab" aria-selected={tab === "fixed"} className={`is-ok ${tab === "fixed" ? "is-on" : ""}`} onClick={() => setTab("fixed")}>
+                    Fixed automatically <span>{v.fixed?.length || 0}</span>
+                </button>
+            </div>
+
+            {tab === "fixed" ? (
+                v.fixed?.length
+                    ? <ul className="es-chk-fixed">{v.fixed.map((f) => <li key={f}>{f}</li>)}</ul>
+                    : <p className="es-chk-none">Nothing needed fixing.</p>
+            ) : !list.length ? (
+                <p className="es-chk-none">{tab === "errors" ? "No problems." : "No warnings."}</p>
+            ) : (
+                <div className="es-chk-scroll">
+                    <table className="table es-chk-table">
+                        <thead>
+                            <tr><th className="ta-right">Line</th><th>Reference</th><th>TIN</th><th>Registered name</th><th>Field</th><th>Problem</th></tr>
+                        </thead>
+                        <tbody>
+                            {list.map((x, i) => (
+                                <tr key={i} className={x.line ? "is-link" : ""} onClick={() => onLine(x.line)} title={x.line ? "Show this line in the report" : undefined}>
+                                    <td className="ta-right mono">{x.line ?? "Header"}</td>
+                                    <td className="mono">{x.ref || "—"}</td>
+                                    <td className="mono">{x.tin ? fmtTin(x.tin) : "—"}</td>
+                                    <td className="es-chk-name" title={x.name}>{x.name || "—"}</td>
+                                    <td><span className={`es-chk-field ${tab === "errors" ? "is-err" : "is-warn"}`}>{x.field}</span></td>
+                                    <td>{x.message}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </Modal>
     );
 }

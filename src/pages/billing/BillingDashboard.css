@@ -28,7 +28,7 @@
 /* ---------- filters ---------- */
 .bd-filters {
   display: grid;
-  grid-template-columns: minmax(280px, 2.2fr) minmax(200px, 1.4fr) minmax(140px, .8fr) minmax(180px, 1.2fr) auto;
+  grid-template-columns: minmax(110px, .6fr) minmax(260px, 2.1fr) minmax(190px, 1.3fr) minmax(130px, .8fr) minmax(130px, .8fr) minmax(170px, 1.1fr) auto;
   gap: 10px 12px;
   align-items: end;
   padding: 14px 16px;
@@ -1118,4 +1118,95 @@
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
+}
+
+/* ---------- dark mode lines ----------
+   The lines on this page used light-mode grey (#e5e7eb / #d1d5db) as a fallback, which shows almost white on the dark theme.
+   Dark mode: the same lines in a soft slate that sits with the dark cards. */
+[data-theme="dark"] :is(.bd, [class*="bd-"], [class*="bsv-"]) {
+  --border: rgba(148, 163, 184, .22);
+  --line: rgba(148, 163, 184, .22);
+}
+
+[data-theme="dark"] .bd-total dt:last-of-type,
+[data-theme="dark"] .bd-total dd:last-of-type,
+[data-theme="dark"] .bd-table tfoot td,
+[data-theme="dark"] .bsv-table tfoot td {
+  border-top-color: rgba(148, 163, 184, .32);
+}
+
+/* ---------- Type picker (PF / EO / Return, several at once) ---------- */
+.bd-types {
+  position: relative;
+}
+
+.bd-types-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bd-types-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bd-types-btn.is-on {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.bd-types-btn:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.bd-types-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--card, #fff);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .15);
+}
+
+.bd-types-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.bd-types-opt:hover {
+  background: rgba(37, 99, 235, .07);
+}
+
+.bd-types-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 4px 2px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
+
+[data-theme="dark"] .bd-types-btn.is-on {
+  color: #93c5fd;
+}
+
+.bd-total.is-dim {
+  opacity: .4;
 }

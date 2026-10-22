@@ -64,7 +64,12 @@ export default function BillingDashboard() {
 
   const [lk, setLk] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [viewBy, setViewBy] = useState("business");  // business = one account (trade name - branch) · client = every account of one client
   const [caid, setCaid] = useState("");
+  const [clientNum, setClientNum] = useState("");
+  const [clientPeriods, setClientPeriods] = useState([]);
+  const [cPeriod, setCPeriod] = useState("");        // client view: service period across the accounts
+  const [groups, setGroups] = useState([]);          // pf / eo / returns – empty = all
   const [account, setAccount] = useState(null);     // TIN, address, periods of the picked account
   const [transNumber, setTransNumber] = useState("");
   const [status, setStatus] = useState("");
@@ -100,6 +105,21 @@ export default function BillingDashboard() {
 
   useEffect(() => { const id = setTimeout(() => setQ(query.trim()), 300); return () => clearTimeout(id); }, [query]);
 
+  // client → the service periods of all its accounts
+  useEffect(() => {
+    let alive = true;
+    setClientPeriods([]);
+    setCPeriod("");
+    if (!clientNum) return;
+    apiFetch(`/billing/clients/${encodeURIComponent(clientNum)}/periods`).then((p) => alive && setClientPeriods(p || []))
+      .catch((e) => alive && notifyRef.current(e.message, "error"));
+    return () => { alive = false; };
+  }, [clientNum]);
+
+  const isClient = viewBy === "client";
+  const scoped = isClient ? !!clientNum : !!caid;      // something picked to show
+  const switchView = (v) => { setViewBy(v); setCaid(""); setClientNum(""); setTransNumber(""); setCPeriod(""); setStatus(""); setQuery(""); };
+
   // account → info + its service periods
   useEffect(() => {
     let alive = true;
@@ -112,25 +132,33 @@ export default function BillingDashboard() {
 
   const params = useMemo(() => {
     const p = new URLSearchParams();
-    if (caid) p.set("ca_id", caid);
-    if (transNumber) p.set("trans_number", transNumber);
+    if (isClient) {
+      if (clientNum) p.set("client_num", clientNum);
+      if (cPeriod) p.set("service_period", cPeriod);
+    } else {
+      if (caid) p.set("ca_id", caid);
+      if (transNumber) p.set("trans_number", transNumber);
+    }
+    if (groups.length) p.set("groups", groups.join(","));
     if (status && tab === "services") p.set("status", status);
     if (q) p.set("q", q);
     return p.toString();
-  }, [caid, transNumber, status, q, tab]);
+  }, [isClient, clientNum, cPeriod, caid, transNumber, groups, status, q, tab]);
 
   // only the newest load may fill the page (an older, slower answer must not overwrite it)
   const loadId = useRef(0);
   const load = useCallback(async () => {
     const id = ++loadId.current;
     setError("");
-    if (!caid) { setRows([]); setMore(false); setSoa(null); setTotals(ZERO_TOTALS); setTicked([]); setLoading(false); return; }
+    if (!scoped) { setRows([]); setMore(false); setSoa(null); setTotals(ZERO_TOTALS); setTicked([]); setLoading(false); return; }
     setLoading(true);
     try {
-      const scope = new URLSearchParams({ ca_id: caid, ...(transNumber ? { trans_number: transNumber } : {}) });
+      const scope = new URLSearchParams(isClient
+        ? { client_num: clientNum, ...(cPeriod ? { service_period: cPeriod } : {}) }
+        : { ca_id: caid, ...(transNumber ? { trans_number: transNumber } : {}) });
       const [list, s, tot] = await Promise.all([
         apiFetch(`/billing/${tab}?${params}`),
-        transNumber ? apiFetch(`/billing/soa/${encodeURIComponent(transNumber)}`) : Promise.resolve(null),
+        !isClient && transNumber ? apiFetch(`/billing/soa/${encodeURIComponent(transNumber)}`) : Promise.resolve(null),
         apiFetch(`/billing/totals?${scope}`),
       ]);
       if (id !== loadId.current) return;
@@ -146,7 +174,7 @@ export default function BillingDashboard() {
     } finally {
       if (id === loadId.current) setLoading(false);
     }
-  }, [tab, params, transNumber, caid]);
+  }, [tab, params, transNumber, caid, scoped, isClient, clientNum, cPeriod]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -159,6 +187,21 @@ export default function BillingDashboard() {
       label: `${a.trade_name || "—"}${a.branch_code ? ` (${a.branch_code})` : ""}`,
       hint: a.client_name || "—",
     }))], [accounts]);
+  // clients: one per client_num (from the same account list), with how many accounts they have
+  const clientOpts = useMemo(() => {
+    const by = new Map();
+    accounts.forEach((a) => {
+      if (!a.client_num) return;
+      const c = by.get(a.client_num) || { value: String(a.client_num), label: a.client_name || a.client_num, n: 0 };
+      c.n += 1;
+      by.set(a.client_num, c);
+    });
+    return [{ value: "", label: "— Select client —" }, ...[...by.values()]
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map((c) => ({ value: c.value, label: c.label, hint: `${c.value} · ${c.n} account${c.n === 1 ? "" : "s"}` }))];
+  }, [accounts]);
+  const clientPeriodOpts = useMemo(() => [{ value: "", label: clientNum ? "All periods" : "Pick a client first" },
+  ...clientPeriods.map((p) => ({ value: p.service_period, label: `${p.service_period} · ${p.soas} SOA${p.soas === 1 ? "" : "s"}${p.closed ? " · closed" : ""}` }))], [clientNum, clientPeriods]);
   const periodOpts = useMemo(() => [{ value: "", label: caid ? "All periods" : "Pick an account first" },
   ...(account?.periods || []).map((p) => ({ value: p.trans_number, label: `${p.service_period || p.trans_number} · ${p.trans_number}${p.is_paid ? " · closed" : ""}` }))], [caid, account]);
 
@@ -219,8 +262,8 @@ export default function BillingDashboard() {
     } catch (e) { notify(e.message, "error"); }
   };
 
-  const clearFilters = () => { setCaid(""); setTransNumber(""); setStatus(""); setQuery(""); };
-  const filtered = caid || transNumber || status || q;
+  const clearFilters = () => { setCaid(""); setClientNum(""); setTransNumber(""); setCPeriod(""); setGroups([]); setStatus(""); setQuery(""); };
+  const filtered = caid || clientNum || transNumber || cPeriod || groups.length || status || q;
   const who = (r) => (
     <div className="bd-who">
       <span className="strong">{r.client_name || "—"}</span>
@@ -238,17 +281,43 @@ export default function BillingDashboard() {
     <div className="bd">
       {/* ---------- filters ---------- */}
       <section className="card bd-filters">
-        <div className="bd-filter bd-filter-wide">
-          <span className="field-label">Account (trade name - branch · client)</span>
-          <SearchSelect value={caid} onChange={setCaid} options={accountOpts} searchPlaceholder="Search trade name, branch or client..." aria-label="Account" />
-        </div>
-        <div className="bd-filter">
-          <span className="field-label">Service period (SOA)</span>
-          <SearchSelect value={transNumber} onChange={setTransNumber} options={periodOpts} searchPlaceholder="Search period..." aria-label="Service period" />
+        <label className="bd-filter bd-filter-view">
+          <span className="field-label">View by</span>
+          <select className="input" value={viewBy} onChange={(e) => switchView(e.target.value)}>
+            <option value="business">Business</option>
+            <option value="client">Client</option>
+          </select>
+        </label>
+        {isClient ? (
+          <>
+            <div className="bd-filter bd-filter-wide">
+              <span className="field-label">Client (all of their accounts)</span>
+              <SearchSelect value={clientNum} onChange={setClientNum} options={clientOpts} searchPlaceholder="Search client name or number..." aria-label="Client" />
+            </div>
+            <div className="bd-filter">
+              <span className="field-label">Service period</span>
+              <SearchSelect value={cPeriod} onChange={setCPeriod} options={clientPeriodOpts} searchPlaceholder="Search period..." aria-label="Service period" />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bd-filter bd-filter-wide">
+              <span className="field-label">Account (trade name - branch · client)</span>
+              <SearchSelect value={caid} onChange={setCaid} options={accountOpts} searchPlaceholder="Search trade name, branch or client..." aria-label="Account" />
+            </div>
+            <div className="bd-filter">
+              <span className="field-label">Service period (SOA)</span>
+              <SearchSelect value={transNumber} onChange={setTransNumber} options={periodOpts} searchPlaceholder="Search period..." aria-label="Service period" />
+            </div>
+          </>
+        )}
+        <div className="bd-filter bd-filter-sm">
+          <span className="field-label">Type</span>
+          <TypePicker value={groups} onChange={setGroups} disabled={!scoped} />
         </div>
         <label className="bd-filter bd-filter-sm">
           <span className="field-label">Status</span>
-          <select className="input" value={status} onChange={(e) => setStatus(e.target.value)} disabled={!caid || tab !== "services"}>
+          <select className="input" value={status} onChange={(e) => setStatus(e.target.value)} disabled={!scoped || tab !== "services"}>
             <option value="">All</option>
             <option value="open">Unpaid + partial</option>
             <option value="unpaid">Unpaid</option>
@@ -260,13 +329,13 @@ export default function BillingDashboard() {
         </label>
         <label className="bd-filter">
           <span className="field-label">Search</span>
-          <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} disabled={!caid} placeholder={tab === "services" ? "Service, client or SOA #..." : "Service, client, SOA #, AR / OR, reference..."} />
+          <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} disabled={!scoped} placeholder={tab === "services" ? "Service, client or SOA #..." : "Service, client, SOA #, AR / OR, reference..."} />
         </label>
         <div className="bd-filter-actions">
           {filtered && <button className="btn" onClick={clearFilters}>Clear</button>}
         </div>
 
-        {account && (
+        {!isClient && account && (
           <p className="bd-info">
             <span>TIN <b>{account.tin || "—"}</b></span>
             <span>{account.branch_type || "—"}</span>
@@ -288,14 +357,17 @@ export default function BillingDashboard() {
           ) : (
             <>
               <span className="muted small">Totals</span>
-              <b>{caid ? "All periods" : "No account"}</b>
-              <span className="muted small">{caid ? "of this account" : "Select an account"}</span>
+              <b>{!scoped ? (isClient ? "No client" : "No account") : (isClient && cPeriod) || "All periods"}</b>
+              <span className="muted small">
+                {!scoped ? (isClient ? "Select a client" : "Select an account")
+                  : isClient ? `all ${clientOpts.find((c) => c.value === clientNum)?.hint?.split("· ")[1] || "accounts"} of this client` : "of this account"}
+              </span>
             </>
           )}
         </div>
         <div className="bd-totals">
           {Object.entries(totals).map(([k, g]) => (
-            <div key={k} className="bd-total">
+            <div key={k} className={`bd-total${groups.length && !groups.includes(k) ? " is-dim" : ""}`}>
               <h4>{g.label}</h4>
               <dl>
                 <dt>Actual bill</dt><dd>{n2(g.bill)}</dd>
@@ -314,7 +386,7 @@ export default function BillingDashboard() {
         <div className="bd-tabs" role="tablist">
           {[["services", "Services"], ["payments", "Payments"]].map(([k, l]) => (
             <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "is-on" : ""} onClick={() => { setTab(k); setRows([]); }}>
-              {l} {tab === k && caid && !loading && <span className="bd-count">{rows.length}{more ? "+" : ""}</span>}
+              {l} {tab === k && scoped && !loading && <span className="bd-count">{rows.length}{more ? "+" : ""}</span>}
             </button>
           ))}
           <button className="btn btn-primary bd-add" onClick={addRow} disabled={!t} title={t ? "" : "Pick an account and a service period first"}>
@@ -323,15 +395,17 @@ export default function BillingDashboard() {
         </div>
 
         <div className="bd-scroll">
-          {!caid && (
+          {!scoped && (
             <div className="bd-pick">
-              <b>Select an account</b>
-              <span>Pick an account (trade name - branch) above to see its services and payments.</span>
+              <b>{isClient ? "Select a client" : "Select an account"}</b>
+              <span>{isClient
+                ? "Pick a client above to see the services and payments of all their accounts."
+                : "Pick an account (trade name - branch) above to see its services and payments."}</span>
             </div>
           )}
-          {caid && loading && <p className="bd-empty">Loading…</p>}
+          {scoped && loading && <p className="bd-empty">Loading…</p>}
 
-          {caid && !loading && tab === "services" && (
+          {scoped && !loading && tab === "services" && (
             <table className="bd-table">
               <thead>
                 <tr>
@@ -392,7 +466,7 @@ export default function BillingDashboard() {
             </table>
           )}
 
-          {caid && !loading && tab === "payments" && (
+          {scoped && !loading && tab === "payments" && (
             <table className="bd-table">
               <thead>
                 <tr>
@@ -455,7 +529,7 @@ export default function BillingDashboard() {
             <button key={k} className="btn btn-info" disabled={!t} title={t ? "" : "Select a service period first"}
               onClick={() => setPrintJob({ type: k, label: k })}>{k}</button>
           ))}
-          <button className="btn btn-info" onClick={load} disabled={!caid || loading}>REFRESH</button>
+          <button className="btn btn-info" onClick={load} disabled={!scoped || loading}>REFRESH</button>
         </div>
       </footer>
 
@@ -864,5 +938,44 @@ function PrintModal({ transNumber, job, onClose }) {
       {!url && !error && <div className="bd-pdf-wait">Preparing {job.label}…</div>}
       {url && <iframe className="bd-pdf" src={url} title={job.label} />}
     </Modal>
+  );
+}
+/* ---------- Type: PF / EO / Return, pick any (none = all) ---------- */
+const TYPE_OPTS = [["pf", "PF & other charges", "PF"], ["eo", "Non-recurring / EO", "EO"], ["returns", "Returns", "Return"]];
+function TypePicker({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e) => { if (!box.current?.contains(e.target)) setOpen(false); };
+    const esc = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", off);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const flip = (k) => onChange(value.includes(k) ? value.filter((x) => x !== k) : TYPE_OPTS.map(([v]) => v).filter((v) => v === k || value.includes(v)));
+  const text = !value.length || value.length === TYPE_OPTS.length ? "All types" : TYPE_OPTS.filter(([v]) => value.includes(v)).map(([, , s]) => s).join(", ");
+  return (
+    <div className="bd-types" ref={box}>
+      <button type="button" className={`input bd-types-btn${value.length && value.length < TYPE_OPTS.length ? " is-on" : ""}`} onClick={() => setOpen((o) => !o)}
+        disabled={disabled} aria-haspopup="listbox" aria-expanded={open}>
+        <span>{text}</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+      </button>
+      {open && (
+        <div className="bd-types-pop" role="listbox" aria-multiselectable="true">
+          {TYPE_OPTS.map(([v, l]) => (
+            <label key={v} className="bd-types-opt">
+              <input type="checkbox" checked={value.includes(v)} onChange={() => flip(v)} />
+              <span>{l}</span>
+            </label>
+          ))}
+          <div className="bd-types-foot">
+            <button type="button" className="btn btn-sm" onClick={() => onChange([])}>All</button>
+            <button type="button" className="btn btn-sm btn-primary" onClick={() => setOpen(false)}>Done</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
