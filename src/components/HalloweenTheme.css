@@ -1,5 +1,6 @@
-/* ================= Halloween: header + sidebar only (html.halloween) ================= */
-html.halloween {
+/* ================= Halloween: header + sidebar only (.sx-halloween on the header / sidebar) ================= */
+.topbar.sx-halloween,
+.sidebar.sx-halloween {
     --hw-orange: #f97316;
     --hw-orange-2: #ea580c;
     --hw-purple: #7c3aed;
@@ -17,13 +18,13 @@ html.halloween {
     pointer-events: none;
 }
 
-html.halloween .topbar,
-html.halloween .sidebar {
+.topbar.sx-halloween,
+.sidebar.sx-halloween {
     isolation: isolate;
 }
 
 /* ---------------- header ---------------- */
-html.halloween .topbar {
+.topbar.sx-halloween {
     background:
         radial-gradient(120% 140% at 50% -40%, rgba(249, 115, 22, .10), transparent 60%),
         var(--hw-top-bg, var(--card, #fff));
@@ -123,7 +124,7 @@ html[data-theme="dark"] .hw-bats {
 }
 
 /* ---------------- sidebar ---------------- */
-html.halloween .sidebar {
+.sidebar.sx-halloween {
     background:
         radial-gradient(160px 160px at 85% 40px, rgba(253, 224, 71, .10), transparent 70%),
         linear-gradient(180deg, #1c1033 0%, #140b26 45%, #0d0718 100%) !important;
@@ -236,46 +237,46 @@ html.halloween .sidebar {
     animation: hw-fog 12s ease-in-out infinite alternate;
 }
 
-html.halloween .sidebar.collapsed .hw-moon,
-html.halloween .sidebar.collapsed .hw-spider,
-html.halloween .sidebar.collapsed .hw-bat {
+.sidebar.sx-halloween.collapsed .hw-moon,
+.sidebar.sx-halloween.collapsed .hw-spider,
+.sidebar.sx-halloween.collapsed .hw-bat {
     display: none;
 }
 
 /* sidebar colours: orange instead of blue */
-html.halloween .sidebar .brand-badge {
+.sidebar.sx-halloween .brand-badge {
     background: var(--hw-orange) !important;
     color: #fff !important;
 }
 
-html.halloween .sidebar .side-heading {
+.sidebar.sx-halloween .side-heading {
     color: #fdba74 !important;
 }
 
-html.halloween .sidebar .side-link.has-active,
-html.halloween .sidebar .side-link.single-active {
+.sidebar.sx-halloween .side-link.has-active,
+.sidebar.sx-halloween .side-link.single-active {
     background: linear-gradient(90deg, var(--hw-orange), var(--hw-orange-2)) !important;
     color: #fff !important;
     box-shadow: 0 6px 18px rgba(234, 88, 12, .35);
 }
 
-html.halloween .sidebar .side-items a.active {
+.sidebar.sx-halloween .side-items a.active {
     background: rgba(249, 115, 22, .16) !important;
     color: #fed7aa !important;
 }
 
-html.halloween .sidebar .side-items a.active::before {
+.sidebar.sx-halloween .side-items a.active::before {
     background: var(--hw-orange) !important;
 }
 
-html.halloween .sidebar .mode-switch [aria-selected="true"],
-html.halloween .sidebar .mode-switch .active,
-html.halloween .sidebar .mode-switch .is-active {
+.sidebar.sx-halloween .mode-switch [aria-selected="true"],
+.sidebar.sx-halloween .mode-switch .active,
+.sidebar.sx-halloween .mode-switch .is-active {
     background: linear-gradient(90deg, #7c3aed, #a855f7) !important;
     color: #fff !important;
 }
 
-html.halloween .sidebar .side-nav {
+.sidebar.sx-halloween .side-nav {
     padding-bottom: 120px;
 }
 
@@ -466,6 +467,6 @@ html.halloween .sidebar .side-nav {
     fill: #2a1d45;
 }
 
-html.halloween .sidebar.collapsed .hw-lower {
+.sidebar.sx-halloween.collapsed .hw-lower {
     display: none;
 }

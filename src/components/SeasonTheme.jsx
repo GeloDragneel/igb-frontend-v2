@@ -7,8 +7,9 @@
 //
 // The title in the middle of the header is a button: pick Auto (by date), any theme to preview it, or Off.
 // The choice is kept in this browser (localStorage "igb-season").
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocation } from "react-router-dom";
 import { HalloweenHeader, HalloweenSidebar, Pumpkin } from "./HalloweenTheme";
 import "./SeasonTheme.css";
 
@@ -231,15 +232,23 @@ const readChoice = () => {
     } catch { return "auto"; }
 };
 
-const readMotion = () => { try { return localStorage.getItem(KEY + "-motion") !== "off"; } catch { return true; } };
+// pages where the theme stays completely out of the way (add a pattern here if a page ever needs it)
+const NO_THEME = [];
+
+// Animations are OFF unless turned on in Theme settings: the moving parts (snow, bats, blinking lights…) kept the
+// browser redrawing all the time and made heavy pages like Billing slow. Standing still costs nothing.
+const readMotion = () => { try { return localStorage.getItem(KEY + "-anim") === "on"; } catch { return false; } };
 
 export default function SeasonTheme() {
+    const { pathname } = useLocation();
+    return NO_THEME.some((r) => r.test(pathname)) ? null : <SeasonThemeOn />;
+}
+
+function SeasonThemeOn() {
     const [choice, setChoice] = useState(readChoice);
     const [motion, setMotion] = useState(readMotion);
     useEffect(() => {
-        try { localStorage.setItem(KEY + "-motion", motion ? "on" : "off"); } catch { /* ignore */ }
-        document.documentElement.classList.toggle("season-still", !motion);
-        return () => document.documentElement.classList.remove("season-still");
+        try { localStorage.setItem(KEY + "-anim", motion ? "on" : "off"); } catch { /* ignore */ }
     }, [motion]);
     const [today, setToday] = useState(() => seasonFor());
     useEffect(() => {                                                 // date may change while the app stays open
@@ -251,15 +260,30 @@ export default function SeasonTheme() {
     useEffect(() => {
         try { localStorage.setItem(KEY, choice); } catch { /* ignore */ }
     }, [choice]);
-    useEffect(() => {
-        const root = document.documentElement;
-        if (!active) return;
-        root.classList.add("season", active);
-        return () => root.classList.remove("season", active);
-    }, [active]);
-
     const top = useHost(".topbar");
     const side = useHost(".sidebar");
+
+    // The theme classes go on the header and the sidebar themselves – NOT on <html>.
+    // Pages like Billing use "html:has(.bd) { overflow: hidden }": every hover / change inside the page makes the browser
+    // re-check <html>, and with theme rules hanging off <html> it had to restyle the whole app each time → Billing hung.
+    // Full-height pages (Billing, VAT Summary, Monitoring…) lock the page with "html:has(...) { overflow: hidden }".
+    // On those, any animation makes the browser re-check the whole page many times a second → they stand still there.
+    const [lockedPage, setLockedPage] = useState(false);
+    useEffect(() => {
+        const check = () => setLockedPage(/hidden|clip/.test(getComputedStyle(document.documentElement).overflowY));
+        check();
+        const t = setInterval(check, 1000);
+        return () => clearInterval(t);
+    }, []);
+    const still = !motion || lockedPage;
+    const classes = useMemo(() => (active ? ["sx-season", `sx-${active}`] : []).concat(still ? ["sx-still"] : []), [active, still]);
+    useEffect(() => {
+        const els = [top, side].filter(Boolean);
+        const put = () => els.forEach((el) => classes.length && el.classList.add(...classes));
+        put();
+        const t = setInterval(put, 1000);        // the sidebar re-sets its className when opened / collapsed
+        return () => { clearInterval(t); els.forEach((el) => classes.length && el.classList.remove(...classes)); };
+    }, [top, side, classes]);
     const t = active ? THEMES[active] : null;
 
     return (
@@ -270,7 +294,7 @@ export default function SeasonTheme() {
                     <Switcher active={active} choice={choice} today={today} onPick={setChoice} />
                 </>, top)}
             {side && t && createPortal(<t.sidebar key={active} />, side)}
-            <SettingsDock choice={choice} today={today} onPick={setChoice} motion={motion} onMotion={setMotion} />
+            <SettingsDock choice={choice} today={today} onPick={setChoice} motion={motion} onMotion={setMotion} classes={classes} />
         </>
     );
 }
@@ -340,7 +364,7 @@ function ThemeOptions({ choice, today, onPick }) {
 }
 
 /* ---------- floating settings button (right edge): open the theme panel any time ---------- */
-function SettingsDock({ choice, today, onPick, motion, onMotion }) {
+function SettingsDock({ choice, today, onPick, motion, onMotion, classes = [] }) {
     const [open, setOpen] = useState(false);
     const box = useRef(null);
     useEffect(() => {
@@ -352,7 +376,7 @@ function SettingsDock({ choice, today, onPick, motion, onMotion }) {
         return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
     }, [open]);
     return createPortal(
-        <div ref={box} className={`sn-dock${open ? " is-open" : ""}`}>
+        <div ref={box} className={`sn-dock${open ? " is-open" : ""} ${classes.join(" ")}`}>
             <button type="button" className="sn-dock-btn" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Theme settings" title="Theme settings">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <circle cx="12" cy="12" r="3" />
@@ -370,7 +394,7 @@ function SettingsDock({ choice, today, onPick, motion, onMotion }) {
                         <ThemeOptions choice={choice} today={today} onPick={onPick} />
                     </div>
                     <label className="sn-motion">
-                        <span><b>Animations</b><small>Falling snow, bats, fireworks…</small></span>
+                        <span><b>Animations</b><small>Falling snow, bats, fireworks… (uses more CPU)</small></span>
                         <input type="checkbox" role="switch" checked={motion} onChange={(e) => onMotion(e.target.checked)} />
                     </label>
                     <p className="sn-menu-note">Only changes this browser. Auto follows the calendar.</p>

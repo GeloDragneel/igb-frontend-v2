@@ -1,6 +1,6 @@
 /* ================= holiday themes: header + sidebar only ================= */
-html.season .topbar,
-html.season .sidebar {
+.topbar.sx-season,
+.sidebar.sx-season {
     isolation: isolate;
 }
 
@@ -21,11 +21,11 @@ html.season .sidebar {
     height: 130px;
 }
 
-html.season .sidebar .side-nav {
+.sidebar.sx-season .side-nav {
     padding-bottom: 120px;
 }
 
-html.season .sidebar.collapsed .hw-side> :not(.hw-bottom) {
+.sidebar.sx-season.collapsed .hw-side> :not(.hw-bottom) {
     display: none;
 }
 
@@ -262,7 +262,7 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
 }
 
 /* ================= CHRISTMAS ================= */
-html.christmas .topbar {
+.topbar.sx-christmas {
     background: radial-gradient(120% 140% at 50% -40%, rgba(22, 163, 74, .10), transparent 60%), var(--card, #fff);
 }
 
@@ -290,7 +290,7 @@ html.christmas .topbar {
     animation: sn-blink 1.6s ease-in-out infinite;
 }
 
-html.christmas .sidebar {
+.sidebar.sx-christmas {
     background: radial-gradient(160px 160px at 85% 40px, rgba(253, 224, 71, .10), transparent 70%), linear-gradient(180deg, #0f2a1e 0%, #0b2018 50%, #07150f 100%) !important;
 }
 
@@ -340,35 +340,35 @@ html.christmas .sidebar {
     gap: 4px;
 }
 
-html.christmas .sidebar .brand-badge {
+.sidebar.sx-christmas .brand-badge {
     background: #dc2626 !important;
     color: #fff !important;
 }
 
-html.christmas .sidebar .side-heading {
+.sidebar.sx-christmas .side-heading {
     color: #86efac !important;
 }
 
-html.christmas .sidebar .side-link.has-active,
-html.christmas .sidebar .side-link.single-active {
+.sidebar.sx-christmas .side-link.has-active,
+.sidebar.sx-christmas .side-link.single-active {
     background: linear-gradient(90deg, #dc2626, #b91c1c) !important;
     color: #fff !important;
     box-shadow: 0 6px 18px rgba(220, 38, 38, .35);
 }
 
-html.christmas .sidebar .side-items a.active {
+.sidebar.sx-christmas .side-items a.active {
     background: rgba(220, 38, 38, .18) !important;
     color: #fecaca !important;
 }
 
-html.christmas .sidebar .mode-switch [aria-selected="true"],
-html.christmas .sidebar .mode-switch .active {
+.sidebar.sx-christmas .mode-switch [aria-selected="true"],
+.sidebar.sx-christmas .mode-switch .active {
     background: linear-gradient(90deg, #16a34a, #15803d) !important;
     color: #fff !important;
 }
 
 /* ================= NEW YEAR ================= */
-html.newyear .topbar {
+.topbar.sx-newyear {
     background: radial-gradient(120% 140% at 50% -40%, rgba(234, 179, 8, .12), transparent 60%), var(--card, #fff);
 }
 
@@ -410,7 +410,7 @@ html.newyear .topbar {
     opacity: 0;
 }
 
-html.newyear .sidebar {
+.sidebar.sx-newyear {
     background: linear-gradient(180deg, #0b1026 0%, #090c1d 55%, #05060f 100%) !important;
 }
 
@@ -471,35 +471,35 @@ html.newyear .sidebar {
     gap: 0;
 }
 
-html.newyear .sidebar .brand-badge {
+.sidebar.sx-newyear .brand-badge {
     background: #ca8a04 !important;
     color: #fff !important;
 }
 
-html.newyear .sidebar .side-heading {
+.sidebar.sx-newyear .side-heading {
     color: #fde68a !important;
 }
 
-html.newyear .sidebar .side-link.has-active,
-html.newyear .sidebar .side-link.single-active {
+.sidebar.sx-newyear .side-link.has-active,
+.sidebar.sx-newyear .side-link.single-active {
     background: linear-gradient(90deg, #ca8a04, #a16207) !important;
     color: #fff !important;
     box-shadow: 0 6px 18px rgba(202, 138, 4, .35);
 }
 
-html.newyear .sidebar .side-items a.active {
+.sidebar.sx-newyear .side-items a.active {
     background: rgba(202, 138, 4, .18) !important;
     color: #fef08a !important;
 }
 
-html.newyear .sidebar .mode-switch [aria-selected="true"],
-html.newyear .sidebar .mode-switch .active {
+.sidebar.sx-newyear .mode-switch [aria-selected="true"],
+.sidebar.sx-newyear .mode-switch .active {
     background: linear-gradient(90deg, #1e3a8a, #3b82f6) !important;
     color: #fff !important;
 }
 
 /* ================= VALENTINE'S ================= */
-html.valentines .topbar {
+.topbar.sx-valentines {
     background: radial-gradient(120% 140% at 50% -40%, rgba(244, 63, 94, .10), transparent 60%), var(--card, #fff);
 }
 
@@ -512,7 +512,7 @@ html.valentines .topbar {
     background: repeating-linear-gradient(90deg, #f43f5e 0 26px, #fda4af 26px 38px, #fff 38px 44px, #be123c 44px 70px);
 }
 
-html.valentines .sidebar {
+.sidebar.sx-valentines {
     background: radial-gradient(180px 160px at 80% 50px, rgba(251, 113, 133, .16), transparent 70%), linear-gradient(180deg, #3b0a24 0%, #2a0619 55%, #1a030f 100%) !important;
 }
 
@@ -548,29 +548,29 @@ html.valentines .sidebar {
     background: rgba(255, 255, 255, .5);
 }
 
-html.valentines .sidebar .brand-badge {
+.sidebar.sx-valentines .brand-badge {
     background: #e11d48 !important;
     color: #fff !important;
 }
 
-html.valentines .sidebar .side-heading {
+.sidebar.sx-valentines .side-heading {
     color: #fda4af !important;
 }
 
-html.valentines .sidebar .side-link.has-active,
-html.valentines .sidebar .side-link.single-active {
+.sidebar.sx-valentines .side-link.has-active,
+.sidebar.sx-valentines .side-link.single-active {
     background: linear-gradient(90deg, #e11d48, #be123c) !important;
     color: #fff !important;
     box-shadow: 0 6px 18px rgba(225, 29, 72, .35);
 }
 
-html.valentines .sidebar .side-items a.active {
+.sidebar.sx-valentines .side-items a.active {
     background: rgba(244, 63, 94, .18) !important;
     color: #fecdd3 !important;
 }
 
-html.valentines .sidebar .mode-switch [aria-selected="true"],
-html.valentines .sidebar .mode-switch .active {
+.sidebar.sx-valentines .mode-switch [aria-selected="true"],
+.sidebar.sx-valentines .mode-switch .active {
     background: linear-gradient(90deg, #db2777, #f472b6) !important;
     color: #fff !important;
 }
@@ -741,10 +741,11 @@ html.valentines .sidebar .mode-switch .active {
     cursor: pointer;
 }
 
-.sn-dock-btn svg {
-    animation: sn-spin 6s linear infinite;
+.sn-dock-btn:hover svg {
+    animation: sn-spin 2s linear infinite;
 }
 
+/* spins only while you point at it */
 .sn-dock-btn:hover {
     width: 50px;
 }
@@ -753,19 +754,19 @@ html.valentines .sidebar .mode-switch .active {
     background: var(--primary, #2563eb);
 }
 
-html.halloween .sn-dock-btn {
+.sn-dock.sx-halloween .sn-dock-btn {
     background: linear-gradient(180deg, #f97316, #7c3aed);
 }
 
-html.christmas .sn-dock-btn {
+.sn-dock.sx-christmas .sn-dock-btn {
     background: linear-gradient(180deg, #dc2626, #15803d);
 }
 
-html.newyear .sn-dock-btn {
+.sn-dock.sx-newyear .sn-dock-btn {
     background: linear-gradient(180deg, #ca8a04, #1e3a8a);
 }
 
-html.valentines .sn-dock-btn {
+.sn-dock.sx-valentines .sn-dock-btn {
     background: linear-gradient(180deg, #e11d48, #db2777);
 }
 
@@ -907,16 +908,16 @@ html.valentines .sn-dock-btn {
 }
 
 /* Animations switch (Theme settings) off → everything stands still */
-html.season-still .hw-top *,
-html.season-still .hw-side *,
-html.season-still .sn-dock-btn svg,
-html.season-still .sn-title {
+.sx-still .hw-top *,
+.sx-still .hw-side *,
+.sx-still .sn-dock-btn svg,
+.sx-still .sn-title {
     animation: none !important;
 }
 
-html.season-still .sn-fall,
-html.season-still .hw-bats,
-html.season-still .sn-burst {
+.sx-still .sn-fall,
+.sx-still .hw-bats,
+.sx-still .sn-burst {
     display: none;
 }
 
@@ -942,4 +943,17 @@ html.season-still .sn-burst {
     height: 22px;
     accent-color: var(--primary, #2563eb);
     cursor: pointer;
+}
+
+/* the small icons in the header title, the menu and the settings panel never animate
+   (the flickering pumpkin there kept restyling the page – that is what hung Billing) */
+.sn-switch *,
+.sn-menu *,
+.sn-panel * {
+    animation: none !important;
+}
+
+.sx-still .sn-switch,
+.sx-still .sn-switch * {
+    animation: none !important;
 }
