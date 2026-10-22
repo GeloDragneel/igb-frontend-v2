@@ -29,7 +29,7 @@ export default function Layout() {
   return (
     <div className="app">
       <Sidebar open={mobileOpen} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} onReady={setReady} />
-      <SeasonTheme />
+      {/* <SeasonTheme /> */}
       {mobileOpen && <div className="scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
 
       <div className="main">

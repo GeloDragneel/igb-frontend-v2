@@ -222,7 +222,7 @@ html.halloween .sidebar {
     display: flex;
     align-items: flex-end;
     gap: 2px;
-    filter: drop-shadow(0 0 10px rgba(249, 115, 22, .45));
+    background: radial-gradient(closest-side, rgba(249, 115, 22, .35), transparent);
 }
 
 .hw-fog {

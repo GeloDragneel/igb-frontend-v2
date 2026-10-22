@@ -215,10 +215,11 @@ function useHost(selector) {
             if (n && getComputedStyle(n).position === "static") n.style.position = "relative";
             setEl(n);
         };
+        // a light check every second instead of watching every DOM change on the page
+        // (a page-wide MutationObserver ran on every row a big page like Billing rendered)
         find();
-        const mo = new MutationObserver(find);
-        mo.observe(document.body, { childList: true, subtree: true });
-        return () => mo.disconnect();
+        const t = setInterval(find, 1000);
+        return () => clearInterval(t);
     }, [selector]);
     return el;
 }
@@ -230,8 +231,16 @@ const readChoice = () => {
     } catch { return "auto"; }
 };
 
+const readMotion = () => { try { return localStorage.getItem(KEY + "-motion") !== "off"; } catch { return true; } };
+
 export default function SeasonTheme() {
     const [choice, setChoice] = useState(readChoice);
+    const [motion, setMotion] = useState(readMotion);
+    useEffect(() => {
+        try { localStorage.setItem(KEY + "-motion", motion ? "on" : "off"); } catch { /* ignore */ }
+        document.documentElement.classList.toggle("season-still", !motion);
+        return () => document.documentElement.classList.remove("season-still");
+    }, [motion]);
     const [today, setToday] = useState(() => seasonFor());
     useEffect(() => {                                                 // date may change while the app stays open
         const t = setInterval(() => setToday(seasonFor()), 60 * 60 * 1000);
@@ -261,7 +270,7 @@ export default function SeasonTheme() {
                     <Switcher active={active} choice={choice} today={today} onPick={setChoice} />
                 </>, top)}
             {side && t && createPortal(<t.sidebar key={active} />, side)}
-            <SettingsDock choice={choice} today={today} onPick={setChoice} />
+            <SettingsDock choice={choice} today={today} onPick={setChoice} motion={motion} onMotion={setMotion} />
         </>
     );
 }
@@ -331,7 +340,7 @@ function ThemeOptions({ choice, today, onPick }) {
 }
 
 /* ---------- floating settings button (right edge): open the theme panel any time ---------- */
-function SettingsDock({ choice, today, onPick }) {
+function SettingsDock({ choice, today, onPick, motion, onMotion }) {
     const [open, setOpen] = useState(false);
     const box = useRef(null);
     useEffect(() => {
@@ -360,6 +369,10 @@ function SettingsDock({ choice, today, onPick }) {
                     <div role="menu" className="sn-panel-list">
                         <ThemeOptions choice={choice} today={today} onPick={onPick} />
                     </div>
+                    <label className="sn-motion">
+                        <span><b>Animations</b><small>Falling snow, bats, fireworks…</small></span>
+                        <input type="checkbox" role="switch" checked={motion} onChange={(e) => onMotion(e.target.checked)} />
+                    </label>
                     <p className="sn-menu-note">Only changes this browser. Auto follows the calendar.</p>
                 </div>
             )}
