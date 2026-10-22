@@ -16,6 +16,7 @@ import { auditTone } from "../Purchases";
 import { ProductForm } from "../../setup/Product";
 import PayBillModal from "../../../components/payments/PayBillModal";
 import { isPayableAccount } from "../../../components/payments/paymentUtils";
+import DuplicateDocModal from "../../../components/invoice/DuplicateDocModal";
 /* =========================================================
    Lists for this page (vendors, items, purchase accounts, ATC ...)
    Same shape as the Sales lookups. Kept 10 minutes per account.
@@ -95,6 +96,14 @@ const vatTypeOfAccount = (name) => {
     if (t.includes("zero")) return "zero";
     if (t.includes("non vat") || t.includes("non-vat") || t.includes("nonvat")) return "nonvat";
     return "vatable";
+};
+
+// VAT type of a line: an account that says Exempt / Zero / Non-VAT decides;
+// otherwise the item's own Tax Type (NonVAT item → Non VAT column, not VATable)
+const lineVatType = (item, accountName) => {
+    const byAccount = accountName ? vatTypeOfAccount(accountName) : "vatable";
+    if (byAccount !== "vatable") return byAccount;
+    return item ? vatTypeOf(item.tax_type) : "vatable";
 };
 
 const blankLine = () => ({ itemId: "", unitTypeId: null, qty: 1, price: 0, discount: 0, vatType: "vatable", accountCode: "" });
@@ -263,7 +272,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             itemId: String(item.id),
             unitTypeId: item.unit_type_id,
             accountCode,
-            vatType: acc ? vatTypeOfAccount(acc.account_name) : vatTypeOf(item.tax_type),
+            vatType: lineVatType(item, acc?.account_name),
         };
     };
     // new purchase defaults: Accounts = Cash / Cash on Hand · first line = the "VARIOUS PURCHASE - VAT / VT" item
@@ -291,7 +300,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             unitTypeId: item.unit_type_id,
             price: Number(item.price) || 0,
             accountCode,
-            vatType: acc ? vatTypeOfAccount(acc.account_name) : vatTypeOf(item.tax_type),
+            vatType: lineVatType(item, acc?.account_name),
         };
     };
     const [f, setF] = useState(() =>
@@ -424,9 +433,9 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     ];
 
     /* ---------- lines ---------- */
-    const vatTypeForAccount = (code, fallback) => {
+    const vatTypeForAccount = (code, item) => {
         const acc = salesAccounts.find((a) => a.account_code === code);
-        return acc ? vatTypeOfAccount(acc.account_name) : fallback;
+        return lineVatType(item, acc?.account_name);
     };
 
     const applyItem = (i, item) => {
@@ -436,7 +445,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             unitTypeId: item.unit_type_id,
             price: Number(item.price) || 0,
             accountCode,
-            vatType: vatTypeForAccount(accountCode, vatTypeOf(item.tax_type)),
+            vatType: vatTypeForAccount(accountCode, item),
         });
     };
 
@@ -448,7 +457,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
 
     const changeLine = (i, patch) => {
         if ("accountCode" in patch) {
-            patch = { ...patch, vatType: vatTypeForAccount(patch.accountCode, f.lines[i]?.vatType || "vatable") };
+            patch = { ...patch, vatType: vatTypeForAccount(patch.accountCode, itemsById[f.lines[i]?.itemId]) };
         }
         setLine(i, patch);
     };
@@ -489,10 +498,8 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
         if (!String(f.documentNo || "").trim()) e.documentNo = "Document # is required.";
         if (!String(f.accountCode || "").trim()) e.accountCode = "Accounts is required.";
 
-        // locked (closed) months: the Declared Month and the 2307 months
+        // locked (closed) months – only the months being SAVED; each on its own field
         const lockedMonths = (locked || lookups.locked_months || []).map((m) => String(m).slice(0, 7));
-        // each month gets its own message on its own field (a locked 2307 month must not make Declared Month red)
-        // only the months being SAVED are checked (moving an invoice out of a locked month into an open one is allowed)
         if (lockedMonths.includes(f.declaredMonth)) e.declaredMonth = `Declared Month is disabled – ${monthName(f.declaredMonth)} is locked.`;
         if (f.atcVtId && f.atcVtMonth && lockedMonths.includes(f.atcVtMonth)) e.atcVtMonth = `2307 (VT/PT) Declared Month is disabled – ${monthName(f.atcVtMonth)} is locked.`;
         if (f.atcItId && f.atcItMonth && lockedMonths.includes(f.atcItMonth)) e.atcItMonth = `2307 (IT) Declared Month is disabled – ${monthName(f.atcItMonth)} is locked.`;
@@ -543,12 +550,24 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
         })),
     });
 
+    // Document No. already used (123 vs 123-155-125 …) → popup with the matches + supervisor override, before the review
+    const [dupFor, setDupFor] = useState(null);   // { body, matches }
+    const openReview = async (body) => {
+        if (body.document_no && !body.scan_action && !body.doc_override_token) {
+            try {
+                const r = await apiFetch(`/purchases/document-check?document_no=${encodeURIComponent(body.document_no)}`);
+                if (r.matches?.length) { setDupFor({ body, matches: r.matches }); return; }
+            } catch { /* the server checks again on save */ }
+        }
+        setReview(body);
+    };
+
     const save = async () => {
         setSaveError("");
         const locked = await freshLocked();
         if (!validate({ locked })) return setSaveError("Please fix the highlighted fields.");
         if (saved) setTicket({ ...buildBody(), action: "EDIT" });
-        else setReview(buildBody());
+        else openReview(buildBody());
     };
 
     const submitNew = async () => {
@@ -567,6 +586,17 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             setPendingFile(null);
             navigate(`/task/purchases/${encodeURIComponent(res.invoice_no)}`, { replace: true, ...navState });
         } catch (e) {
+            // document no. already used → the supervisor override popup (also when the check before the review couldn't run)
+            if (/supervisor override/i.test(e.message || "") && !review?.doc_override_token) {
+                const { doc_override_token, ...body } = review || {};
+                setReview(null);
+                setDupFor({ body, matches: [] });
+                try {
+                    const r = await apiFetch(`/purchases/document-check?document_no=${encodeURIComponent(body.document_no || "")}`);
+                    setDupFor((x) => x && { ...x, matches: r.matches || [] });
+                } catch { /* the popup still asks for the supervisor */ }
+                return;
+            }
             setSaveError(e.message || "Couldn't save the invoice.");
             setReview(null);
         } finally {
@@ -591,7 +621,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
         setSaveError("");
         const locked = await freshLocked();
         if (!validate({ locked })) return setSaveError("Please fix the highlighted fields.");
-        setReview({ ...buildBody(), trans_type: "billing" });
+        openReview({ ...buildBody(), trans_type: "billing" });
     };
     // INVALID / PARTIAL INVALID (reason popup) and CANCEL (no price needed)
     const markInvalid = async (action) => {
@@ -1051,6 +1081,16 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                 />
             )}
 
+            {dupFor && (
+                <DuplicateDocModal
+                    module="purchases"
+                    docNo={dupFor.body.document_no}
+                    matches={dupFor.matches}
+                    partyLabel="Vendor"
+                    onCancel={() => setDupFor(null)}
+                    onApproved={(token) => { const body = { ...dupFor.body, doc_override_token: token }; setDupFor(null); setReview(body); }}
+                />
+            )}
             {review && (
                 <ReviewPanel
                     title={f.documentNo ? `#${f.documentNo}` : "New invoice"}

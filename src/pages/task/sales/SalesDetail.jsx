@@ -541,6 +541,17 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             setPendingFile(null);
             navigate(`/task/sales/${encodeURIComponent(res.invoice_no)}`, { replace: true, ...navState });
         } catch (e) {
+            // document no. already used → the supervisor override popup (also when the check before the review couldn't run)
+            if (/supervisor override/i.test(e.message || "") && !review?.doc_override_token) {
+                const { doc_override_token, ...body } = review || {};
+                setReview(null);
+                setDupFor({ body, matches: [] });
+                try {
+                    const r = await apiFetch(`/sales/document-check?document_no=${encodeURIComponent(body.document_no || "")}`);
+                    setDupFor((x) => x && { ...x, matches: r.matches || [] });
+                } catch { /* the popup still asks for the supervisor */ }
+                return;
+            }
             setSaveError(e.message || "Couldn't save the invoice.");
             setReview(null);
         } finally {
