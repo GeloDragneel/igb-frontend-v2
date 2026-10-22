@@ -16,7 +16,6 @@ import { auditTone } from "../Purchases";
 import { ProductForm } from "../../setup/Product";
 import PayBillModal from "../../../components/payments/PayBillModal";
 import { isPayableAccount } from "../../../components/payments/paymentUtils";
-import DuplicateDocModal from "../../../components/invoice/DuplicateDocModal";
 /* =========================================================
    Lists for this page (vendors, items, purchase accounts, ATC ...)
    Same shape as the Sales lookups. Kept 10 minutes per account.
@@ -96,14 +95,6 @@ const vatTypeOfAccount = (name) => {
     if (t.includes("zero")) return "zero";
     if (t.includes("non vat") || t.includes("non-vat") || t.includes("nonvat")) return "nonvat";
     return "vatable";
-};
-
-// VAT type of a line: an account that says Exempt / Zero / Non-VAT decides;
-// otherwise the item's own Tax Type (NonVAT item → Non VAT column, not VATable)
-const lineVatType = (item, accountName) => {
-    const byAccount = accountName ? vatTypeOfAccount(accountName) : "vatable";
-    if (byAccount !== "vatable") return byAccount;
-    return item ? vatTypeOf(item.tax_type) : "vatable";
 };
 
 const blankLine = () => ({ itemId: "", unitTypeId: null, qty: 1, price: 0, discount: 0, vatType: "vatable", accountCode: "" });
@@ -272,7 +263,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             itemId: String(item.id),
             unitTypeId: item.unit_type_id,
             accountCode,
-            vatType: lineVatType(item, acc?.account_name),
+            vatType: acc ? vatTypeOfAccount(acc.account_name) : vatTypeOf(item.tax_type),
         };
     };
     // new purchase defaults: Accounts = Cash / Cash on Hand · first line = the "VARIOUS PURCHASE - VAT / VT" item
@@ -300,7 +291,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             unitTypeId: item.unit_type_id,
             price: Number(item.price) || 0,
             accountCode,
-            vatType: lineVatType(item, acc?.account_name),
+            vatType: acc ? vatTypeOfAccount(acc.account_name) : vatTypeOf(item.tax_type),
         };
     };
     const [f, setF] = useState(() =>
@@ -433,9 +424,9 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     ];
 
     /* ---------- lines ---------- */
-    const vatTypeForAccount = (code, item) => {
+    const vatTypeForAccount = (code, fallback) => {
         const acc = salesAccounts.find((a) => a.account_code === code);
-        return lineVatType(item, acc?.account_name);
+        return acc ? vatTypeOfAccount(acc.account_name) : fallback;
     };
 
     const applyItem = (i, item) => {
@@ -445,7 +436,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             unitTypeId: item.unit_type_id,
             price: Number(item.price) || 0,
             accountCode,
-            vatType: vatTypeForAccount(accountCode, item),
+            vatType: vatTypeForAccount(accountCode, vatTypeOf(item.tax_type)),
         });
     };
 
@@ -457,7 +448,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
 
     const changeLine = (i, patch) => {
         if ("accountCode" in patch) {
-            patch = { ...patch, vatType: vatTypeForAccount(patch.accountCode, itemsById[f.lines[i]?.itemId]) };
+            patch = { ...patch, vatType: vatTypeForAccount(patch.accountCode, f.lines[i]?.vatType || "vatable") };
         }
         setLine(i, patch);
     };
@@ -474,7 +465,23 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     };
 
     /* ---------- save ---------- */
-    const validate = ({ allowZeroPrice = false } = {}) => {
+    // the locked months, asked from the server right when SAVE is pressed (the lookups list can be old:
+    // a month locked by the admin after this page was opened was not in it, so the save went through)
+    const [checking, setChecking] = useState(false);
+    const freshLocked = async () => {
+        setChecking(true);
+        try {
+            const r = await apiFetch("/declared-months/locked");
+            return (r.locked || []).map((m) => String(m).slice(0, 7));
+        } catch {
+            return (lookups.locked_months || []).map((m) => String(m).slice(0, 7));   // server checks again on save
+        } finally {
+            setChecking(false);
+        }
+    };
+    const monthName = (ym) => { const [y, m] = String(ym).split("-"); return new Date(+y, +m - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" }); };
+
+    const validate = ({ allowZeroPrice = false, locked = null } = {}) => {
         const e = {};
         if (!f.customerId) e.customerId = "Vendor is required.";
         if (!f.date) e.date = "Invoice Date is required.";
@@ -482,14 +489,13 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
         if (!String(f.documentNo || "").trim()) e.documentNo = "Document # is required.";
         if (!String(f.accountCode || "").trim()) e.accountCode = "Accounts is required.";
 
-        const lockedMonths = lookups.locked_months || [];
-        if (
-            lockedMonths.includes(f.declaredMonth) ||
-            (f.atcVtId && lockedMonths.includes(f.atcVtMonth)) ||
-            (f.atcItId && lockedMonths.includes(f.atcItMonth))
-        ) {
-            e.declaredMonth = "Declared Month is disabled.";
-        }
+        // locked (closed) months: the Declared Month and the 2307 months
+        const lockedMonths = (locked || lookups.locked_months || []).map((m) => String(m).slice(0, 7));
+        // each month gets its own message on its own field (a locked 2307 month must not make Declared Month red)
+        // only the months being SAVED are checked (moving an invoice out of a locked month into an open one is allowed)
+        if (lockedMonths.includes(f.declaredMonth)) e.declaredMonth = `Declared Month is disabled – ${monthName(f.declaredMonth)} is locked.`;
+        if (f.atcVtId && f.atcVtMonth && lockedMonths.includes(f.atcVtMonth)) e.atcVtMonth = `2307 (VT/PT) Declared Month is disabled – ${monthName(f.atcVtMonth)} is locked.`;
+        if (f.atcItId && f.atcItMonth && lockedMonths.includes(f.atcItMonth)) e.atcItMonth = `2307 (IT) Declared Month is disabled – ${monthName(f.atcItMonth)} is locked.`;
 
         if (f.lines.filter((l) => l.itemId).length === 0) e.lines = "At least one item is required.";
         f.lines.forEach((l, i) => {
@@ -498,6 +504,8 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
         });
 
         setErrors(e);
+        const monthErr = [e.declaredMonth, e.atcVtMonth, e.atcItMonth].filter((x) => x && /is disabled|is locked/.test(x));
+        if (monthErr.length) notify(monthErr.join(" "), "error");
         return Object.keys(e).length === 0;
     };
 
@@ -535,23 +543,12 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
         })),
     });
 
-    // Document No. already used (123 vs 123-155-125 …) → popup with the matches + supervisor override, before the review
-    const [dupFor, setDupFor] = useState(null);   // { body, matches }
-    const openReview = async (body) => {
-        if (body.document_no && !body.scan_action && !body.doc_override_token) {
-            try {
-                const r = await apiFetch(`/purchases/document-check?document_no=${encodeURIComponent(body.document_no)}`);
-                if (r.matches?.length) { setDupFor({ body, matches: r.matches }); return; }
-            } catch { /* the server checks again on save */ }
-        }
-        setReview(body);
-    };
-
-    const save = () => {
+    const save = async () => {
         setSaveError("");
-        if (!validate()) return setSaveError("Please fix the highlighted fields.");
+        const locked = await freshLocked();
+        if (!validate({ locked })) return setSaveError("Please fix the highlighted fields.");
         if (saved) setTicket({ ...buildBody(), action: "EDIT" });
-        else openReview(buildBody());
+        else setReview(buildBody());
     };
 
     const submitNew = async () => {
@@ -590,15 +587,17 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     };
 
     // FOR PAYMENT (scan): same review + save, but listed under For Payment
-    const forPayment = () => {
+    const forPayment = async () => {
         setSaveError("");
-        if (!validate()) return setSaveError("Please fix the highlighted fields.");
-        openReview({ ...buildBody(), trans_type: "billing" });
+        const locked = await freshLocked();
+        if (!validate({ locked })) return setSaveError("Please fix the highlighted fields.");
+        setReview({ ...buildBody(), trans_type: "billing" });
     };
     // INVALID / PARTIAL INVALID (reason popup) and CANCEL (no price needed)
-    const markInvalid = (action) => {
+    const markInvalid = async (action) => {
         setSaveError("");
-        if (!validate({ allowZeroPrice: action === "cancel" })) return setSaveError("Please fix the highlighted fields.");
+        const locked = await freshLocked();
+        if (!validate({ allowZeroPrice: action === "cancel", locked })) return setSaveError("Please fix the highlighted fields.");
         if (action === "cancel") {
             setReview({ ...buildBody(), trans_type: "invalid", scan_action: "cancel" });
         } else {
@@ -612,6 +611,12 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     };
     // POST (Partially Invalid → posted)
     const postInvoice = async () => {
+        const locked = await freshLocked();
+        if (locked.includes(f.declaredMonth)) {
+            setConfirmPost(false);
+            setErrors((x) => ({ ...x, declaredMonth: `Declared Month is disabled – ${monthName(f.declaredMonth)} is locked.` }));
+            return notify(`Declared Month is disabled – ${monthName(f.declaredMonth)} is locked.`, "error");
+        }
         setSaving(true);
         try {
             const res = await apiFetch(`/purchases/${f.id}/post`, { method: "POST" });
@@ -842,8 +847,8 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                                             </div>
                                         </SumRow>
                                         <SumRow label="2307 (VT/PT)"><input className="input ta-right" readOnly value={num4(calc.wtaxVT)} /></SumRow>
-                                        <SumRow label="2307 (VT/PT) Declared Month">
-                                            <input type="month" className="input" value={f.atcVtMonth} onChange={(e) => set("atcVtMonth", e.target.value)} disabled={!f.atcVtId} />
+                                        <SumRow label="2307 (VT/PT) Declared Month" error={errors.atcVtMonth}>
+                                            <input type="month" className={`input ${err("atcVtMonth")}`} value={f.atcVtMonth} onChange={(e) => set("atcVtMonth", e.target.value)} disabled={!f.atcVtId} />
                                         </SumRow>
                                     </>
                                 )}
@@ -869,8 +874,8 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                                             </div>
                                         </SumRow>
                                         <SumRow label="2307 (IT)"><input className="input ta-right" readOnly value={num4(calc.wtaxIT)} /></SumRow>
-                                        <SumRow label="2307 (IT) Declared Month">
-                                            <input type="month" className="input" value={f.atcItMonth} onChange={(e) => set("atcItMonth", e.target.value)} disabled={!f.atcItId} />
+                                        <SumRow label="2307 (IT) Declared Month" error={errors.atcItMonth}>
+                                            <input type="month" className={`input ${err("atcItMonth")}`} value={f.atcItMonth} onChange={(e) => set("atcItMonth", e.target.value)} disabled={!f.atcItId} />
                                         </SumRow>
                                     </>
                                 )}
@@ -927,7 +932,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                             )}
 
                             {(scanStatus === 0 || scanStatus === 4) && (
-                                <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "SAVING…" : "SAVE"}</button>
+                                <button className="btn btn-primary" onClick={save} disabled={saving || checking}>{saving || checking ? "SAVING…" : "SAVE"}</button>
                             )}
                         </>
                     ) : (
@@ -960,7 +965,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                                     >
                                         <Icon name="plus" size={16} /> Add New Purchase
                                     </button>
-                                    <button className="btn btn-primary" disabled={locked || saving} onClick={save}>{saving ? "SAVING…" : "SAVE"}</button>
+                                    <button className="btn btn-primary" disabled={locked || saving || checking} onClick={save}>{saving || checking ? "SAVING…" : "SAVE"}</button>
                                 </>
                             )}
                         </>
@@ -1046,16 +1051,6 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                 />
             )}
 
-            {dupFor && (
-                <DuplicateDocModal
-                    module="purchases"
-                    docNo={dupFor.body.document_no}
-                    matches={dupFor.matches}
-                    partyLabel="Vendor"
-                    onCancel={() => setDupFor(null)}
-                    onApproved={(token) => { const body = { ...dupFor.body, doc_override_token: token }; setDupFor(null); setReview(body); }}
-                />
-            )}
             {review && (
                 <ReviewPanel
                     title={f.documentNo ? `#${f.documentNo}` : "New invoice"}
