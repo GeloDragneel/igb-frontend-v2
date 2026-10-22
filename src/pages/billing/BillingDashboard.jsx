@@ -30,6 +30,31 @@ const ZERO_TOTALS = {
   returns: { label: "Returns", bill: 0, paid: 0, balance: 0 },
   eo: { label: "Non-recurring / EO", bill: 0, paid: 0, balance: 0 },
 };
+// lists that rarely change: fetched once per session, shared by every visit to this page
+let lookupsCache = null;
+let accountsCache = null;
+
+// what a service's Total is made of: fee total + VAT − withholding − discount (Option)
+const breakdownNote = (s) => [
+  Number(s.inherited_vat) > 0 && `incl. VAT ${n2(s.inherited_vat)}`,
+  Number(s.inherited_wh) > 0 && `less WH ${n2(s.inherited_wh)}`,
+  Number(s.inherited_discount_amount) > 0 && `less disc. ${n2(s.inherited_discount_amount)}`,
+].filter(Boolean).join(" · ");
+const breakdownTitle = (s) => `Service total ${n2(s.total_service_fee)}`
+  + (Number(s.inherited_vat) > 0 ? ` + VAT 12% ${n2(s.inherited_vat)}` : "")
+  + (Number(s.inherited_wh) > 0 ? ` − withholding 5% ${n2(s.inherited_wh)}` : "")
+  + (Number(s.inherited_discount_amount) > 0 ? ` − discount ${n2(s.inherited_discount_amount)}` : "")
+  + ` = ${n2(s.net)}  (VAT / withholding / discount are set in Option)`;
+/** same rules as the server (BillingController::inherited) */
+function optionAmounts(total, f = {}) {
+  const vat = Number(f.d_vat) ? Math.round(total * 0.12 * 100) / 100 : 0;
+  const wh = Number(f.d_witholding) ? Math.round(total * 0.05 * 100) / 100 : 0;
+  const base = total + vat - wh;
+  const pct = Number(f.d_less_sc) || Number(f.d_less_pwd) ? 0.2 : Number(f.d_less_sp) ? 0.1 : Number(f.d_less_others) ? (Number(f.less_other_percentage) || 0) / 100 : 0;
+  const disc = Math.round(base * pct * 100) / 100;
+  return { vat, wh, disc, net: Math.round((base - disc) * 100) / 100 };
+}
+
 const PRINTS = ["C_RETURN", "PT_EO_SOA", "C_EO_SOA", "EO_SOA", "CLOSE", "PT_SOA", "C_SOA", "SOA"];   // CLOSE = Close SOA, same spot as before
 
 export default function BillingDashboard() {
@@ -65,18 +90,24 @@ export default function BillingDashboard() {
   const [printJob, setPrintJob] = useState(null);     // { type, serviceId?, label }
 
   useEffect(() => {
-    apiFetch("/billing/lookups").then(setLk).catch((e) => setError(e.message || "Couldn't load the lists."));
-    apiFetch("/billing/account-list").then(setAccounts).catch(() => { });
+    let alive = true;
+    (lookupsCache ??= apiFetch("/billing/lookups").catch((e) => { lookupsCache = null; throw e; }))
+      .then((d) => alive && setLk(d)).catch((e) => alive && setError(e.message || "Couldn't load the lists."));
+    (accountsCache ??= apiFetch("/billing/account-list").catch((e) => { accountsCache = null; throw e; }))
+      .then((d) => alive && setAccounts(d || [])).catch(() => { });
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => { const id = setTimeout(() => setQ(query.trim()), 300); return () => clearTimeout(id); }, [query]);
 
   // account → info + its service periods
   useEffect(() => {
+    let alive = true;
     setAccount(null);
     setTransNumber("");
     if (!caid) return;
-    apiFetch(`/billing/accounts/${caid}`).then(setAccount).catch((e) => notifyRef.current(e.message, "error"));
+    apiFetch(`/billing/accounts/${caid}`).then((a) => alive && setAccount(a)).catch((e) => alive && notifyRef.current(e.message, "error"));
+    return () => { alive = false; };
   }, [caid]);
 
   const params = useMemo(() => {
@@ -88,7 +119,10 @@ export default function BillingDashboard() {
     return p.toString();
   }, [caid, transNumber, status, q, tab]);
 
+  // only the newest load may fill the page (an older, slower answer must not overwrite it)
+  const loadId = useRef(0);
   const load = useCallback(async () => {
+    const id = ++loadId.current;
     setError("");
     if (!caid) { setRows([]); setMore(false); setSoa(null); setTotals(ZERO_TOTALS); setTicked([]); setLoading(false); return; }
     setLoading(true);
@@ -99,16 +133,18 @@ export default function BillingDashboard() {
         transNumber ? apiFetch(`/billing/soa/${encodeURIComponent(transNumber)}`) : Promise.resolve(null),
         apiFetch(`/billing/totals?${scope}`),
       ]);
+      if (id !== loadId.current) return;
       setRows(list.rows || []);
       setMore(!!list.more);
       setSoa(s);
       setTotals(tot || ZERO_TOTALS);
       setTicked([]);
     } catch (e) {
+      if (id !== loadId.current) return;
       setError(e.message || "Couldn't load.");
       setRows([]);
     } finally {
-      setLoading(false);
+      if (id === loadId.current) setLoading(false);
     }
   }, [tab, params, transNumber, caid]);
 
@@ -123,8 +159,8 @@ export default function BillingDashboard() {
       label: `${a.trade_name || "—"}${a.branch_code ? ` (${a.branch_code})` : ""}`,
       hint: a.client_name || "—",
     }))], [accounts]);
-  const periodOpts = [{ value: "", label: caid ? "All periods" : "Pick an account first" },
-  ...(account?.periods || []).map((p) => ({ value: p.trans_number, label: `${p.service_period || p.trans_number} · ${p.trans_number}${p.is_paid ? " · closed" : ""}` }))];
+  const periodOpts = useMemo(() => [{ value: "", label: caid ? "All periods" : "Pick an account first" },
+  ...(account?.periods || []).map((p) => ({ value: p.trans_number, label: `${p.service_period || p.trans_number} · ${p.trans_number}${p.is_paid ? " · closed" : ""}` }))], [caid, account]);
 
   const tickable = (s) => ![PAID, VOID, CANCELLED].includes(Number(s.invoice_status_id));
   const toggle = (id) => setTicked((x) => (x.includes(id) ? x.filter((i) => i !== id) : [...x, id]));
@@ -165,6 +201,8 @@ export default function BillingDashboard() {
     id: s.id, trans_number: s.trans_number, ser_list_id: String(s.ser_list_id || ""), ser_fee_id: s.ser_fee_id, prep_target_date: s.prep_target_date || today(),
     service_fee: String(s.service_fee), qty: String(s.qty), less: s.less ? String(s.less) : "", surcharge: s.surcharge ? String(s.surcharge) : "",
     orig_fee: s.service_fee, locked: dead,
+    // Option flags (VAT / withholding / discount) – the popup shows the same Total as the list
+    flags: { d_vat: s.d_vat, d_witholding: s.d_witholding, d_less_sc: s.d_less_sc, d_less_sp: s.d_less_sp, d_less_pwd: s.d_less_pwd, d_less_others: s.d_less_others, less_other_percentage: s.less_other_percentage },
   });
 
   const voidCancel = (kind) => {
@@ -319,8 +357,11 @@ export default function BillingDashboard() {
                       <td>{soaCell(s)}</td>
                       <td className="bd-svc">{s.service}</td>
                       <td className="n">{fmtDay(s.prep_target_date)}</td>
-                      <td className="n strong">{n2(s.net)}</td>
-                      <td className="n">{s.paid ? n2(s.paid) : ""}</td>
+                      <td className="n strong bd-net-cell" title={breakdownTitle(s)}>
+                        {n2(s.net)}
+                        {breakdownNote(s) && <small className="bd-net-note">{breakdownNote(s)}</small>}
+                      </td>
+                      <td className="n">{dead ? "" : n2(s.paid || 0)}</td>
                       <td className={`n ${s.balance > 0.009 ? "is-due" : ""}`}>{dead ? "" : n2(s.balance)}</td>
                       <td className="c">
                         <div className="bd-actions">
@@ -464,6 +505,8 @@ export function ServiceModal({ initial, lk, transNumber, onClose, onSaved, onNee
 
   const gross = num(f.service_fee) * num(f.qty);
   const total = gross - num(f.less) + gross * (num(f.surcharge) / 100);
+  const opt = optionAmounts(Math.round(total * 100) / 100, f.flags);
+  const hasOpt = opt.vat > 0 || opt.wh > 0 || opt.disc > 0;
 
   const pickService = (v) => {
     const s = lk.services.find((x) => String(x.id) === v);
@@ -507,8 +550,18 @@ export function ServiceModal({ initial, lk, transNumber, onClose, onSaved, onNee
         <Field label="Qty"><input className="input ta-right" inputMode="decimal" value={f.qty} onChange={(e) => set("qty", cleanNum(e.target.value))} /></Field>
         <Field label="Less"><input className="input ta-right" inputMode="decimal" value={f.less} onChange={(e) => set("less", cleanNum(e.target.value))} placeholder="0.00" /></Field>
         <Field label="Surcharge (%)"><input className="input ta-right" inputMode="decimal" value={f.surcharge} onChange={(e) => set("surcharge", cleanNum(e.target.value))} placeholder="0" /></Field>
-        <Field label="Total"><input className="input ta-right strong" disabled value={n2(total)} /></Field>
+        <Field label={hasOpt ? "Service total" : "Total"}><input className="input ta-right strong" disabled value={n2(total)} /></Field>
       </div>
+      {hasOpt && (
+        <dl className="bd-opt bd-opt-sum">
+          <dt>Service total</dt><dd>{n2(total)}</dd>
+          {opt.vat > 0 && <><dt>+ VAT (12%)</dt><dd>{n2(opt.vat)}</dd></>}
+          {opt.wh > 0 && <><dt>− Withholding (5%)</dt><dd>({n2(opt.wh)})</dd></>}
+          {opt.disc > 0 && <><dt>− Discount</dt><dd>({n2(opt.disc)})</dd></>}
+          <dt className="strong">Total due</dt><dd className="bd-net">{n2(opt.net)}</dd>
+        </dl>
+      )}
+      {hasOpt && <p className="muted small">VAT / withholding / discount come from <b>Option</b> on this service – untick them there if they don't apply.</p>}
     </Modal>
   );
 }

@@ -1077,3 +1077,45 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Total breakdown (VAT / withholding / discount from Option) */
+.bd-opt-sum {
+  margin: 12px 0 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 10px;
+  background: var(--soft, #f8fafc);
+}
+
+.bd-opt-sum dt.strong {
+  font-weight: 700;
+  border-top: 1px dashed var(--line, #e5e7eb);
+  padding-top: 8px;
+}
+
+.bd-opt-sum dt.strong+dd {
+  border-top: 1px dashed var(--line, #e5e7eb);
+  padding-top: 6px;
+}
+
+/* the note sits under the amount without pushing it up – Total, Paid and Balance stay on one line */
+.bd-net-cell {
+  position: relative;
+}
+
+.bd-net-note {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  padding: 0 12px;
+  text-align: right;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--muted, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}

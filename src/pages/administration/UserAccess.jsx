@@ -1,5 +1,6 @@
 // Administration → User Access
-// Staff logins (m_user_staff) as cards · click a card → popup with the Staff pages that login can open
+// Every employee (m_employee) as a card with their staff login (m_user_staff) – or "No login yet"
+// click a card → popup: Login (create / edit m_user_staff) · Page access · Client logins
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Modal from "../../components/Modal";
@@ -41,7 +42,7 @@ export default function UserAccess() {
     const [paths, setPaths] = useState([]);
     const [busy, setBusy] = useState(false);
     const [openGroups, setOpenGroups] = useState(() => STAFF.map((g) => g.key));   // tree: every group open
-    const [tab, setTab] = useState("pages");           // popup: "pages" | "clients"
+    const [tab, setTab] = useState("pages");           // popup: "login" | "pages" | "clients"
 
     const loadUsers = useCallback(async () => {
         setLoading(true);
@@ -58,7 +59,7 @@ export default function UserAccess() {
 
     useEffect(() => {
         setDetail(null);
-        if (!sel) return;
+        if (!sel?.id) return;                             // no login yet → nothing to load for Page access
         let alive = true;
         apiFetch(`/admin/user-access/${sel.id}`)
             .then((d) => { if (!alive) return; setDetail(d); setPaths(d.saved ? d.paths : ALL_PATHS); })
@@ -69,7 +70,7 @@ export default function UserAccess() {
     const shown = useMemo(() => {
         const s = q.trim().toLowerCase();
         return users.filter((u) =>
-            (status === "all" || (status === "active" ? u.is_active : !u.is_active)) &&
+            (status === "all" || (status === "nologin" ? !u.has_login : status === "active" ? u.is_active : !u.is_active)) &&
             (!s || [u.name, u.username, u.designation, u.user_type].some((v) => (v || "").toLowerCase().includes(s))));
     }, [users, q, status]);
 
@@ -102,8 +103,19 @@ export default function UserAccess() {
     const counts = useMemo(() => ({
         active: users.filter((u) => u.is_active).length,
         inactive: users.filter((u) => !u.is_active).length,
+        nologin: users.filter((u) => !u.has_login).length,
         all: users.length,
     }), [users]);
+
+    const openCard = (u) => { setSel(u); setTab(u.has_login ? "pages" : "login"); };
+    // Login tab created / changed the m_user_staff row → update the card and the popup
+    const loginChanged = (login) => {
+        const patch = login
+            ? { id: login.id, has_login: true, username: login.username, is_active: login.is_active }
+            : {};
+        setUsers((list) => list.map((u) => (u.key === sel.key ? { ...u, ...patch } : u)));
+        setSel((cur) => (cur ? { ...cur, ...patch } : cur));
+    };
 
     return (
         <div className="uac">
@@ -111,7 +123,7 @@ export default function UserAccess() {
             <section className="card uac-bar">
                 <input className="input" placeholder="Search name, username, designation" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search staff" />
                 <div className="ua-seg" role="tablist">
-                    {[["active", "Active"], ["inactive", "Inactive"], ["all", "All"]].map(([v, l]) => (
+                    {[["active", "Active"], ["inactive", "Inactive"], ["nologin", "No login"], ["all", "All"]].map(([v, l]) => (
                         <button key={v} role="tab" aria-selected={status === v} className={status === v ? "is-on" : ""} onClick={() => setStatus(v)}>
                             {l} <span className="uac-n">{counts[v]}</span>
                         </button>
@@ -130,18 +142,20 @@ export default function UserAccess() {
                         <span className="sk sk-cell" style={{ width: "45%" }} />
                     </div>
                 ))}
-                {!loading && !shown.length && <p className="ua-empty">No staff login matches.</p>}
+                {!loading && !shown.length && <p className="ua-empty">No employee matches.</p>}
                 {!loading && shown.map((u) => (
-                    <button key={u.id} type="button" className={`card uac-card${u.is_active ? "" : " is-off"}`} onClick={() => setSel(u)}>
-                        <span className={`uac-pages ${u.saved ? "" : "is-all"}`} title={u.saved ? "Pages this login can open" : "Not set up yet: sees every Staff page"}>
-                            {u.saved ? `${u.pages}/${ALL_PATHS.length} pages` : "All pages"}
-                        </span>
+                    <button key={u.key} type="button" className={`card uac-card${u.is_active ? "" : " is-off"}${u.has_login ? "" : " is-nologin"}`} onClick={() => openCard(u)}>
+                        {u.has_login ? (
+                            <span className={`uac-pages ${u.saved ? "" : "is-all"}`} title={u.saved ? "Pages this login can open" : "Not set up yet: sees every Staff page"}>
+                                {u.saved ? `${u.pages}/${ALL_PATHS.length} pages` : "All pages"}
+                            </span>
+                        ) : <span className="uac-pages is-none" title="No staff login (m_user_staff) yet">No login</span>}
                         <Photo u={u} />
                         <b className="uac-name" title={u.name}>{u.name}</b>
-                        <small className="uac-user">@{u.username}</small>
+                        <small className={`uac-user${u.has_login ? "" : " is-empty"}`}>{u.has_login ? `@${u.username}` : "No login yet"}</small>
                         <span className="uac-role">{u.designation || u.user_type || "—"}</span>
                         {!u.is_active && <span className="uac-off">Inactive</span>}
-                        <span className="uac-cta">Manage access →</span>
+                        <span className="uac-cta">{u.has_login ? "Manage access →" : "Create login →"}</span>
                     </button>
                 ))}
             </div>
@@ -154,7 +168,7 @@ export default function UserAccess() {
                             <Photo u={sel} size={40} />
                             <span>
                                 <b>{sel.name}</b>
-                                <small>@{sel.username}{sel.designation ? ` · ${sel.designation}` : ""}{detail?.user?.user_access ? ` · ${detail.user.user_access}` : ""}</small>
+                                <small>{sel.has_login ? `@${sel.username}` : "No login yet"}{sel.designation ? ` · ${sel.designation}` : ""}{detail?.user?.user_access ? ` · ${detail.user.user_access}` : ""}</small>
                             </span>
                         </span>
                     }
@@ -162,10 +176,10 @@ export default function UserAccess() {
                     size="xlg"
                     footer={
                         <div className="ua-foot uac-mfoot">
-                            <span className="muted">{tab === "pages" && detail ? `${paths.length} of ${ALL_PATHS.length} pages` : ""}</span>
+                            <span className="muted">{tab === "pages" && sel.id && detail ? `${paths.length} of ${ALL_PATHS.length} pages` : ""}</span>
                             <div className="ua-tools">
                                 <button className="btn" onClick={close} disabled={busy}>Close</button>
-                                {tab === "pages" && (
+                                {tab === "pages" && sel.id && (
                                     <>
                                         <button className="btn" onClick={() => setPaths(original)} disabled={!dirty || busy}>Reset</button>
                                         <button className="btn btn-primary" onClick={save} disabled={!detail || busy || (detail.saved && !dirty)}>{busy ? "Saving…" : "Save access"}</button>
@@ -178,10 +192,22 @@ export default function UserAccess() {
                     <div className="uac-tabs" role="tablist">
                         <button role="tab" aria-selected={tab === "pages"} className={tab === "pages" ? "is-on" : ""} onClick={() => setTab("pages")}>Page access</button>
                         <button role="tab" aria-selected={tab === "clients"} className={tab === "clients" ? "is-on" : ""} onClick={() => setTab("clients")}>Client logins</button>
+                        <button role="tab" aria-selected={tab === "login"} className={tab === "login" ? "is-on" : ""} onClick={() => setTab("login")}>
+                            Login {!sel.has_login && <span className="uac-tabdot" aria-label="no login yet" />}
+                        </button>
                     </div>
-                    {tab === "clients" && <ClientLogins staffId={sel.id} />}
-                    {tab === "pages" && !detail && <p className="ua-empty">Loading…</p>}
-                    {tab === "pages" && detail && (
+                    {tab === "login" && (sel.employee_id
+                        ? <StaffLogin empId={sel.employee_id} onChange={loginChanged} />
+                        : <p className="ua-note">This login is not linked to an employee (m_user_staff.comid → m_employee.com_id), so it can't be managed here.</p>)}
+                    {tab === "clients" && <ClientLogins staffId={sel.id} empId={sel.employee_id} />}
+                    {tab === "pages" && !sel.id && (
+                        <div className="uac-nologin">
+                            <p className="ua-note">{sel.name} has no staff login yet. Create it in the <b>Login</b> tab first, then set the pages here.</p>
+                            <button className="btn btn-primary" onClick={() => setTab("login")}>Go to Login</button>
+                        </div>
+                    )}
+                    {tab === "pages" && sel.id && !detail && <p className="ua-empty">Loading…</p>}
+                    {tab === "pages" && sel.id && detail && (
                         <>
                             <div className="uac-mtools">
                                 {!detail.saved
@@ -256,7 +282,9 @@ export default function UserAccess() {
 }
 
 /* ---------- popup tab: every client account + this employee's login there (m_user_client_staff) ---------- */
-function ClientLogins({ staffId }) {
+function ClientLogins({ staffId, empId }) {
+    // employee endpoints work with or without a staff login; old ones for logins with no employee
+    const base = empId ? `/admin/user-access/emp/${empId}` : `/admin/user-access/${staffId}`;
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
     const [q, setQ] = useState("");
@@ -268,7 +296,7 @@ function ClientLogins({ staffId }) {
     const generate = async (r) => {
         setBusyId(r.caid);
         try {
-            const res = await apiFetch(`/admin/user-access/${staffId}/clients/${r.caid}/login`, { method: "POST" });
+            const res = await apiFetch(`${base}/clients/${r.caid}/login`, { method: "POST" });
             setData((d) => ({
                 ...d,
                 rows: d.rows.map((x) => (x.caid === r.caid ? { ...x, login: res.login } : x)),
@@ -286,11 +314,11 @@ function ClientLogins({ staffId }) {
     useEffect(() => {
         let alive = true;
         setData(null);
-        apiFetch(`/admin/user-access/${staffId}/clients`)
+        apiFetch(`${base}/clients`)
             .then((d) => alive && setData(d))
             .catch((e) => alive && setError(e.message || "Couldn't load the client accounts."));
         return () => { alive = false; };
-    }, [staffId]);
+    }, [base]);
 
     const rows = useMemo(() => {
         const s = q.trim().toLowerCase();
@@ -367,6 +395,190 @@ function ClientLogins({ staffId }) {
                 </div>,
                 document.body
             )}
+        </div>
+    );
+}
+
+/* ---------- the username + password, shown once ---------- */
+function Credentials({ title, note, username, password, onDone }) {
+    const notify = useToast();
+    const copy = (t) => navigator.clipboard?.writeText(t).then(() => notify("Copied."));
+    return createPortal(
+        <div className="ucl-made" role="dialog" aria-label={title}>
+            <div className="ucl-made-box">
+                <h4>{title}</h4>
+                <p className="muted small">{note} The password is shown only now.</p>
+                <div className="ucl-cred"><span>Username</span><b className="mono">{username}</b><button className="btn btn-sm" onClick={() => copy(username)}>Copy</button></div>
+                <div className="ucl-cred"><span>Password</span><b className="mono">{password}</b><button className="btn btn-sm" onClick={() => copy(password)}>Copy</button></div>
+                <div className="ucl-made-foot">
+                    <button className="btn" onClick={() => copy(`Username: ${username}\nPassword: ${password}`)}>Copy both</button>
+                    <button className="btn btn-primary" onClick={onDone}>Done</button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+}
+
+/* ---------- popup tab: the employee's staff login (m_user_staff) – create it, or change username / type / active / password ---------- */
+function StaffLogin({ empId, onChange }) {
+    const notify = useToast();
+    const [data, setData] = useState(null);
+    const [error, setError] = useState("");
+    const [f, setF] = useState({ username: "", user_type_id: "", is_active: true, password: "" });
+    const [busy, setBusy] = useState("");
+    const [made, setMade] = useState(null);                // { title, username, password }
+    const [pw, setPw] = useState("");                      // new password (blank = generate)
+
+    const fill = (d) => {
+        setData(d);
+        setF(d.login
+            ? { username: d.login.username, user_type_id: d.login.user_type_id ?? "", is_active: d.login.is_active, password: "" }
+            : { username: d.suggest || "", user_type_id: d.employee.designation_id ?? "", is_active: true, password: "" });
+    };
+    useEffect(() => {
+        let alive = true;
+        setData(null); setError("");
+        apiFetch(`/admin/user-access/emp/${empId}/login`)
+            .then((d) => alive && fill(d))
+            .catch((e) => alive && setError(e.message || "Couldn't load the login."));
+        return () => { alive = false; };
+    }, [empId]);
+
+    const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
+    const body = () => ({ username: f.username.trim(), user_type_id: f.user_type_id ? Number(f.user_type_id) : null });
+
+    const create = async () => {
+        setBusy("create");
+        try {
+            const r = await apiFetch(`/admin/user-access/emp/${empId}/login`, { method: "POST", body: JSON.stringify({ ...body(), password: f.password || null }) });
+            fill(r);
+            onChange?.(r.login);
+            notify(r.message || "Login created.");
+            setMade({ title: "Login created", username: r.login.username, password: r.password });
+        } catch (e) { notify(e.message || "Couldn't create the login.", "error"); }
+        finally { setBusy(""); }
+    };
+    const save = async () => {
+        setBusy("save");
+        try {
+            const r = await apiFetch(`/admin/user-access/emp/${empId}/login`, { method: "PUT", body: JSON.stringify({ ...body(), is_active: f.is_active }) });
+            fill(r);
+            onChange?.(r.login);
+            notify(r.message || "Login saved.");
+        } catch (e) { notify(e.message || "Couldn't save the login.", "error"); }
+        finally { setBusy(""); }
+    };
+    const resetPw = async () => {
+        setBusy("pw");
+        try {
+            const r = await apiFetch(`/admin/user-access/emp/${empId}/login/password`, { method: "POST", body: JSON.stringify({ password: pw || null }) });
+            setPw("");
+            setMade({ title: "Password changed", username: r.username, password: r.password });
+        } catch (e) { notify(e.message || "Couldn't change the password.", "error"); }
+        finally { setBusy(""); }
+    };
+
+    if (error) return <div className="alert-error" role="alert">{error}</div>;
+    if (!data) return <p className="ua-empty">Loading…</p>;
+    const l = data.login;
+    const dirty = l && (f.username.trim() !== l.username || String(f.user_type_id ?? "") !== String(l.user_type_id ?? "") || f.is_active !== l.is_active);
+    const noCom = !data.employee.com_id;
+
+    const typeName = (id) => data.types.find((t) => String(t.id) === String(id))?.name || "";
+    const state = l ? (l.is_active ? "on" : "off") : "none";
+
+    return (
+        <div className={`usl${l ? "" : " is-new"}`}>
+            {/* ---------- account ---------- */}
+            <section className="usl-card">
+                <header className="usl-head">
+                    <span className={`usl-ico is-${state}`} aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 8a7 7 0 0 1 14 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                    </span>
+                    <div className="usl-title">
+                        <b>{l ? `@${l.username}` : "Create staff login"}</b>
+                        <small>
+                            {l
+                                ? <>{typeName(l.user_type_id) || "No user type"}{l.created_at ? ` · since ${String(l.created_at).slice(0, 10)}` : ""}</>
+                                : "So this employee can sign in to the Staff side."}
+                        </small>
+                    </div>
+                    <span className={`usl-pill is-${state}`}>{l ? (l.is_active ? "Active" : "Inactive") : "No login yet"}</span>
+                </header>
+
+                {noCom && !l && <p className="ua-note usl-warn">This employee has no com_id in m_employee, so a login can't be linked to them. Fill in the com_id first.</p>}
+
+                <div className="usl-body">
+                    <label className="usl-field">
+                        <span>Username</span>
+                        <div className="usl-input">
+                            <i>@</i>
+                            <input className="input" value={f.username} onChange={set("username")} maxLength={50} autoComplete="off" spellCheck={false} />
+                        </div>
+                    </label>
+                    <label className="usl-field">
+                        <span>User type</span>
+                        <select className="input" value={f.user_type_id ?? ""} onChange={set("user_type_id")}>
+                            <option value="">—</option>
+                            {data.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    </label>
+                    {!l && (
+                        <label className="usl-field usl-span">
+                            <span>Password</span>
+                            <input className="input" type="text" value={f.password} onChange={set("password")} autoComplete="new-password" placeholder="Leave blank to generate one" />
+                        </label>
+                    )}
+                    {l && (
+                        <div className="usl-field usl-span">
+                            <span>Sign in</span>
+                            <label className={`usl-toggle${f.is_active ? " is-on" : ""}`}>
+                                <input type="checkbox" checked={f.is_active} onChange={set("is_active")} />
+                                <i aria-hidden="true" />
+                                <span>{f.is_active ? "Allowed – this login can sign in" : "Blocked – this login can't sign in"}</span>
+                            </label>
+                        </div>
+                    )}
+                </div>
+
+                <footer className="usl-foot">
+                    {!l
+                        ? <button className="btn btn-primary" onClick={create} disabled={!!busy || noCom || f.username.trim().length < 3}>{busy === "create" ? "Creating…" : "Create login"}</button>
+                        : <>
+                            {dirty && <span className="usl-dirty">Unsaved changes</span>}
+                            <button className="btn" onClick={() => fill(data)} disabled={!dirty || !!busy}>Reset</button>
+                            <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy || f.username.trim().length < 3}>{busy === "save" ? "Saving…" : "Save changes"}</button>
+                        </>}
+                </footer>
+            </section>
+
+            {/* ---------- password ---------- */}
+            {l && (
+                <section className="usl-card">
+                    <header className="usl-head">
+                        <span className="usl-ico is-key" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 7a4 4 0 1 1-3.9 4.9L4 19v2h3v-2h2v-2h2l1.1-1.1A4 4 0 0 1 15 7zm1 3h.01" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        </span>
+                        <div className="usl-title">
+                            <b>Password</b>
+                            <small>Set a new one for @{l.username}</small>
+                        </div>
+                    </header>
+                    <div className="usl-body usl-one">
+                        <label className="usl-field">
+                            <span>New password</span>
+                            <input className="input" type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Leave blank to generate one" autoComplete="new-password" />
+                        </label>
+                        {pw && pw.length < 6 && <small className="usl-hint">At least 6 characters.</small>}
+                    </div>
+                    <footer className="usl-foot">
+                        <button className="btn btn-primary" onClick={resetPw} disabled={!!busy || (pw && pw.length < 6)}>{busy === "pw" ? "Changing…" : pw ? "Set password" : "Generate password"}</button>
+                    </footer>
+                </section>
+            )}
+
+            {made && <Credentials title={made.title} note={`${data.employee.name} · give these to the employee.`} username={made.username} password={made.password} onDone={() => setMade(null)} />}
         </div>
     );
 }
