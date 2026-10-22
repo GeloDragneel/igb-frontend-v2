@@ -922,3 +922,61 @@
     margin: 10mm;
   }
 }
+
+/* ---------- E-BIR: clickable "Undeclared amount" / "waiting for approval" chips ---------- */
+.vs-chip-btn {
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.vs-chip-btn:hover:not(:disabled) {
+  border-color: var(--brand, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, #2563eb) 14%, transparent);
+}
+
+.vs-chip-btn:focus-visible {
+  outline: 2px solid var(--brand, #2563eb);
+  outline-offset: 2px;
+}
+
+.vs-chip-btn:disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+.vs-chip-btn.is-warn:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .18);
+}
+
+/* ---------- undeclared list: From → To month ---------- */
+.vs-move {
+  white-space: nowrap;
+}
+
+.vs-move .vs-from {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+.vs-move .vs-arrow {
+  margin: 0 6px;
+  color: var(--muted);
+}
+
+.vs-move .vs-to {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #f59e0b 16%, var(--card));
+  color: #b45309;
+  font-weight: 700;
+}
+
+.vs-pend-mod {
+  width: auto;
+  min-width: 150px;
+}
