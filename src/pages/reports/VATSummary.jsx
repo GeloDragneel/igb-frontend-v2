@@ -137,6 +137,7 @@ export default function VATSummary() {
   const [undeclare, setUndeclare] = useState(null);
   const [pending, setPending] = useState(null);          // every undeclared document waiting for approval (From → To month)
   const [history, setHistory] = useState(null);          // approved undeclared documents (one group per Approve)
+  const [snap, setSnap] = useState(null);                // one approval → before / after popup
   const [confirm, setConfirm] = useState(null);
   const [printing, setPrinting] = useState(false);
   const [pdf, setPdf] = useState(null);              // { url, name, title } PDF preview
@@ -360,7 +361,9 @@ export default function VATSummary() {
         if (ok) await afterChange();
       } else {
         await apiFetch("/reports/vat-clients/approve", {
-          method: "POST", body: JSON.stringify({ client_id: ebir.row.client_id, from: used.from, to: used.to }),
+          method: "POST",
+          // user_ids + caid → the server saves the E-BIR table before / after for the History
+          body: JSON.stringify({ client_id: ebir.row.client_id, from: used.from, to: used.to, user_ids: ebir.row.user_ids, caid: ebir.row.caid || null }),
         });
         notify("Record successfully approved", "success");
         setConfirm(null);
@@ -447,11 +450,13 @@ export default function VATSummary() {
   });
 
   // undeclared Sales / Purchases / Expenses → PDF preview (old ReportToPDF: SalesReport / PurchaseReport / ExpenseReport)
-  const printUndeclared = (type) => run(async () => {
+  // approval (from History) → only the documents of that approval
+  const printUndeclared = (type, approval = null) => run(async () => {
     const res = await apiFetch(`/reports/vat-clients/undeclared?${new URLSearchParams({
       client_id: ebir.row.client_id, client_num: ebir.row.client_num, from: used.from, to: used.to, type,
+      ...(approval?.approval_no ? { approval_no: approval.approval_no } : {}),
     })}`);
-    if (!res.rows?.length) { notify("No undeclared found", "error"); return; }
+    if (!res.rows?.length) { notify(approval ? `No ${type} in this approval` : "No undeclared found", "error"); return; }
     const c = res.client || {};
     const title = { sales: "Sales Report", purchases: "Purchase Report", expenses: "Expense Report" }[type];
     const keys = ["total", "total2", "net_of_vat", "input_vat", "vat_exempt", "zero_rated", "non_vat"];
@@ -462,11 +467,14 @@ export default function VATSummary() {
       r2(r.total), r.currency || "", r2(r.ex_rate), r2(r.total2), r2(r.net_of_vat), r2(r.input_vat), r2(r.vat_exempt), r2(r.zero_rated), r2(r.non_vat)],
     }));
     rowsOut.push({ k: "total", c: ["", "", "", "", "", "", "", "Total", r2(sum("total")), "", "", ...keys.slice(1).map((k) => r2(sum(k)))] });
-    const file = `${title.replace(/\s+/g, "")}-Undeclared-${used.from}-to-${used.to}`;
+    const file = `${title.replace(/\s+/g, "")}-Undeclared-${approval?.approval_no || `${used.from}-to-${used.to}`}`;
+    const approvedLine = approval
+      ? `Approved ${approval.approved_at ? `${fullDate(approval.approved_at.slice(0, 10))} ${approval.approved_at.slice(11, 16)}` : ""} by ${approval.approved_by || "—"} · ${approval.approval_no}`
+      : null;
     const blob = await printFile({
       kind: "undeclared", format: "pdf", file, sheet: title,
       title: [c.trade_name || ebir.row.client_name, c.street || "", `TIN : ${c.tin || ""}${c.branch_code ? `-${c.branch_code}` : ""}`,
-      `${title} (Undeclared)`, `For the Period From ${used.from} to ${used.to}`],
+      `${title} (Undeclared)`, approvedLine || `For the Period From ${used.from} to ${used.to}`],
       head: ["#", "Branch", "Date", "TIN", "Br. Code", type === "sales" ? "Customer" : "Vendor", "Document", "Account Title", "Amount", "Currency", "Ex Rate",
         "PHP", "Net VAT", type === "sales" ? "Output VAT" : "Input VAT", "VAT Exempt", "Zero Rated", "Non VAT"],
       money: [8, 10, 11, 12, 13, 14, 15, 16],
@@ -520,7 +528,7 @@ export default function VATSummary() {
 
   const closeAmounts = useCallback(() => setAmounts(null), []);
   const closeRemarks = useCallback(() => setRemarks(null), []);
-  const closeEbir = useCallback(() => { setEbir(null); setCell(null); setPending(null); setHistory(null); }, []);
+  const closeEbir = useCallback(() => { setEbir(null); setCell(null); setPending(null); setHistory(null); setSnap(null); }, []);
   const closeHistory = useCallback(() => setHistory(null), []);
   const closePending = useCallback(() => setPending(null), []);
   const closeCell = useCallback(() => setCell(null), []);
@@ -670,7 +678,14 @@ export default function VATSummary() {
       {/* ---------- approval history ---------- */}
       {history && (
         <Modal title={`Approval history : ${ebir?.row?.client_name || ""}`} onClose={closeHistory} size="xlg">
-          <HistoryList state={history} period={used ? rangeLabel(used.from, used.to) : ""} />
+          <HistoryList state={history} period={used ? rangeLabel(used.from, used.to) : ""} onSnap={setSnap} onPrint={printUndeclared} busy={printing} />
+        </Modal>
+      )}
+
+      {/* ---------- one approval: E-BIR before / after (same look as the E-BIR popup) ---------- */}
+      {snap && (
+        <Modal title={`Before / After : ${ebir?.row?.client_name || ""}`} onClose={() => setSnap(null)} size="full">
+          <SnapView group={snap} row={ebir?.row} onPrint={printUndeclared} busy={printing} />
         </Modal>
       )}
 
@@ -1154,76 +1169,236 @@ function PendingList({ state, busy, canEdit, period, onUndo }) {
 /* =========================================================
    approval history: one card per Approve (who / when), its documents From → To
    ========================================================= */
-function HistoryList({ state, period }) {
+function HistoryList({ state, period, onSnap, onPrint, busy }) {
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState({});                 // group key → expanded
   const needle = q.trim().toLowerCase();
   const groups = state.groups
-    .map((g) => ({ ...g, rows: g.rows.filter((r) => `${r.fullname} ${r.document_no} ${r.reference} ${r.undeclared_by}`.toLowerCase().includes(needle)) }))
-    .filter((g) => g.rows.length || (!needle && !g.rows.length));
-  const isOpen = (g, i) => open[g.key] ?? i === 0;      // newest approval opens by itself
+    .map((g) => ({ ...g, shown: g.rows.filter((r) => `${r.fullname} ${r.document_no} ${r.reference} ${r.undeclared_by} ${g.approved_by}`.toLowerCase().includes(needle)) }))
+    .filter((g) => g.shown.length);
+  const when = (ts) => (ts ? `${fullDate(ts.slice(0, 10))} · ${ts.slice(11, 16)}` : "—");
 
   return (
-    <div className="vs-docs vs-hist">
-      <div className="vs-docs-bar">
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, doc #, reference or user" />
-        <span className="vs-muted vs-docs-count">{period} · {state.groups.length} approval{state.groups.length === 1 ? "" : "s"}</span>
+    <div className="hs">
+      <div className="hs-bar">
+        <input className="input hs-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search customer, doc #, reference or user" />
+        <span className="hs-count">{period} · {state.groups.length} approval{state.groups.length === 1 ? "" : "s"}</span>
       </div>
+
       {state.error && <div className="alert-error" role="alert">{state.error}</div>}
-      {state.loading && <div className="vs-empty">Loading…</div>}
-      {!state.loading && !groups.length && <div className="vs-empty">{state.groups.length ? "Nothing matches." : "No approved undeclared documents in this period."}</div>}
-      <div className="vs-hist-list">
-        {groups.map((g, i) => (
-          <section key={g.key} className={`vs-hist-card${isOpen(g, i) ? " is-open" : ""}`}>
-            <button type="button" className="vs-hist-head" onClick={() => setOpen((o) => ({ ...o, [g.key]: !isOpen(g, i) }))} aria-expanded={isOpen(g, i)}>
-              <span className="vs-hist-dot" aria-hidden="true">✓</span>
-              <span className="vs-hist-main">
-                <b>Approved {g.approved_at ? fullDate(g.approved_at.slice(0, 10)) : ""}{g.approved_at ? ` · ${g.approved_at.slice(11, 16)}` : ""}</b>
-                <small>by {g.approved_by || "—"}{g.approval_no ? ` · ${g.approval_no}` : ""}</small>
-              </span>
-              <span className="vs-hist-sum">
-                <span>{g.count} doc{g.count === 1 ? "" : "s"}</span>
-                <span>Net <b>{n2(g.net)}</b></span>
-                <span>VAT <b>{n2(g.vat)}</b></span>
-              </span>
-              <span className="vs-hist-caret" aria-hidden="true">▾</span>
-            </button>
-            {isOpen(g, i) && (
-              <div className="vs-docs-scroll">
-                <table className="vs-mini">
-                  <thead>
-                    <tr>
-                      <th>Date</th><th>Doc #</th><th>Reference</th><th>Customer / Vendor</th><th>Module</th>
-                      <th>Declared month</th><th>VT / IT month</th><th>Undeclared by</th>
-                      <th className="vs-num">Net amount</th><th className="vs-num">VAT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.rows.map((r) => (
-                      <tr key={r.id}>
-                        <td>{r.transaction_date ? fullDate(r.transaction_date) : "—"}</td>
-                        <td className="vs-mono">{r.document_no || "—"}</td>
-                        <td className="vs-mono">{r.reference}</td>
-                        <td className="vs-name" title={r.fullname || ""}>{r.fullname || "N/A"}</td>
-                        <td>{r.module}</td>
-                        <td className="vs-move">
-                          <span className="vs-from">{monthLabel(r.old_declared_month)}</span>
-                          <span className="vs-arrow" aria-label="to">→</span>
-                          <span className="vs-to is-done">{monthLabel(r.new_declared_month)}</span>
-                        </td>
-                        <td>{r.new_wh_declared_month ? monthLabel(r.new_wh_declared_month) : "—"}</td>
-                        <td className="vs-who">{r.undeclared_by || "—"}{r.undeclared_at && <small>{r.undeclared_at}</small>}</td>
-                        <td className="vs-num">{n2(r.amount)}</td>
-                        <td className="vs-num">{n2(r.vat)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        ))}
+
+      <div className="hs-wrap">
+        <table className="hs-table">
+          <thead>
+            <tr>
+              <th>Customer / Vendor</th>
+              <th>Document</th>
+              <th>Module</th>
+              <th>Declared month</th>
+              <th>Undeclared by</th>
+              <th className="hs-num">Net amount</th>
+              <th className="hs-num">VAT</th>
+            </tr>
+          </thead>
+          {state.loading && <tbody><tr><td colSpan={7} className="hs-empty">Loading…</td></tr></tbody>}
+          {!state.loading && !groups.length && (
+            <tbody><tr><td colSpan={7} className="hs-empty">{state.groups.length ? "Nothing matches your search." : "No approvals in this period yet."}</td></tr></tbody>
+          )}
+          {groups.map((g) => (
+            <tbody key={g.key} className="hs-group">
+              <tr className="hs-head">
+                <td colSpan={5}>
+                  <div className="hs-head-in">
+                    <span className="hs-ok" aria-hidden="true">✓</span>
+                    <b>Approved {when(g.approved_at)}</b>
+                    <span className="hs-by">by {g.approved_by || "—"}</span>
+                    <span className="hs-docs">{g.count} document{g.count === 1 ? "" : "s"}</span>
+                    <span className="hs-tools">
+                      {g.approval_no && <PrintMenu onPrint={(t) => onPrint(t, g)} busy={busy} />}
+                      {g.snapshot
+                        ? <button type="button" className="btn btn-sm hs-compare" onClick={() => onSnap(g)}>Compare before / after</button>
+                        : <span className="hs-na" title="Approved before the before / after summary was saved">No comparison saved</span>}
+                    </span>
+                  </div>
+                </td>
+                <td className="hs-num"><b>{n2(g.net)}</b></td>
+                <td className="hs-num"><b>{n2(g.vat)}</b></td>
+              </tr>
+              {g.shown.map((r) => (
+                <tr key={r.id} className="hs-row">
+                  <td className="hs-name" title={r.fullname || ""}>{r.fullname || "N/A"}</td>
+                  <td>
+                    <div>{r.document_no || "—"}</div>
+                    <small className="hs-ref">{r.reference}</small>
+                  </td>
+                  <td>{r.module}</td>
+                  <td className="hs-move">
+                    <span className="hs-from">{monthLabel(r.old_declared_month)}</span> → <b>{monthLabel(r.new_declared_month)}</b>
+                  </td>
+                  <td>
+                    <div>{r.undeclared_by || "—"}</div>
+                    {r.undeclared_at && <small className="hs-ref">{when(r.undeclared_at)}</small>}
+                  </td>
+                  <td className="hs-num">{n2(r.amount)}</td>
+                  <td className="hs-num">{n2(r.vat)}</td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
+        </table>
       </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   one approval: 2550-M/Q Summary BEFORE (left) and AFTER · Adjusted (right, + Adjustment)
+   same layout as the E-BIR print, saved when it was approved
+   ========================================================= */
+const snapNum = (v) => (Math.abs(Number(v) || 0) < 0.005 ? "0" : n2(v));
+
+function snapLines(d) {
+  const L = [];
+  (d.sections || []).forEach((sec) => {
+    sec.rows.forEach((r) => L.push({ k: "row", tag: sec.tag, sub: r.name, cells: r.values, total: r.total, key: `r|${sec.tag}|${r.code}` }));
+    L.push({ k: "sub", tag: sec.tag, sub: "Total", cells: sec.subtotal?.values, total: sec.subtotal?.total, key: `s|${sec.tag}` });
+  });
+  const one = (k, tag, sub, o, key) => L.push({ k, tag, sub, cells: o?.values, total: o?.total, key });
+  one("sub", "Total Purchases/Expenses", "", d.total_purchase_exp, "total_purchase_exp");
+  one("grand", "Net Total", "", d.net_total, "net_total");
+  one("row", "Output VAT", "", d.output_vat, "output_vat");
+  one("row", "Input VAT", "", d.input_vat, "input_vat");
+  one("sub", "VAT Due", "", d.vat_due, "vat_due");
+  L.push({ k: "less", tag: "Less : Tax Paid", sub: "1ST MONTH", cells: null, total: d.first_month, key: "first_month" });
+  L.push({ k: "less", tag: "", sub: "2ND MONTH", cells: null, total: d.second_month, key: "second_month" });
+  one("less", "", "2307 (VT)", d.vt_2307, "vt_2307");
+  L.push({
+    k: "grand pay", tag: "TOTAL VAT PAYABLE/EXCESS", sub: "",
+    cells: Object.fromEntries((d.months || []).map((x) => [x, payableOfMonth(d, x)])), total: d.vat_payable, key: "vat_payable",
+  });
+  return L;
+}
+
+function SnapView({ group, row, onPrint, busy }) {
+  const snap = group.snapshot;
+  const [client, setClient] = useState(null);
+  const period = ebirRange(snap.from, snap.to);
+  // both tables share the same months (the server builds them from From to the month the documents moved to)
+  const months = [...new Set([...(snap.old.months || []), ...(snap.new.months || [])])].sort();
+  const before = snapLines(snap.old);
+  const after = Object.fromEntries(snapLines(snap.new).map((l) => [l.key, l]));
+  const same = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.005;
+  const adjPill = (v) => (Math.abs(v) < 0.005
+    ? <span className="sx2-zero">0</span>
+    : <span className={`sx2-pill${v < 0 ? " is-neg" : " is-pos"}`}>{v > 0 ? "+" : "−"}{n2(Math.abs(v))}</span>);
+
+
+  // company name / TIN / trade name for the header (same source as the E-BIR print)
+  useEffect(() => {
+    let live = true;
+    if (!row) return undefined;
+    apiFetch(`/reports/vat-clients/undeclared?${new URLSearchParams({
+      client_id: row.client_id, client_num: row.client_num, from: snap.from, to: snap.to, type: "sales",
+    })}`).then((r) => { if (live) setClient(r.client || null); }).catch(() => { });
+    return () => { live = false; };
+  }, [row, snap.from, snap.to]);
+
+  return (
+    <div className="sx2">
+      <section className="sx2-top">
+        <div className="sx2-co">
+          <span className="sx2-form">2550-M/Q Summary · {period}</span>
+          <h2>{client?.client_name || row?.client_name || ""}</h2>
+        </div>
+        <div className="sx2-meta">
+          <span><small>Approved</small><b>{group.approved_at ? `${fullDate(group.approved_at.slice(0, 10))} · ${group.approved_at.slice(11, 16)}` : "—"}</b></span>
+          <span><small>By</small><b>{group.approved_by || "—"}</b></span>
+          {group.approval_no && <PrintMenu onPrint={(t) => onPrint(t, group)} busy={busy} big />}
+        </div>
+      </section>
+
+
+      <section className="sx2-sheet">
+        <div className="sx2-scroll">
+          <table className="sx2-table">
+            <thead>
+              <tr>
+                <th rowSpan={2} className="sx2-tag">Tag</th><th rowSpan={2}>Summary Data</th>
+                <th colSpan={months.length + 1} className="sx2-grp sx2-grp-b">Before</th>
+                <th colSpan={months.length + 1} className="sx2-grp sx2-grp-a">After</th>
+                <th colSpan={months.length + 1} className="sx2-grp sx2-grp-adj">Adjustment</th>
+              </tr>
+              <tr>
+                {months.map((m, i) => <th key={`b${m}`} className={`sx2-num sx2-bh${i === 0 ? " is-first" : ""}`}>{monthHead(m)}</th>)}
+                <th className="sx2-num sx2-bh sx2-tot">Total</th>
+                {months.map((m, i) => <th key={`a${m}`} className={`sx2-num sx2-ah${i === 0 ? " is-first" : ""}`}>{monthHead(m)}</th>)}
+                <th className="sx2-num sx2-ah sx2-tot">Total</th>
+                {months.map((m, i) => <th key={`d${m}`} className={`sx2-num sx2-dh${i === 0 ? " is-first" : ""}`}>{monthHead(m)}</th>)}
+                <th className="sx2-num sx2-dh sx2-tot">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {before.map((b, i) => {
+                const a = after[b.key] || {};
+                const adj = r2((Number(a.total) || 0) - (Number(b.total) || 0));
+                const kinds = b.k.split(" ").map((c) => `is-${c}`).join(" ");
+                const sectionEnd = b.k === "sub" && b.key.startsWith("s|");
+                const pay = b.key === "vat_payable";
+                return (
+                  <tr key={i} className={`${kinds}${same(adj, 0) ? "" : " is-changed"}${sectionEnd ? " is-end" : ""}`}>
+                    <td className="sx2-tag">{b.tag}</td>
+                    <td className={b.k === "less" ? "sx2-r" : ""}>{b.sub}</td>
+                    {months.map((m, j) => (
+                      <td key={`b${m}`} className={`sx2-num sx2-b${j === 0 ? " is-first" : ""}`}>{b.cells ? snapNum(b.cells[m]) : ""}</td>
+                    ))}
+                    <td className="sx2-num sx2-b sx2-tot">{snapNum(b.total)}</td>
+                    {months.map((m, j) => (
+                      <td key={`a${m}`} className={`sx2-num sx2-a${j === 0 ? " is-first" : ""}${a.cells && b.cells && !same(b.cells[m], a.cells[m]) ? " is-diff" : ""}`}>
+                        {a.cells ? snapNum(a.cells[m]) : ""}
+                      </td>
+                    ))}
+                    <td className={`sx2-num sx2-a sx2-tot${!same(a.total, b.total) ? " is-diff" : ""}${pay ? " is-pay" : ""}`}>{snapNum(a.total)}</td>
+                    {/* Adjustment = after − before, per month and total (a move inside the period nets to 0 in the Total) */}
+                    {months.map((m, j) => (
+                      <td key={`d${m}`} className={`sx2-num sx2-adj${j === 0 ? " is-first" : ""}`}>
+                        {a.cells && b.cells ? adjPill(r2((Number(a.cells[m]) || 0) - (Number(b.cells[m]) || 0))) : ""}
+                      </td>
+                    ))}
+                    <td className="sx2-num sx2-adj sx2-tot">{adjPill(adj)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <p className="sx2-hint">Saved when it was approved. Before = original figures · After = with the undeclared documents moved to their new month · Adjustment = after − before.</p>
+    </div>
+  );
+}
+
+/* Print ▾ → Sales / Purchases / Expenses (undeclared) of one approval — same PDF as the E-BIR Print menu */
+function PrintMenu({ onPrint, busy, big = false }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const off = (e) => { if (!wrap.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", off);
+    return () => document.removeEventListener("mousedown", off);
+  }, [open]);
+  const pick = (t) => { setOpen(false); onPrint(t); };
+  return (
+    <div className="vs-menu-wrap pm" ref={wrap}>
+      <button type="button" className={`btn ${big ? "" : "btn-sm "}pm-btn`} onClick={() => setOpen((o) => !o)} disabled={busy} aria-expanded={open}>
+        {busy ? "Printing…" : "Print ▾"}
+      </button>
+      {open && (
+        <div className="vs-menu pm-menu" role="menu">
+          <button type="button" role="menuitem" onClick={() => pick("sales")}>Sales (undeclared)</button>
+          <button type="button" role="menuitem" onClick={() => pick("purchases")}>Purchases (undeclared)</button>
+          <button type="button" role="menuitem" onClick={() => pick("expenses")}>Expenses (undeclared)</button>
+        </div>
+      )}
     </div>
   );
 }
