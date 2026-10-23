@@ -2847,3 +2847,528 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
 [data-theme="dark"] .sn-tile.is-today::after {
     box-shadow: 0 0 0 2px #111827;
 }
+
+/* ---------- picker: preview cards with a big icon ---------- */
+.sn-panel,
+.sn-menu {
+    width: 344px;
+}
+
+.sn-tiles {
+    gap: 8px;
+    padding: 2px 6px 6px;
+}
+
+.sn-tile {
+    gap: 6px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+}
+
+.sn-swatch {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 58px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), 0 1px 3px rgba(15, 23, 42, .12);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.sn-tile:hover .sn-swatch {
+    transform: translateY(-2px);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2), 0 8px 18px rgba(15, 23, 42, .18);
+}
+
+.sn-tile:focus-visible {
+    outline: none;
+}
+
+.sn-tile:focus-visible .sn-swatch {
+    box-shadow: 0 0 0 3px var(--primary, #2563eb);
+}
+
+.sn-tile.is-on .sn-swatch {
+    box-shadow: 0 0 0 2px var(--card, #fff), 0 0 0 4px var(--primary, #2563eb);
+}
+
+.sn-tile-ico {
+    display: grid;
+    place-items: center;
+    font-size: 30px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35));
+}
+
+.sn-tile-ico svg {
+    display: block;
+}
+
+.sn-tile-check {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary, #2563eb);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    box-shadow: 0 0 0 2px var(--card, #fff);
+}
+
+.sn-tile-today {
+    position: absolute;
+    left: 6px;
+    bottom: 5px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .92);
+    color: #15803d;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.sn-tile.is-today::after {
+    content: none;
+}
+
+.sn-tile-name {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.sn-tile.is-on .sn-tile-name {
+    color: var(--primary, #2563eb);
+    font-weight: 800;
+}
+
+.sn-chip-ico {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: rgba(100, 116, 139, .1);
+    font-size: 18px !important;
+}
+
+/* each card wears its theme */
+.sw-newyear {
+    background: radial-gradient(circle at 70% 30%, rgba(253, 224, 71, .55), transparent 45%), linear-gradient(135deg, #1e1b4b, #0b1026);
+}
+
+.sw-cny {
+    background: radial-gradient(circle at 30% 30%, rgba(250, 204, 21, .45), transparent 50%), linear-gradient(135deg, #dc2626, #7f1d1d);
+}
+
+.sw-valentines {
+    background: linear-gradient(135deg, #fb7185, #be123c);
+}
+
+.sw-easter {
+    background: linear-gradient(135deg, #ddd6fe, #fbcfe8 55%, #bbf7d0);
+}
+
+.sw-summer {
+    background: linear-gradient(180deg, #38bdf8 0 55%, #fde68a 55% 100%);
+}
+
+.sw-independence {
+    background: linear-gradient(180deg, #1e3a8a 0 50%, #991b1b 50% 100%);
+}
+
+.sw-rainy {
+    background: linear-gradient(135deg, #475569, #1e293b);
+}
+
+.sw-halloween {
+    background: radial-gradient(circle at 75% 25%, rgba(253, 224, 71, .5), transparent 35%), linear-gradient(135deg, #4c1d95, #1c0b30);
+}
+
+.sw-christmas {
+    background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, .35), transparent 30%), linear-gradient(135deg, #166534, #7f1d1d);
+}
+
+.sw-reggae {
+    background: linear-gradient(180deg, #dc2626 0 33.3%, #eab308 33.3% 66.6%, #16a34a 66.6% 100%);
+}
+
+.sw-ocean {
+    background: linear-gradient(180deg, #22d3ee, #0c4a6e);
+}
+
+.sw-space {
+    background: radial-gradient(circle at 25% 30%, rgba(168, 85, 247, .6), transparent 45%), radial-gradient(1px 1px at 70% 20%, #fff, transparent), radial-gradient(1px 1px at 85% 70%, #fff, transparent), linear-gradient(135deg, #0b0b23, #1e1b4b);
+}
+
+.sw-forest {
+    background: linear-gradient(180deg, #0c2a1c, #14532d 60%, #3f6212);
+}
+
+.sw-sakura {
+    background: linear-gradient(135deg, #fce7f3, #f9a8d4 60%, #db2777);
+}
+
+.sw-neon {
+    background: linear-gradient(180deg, #2d0a4e 0 55%, #ec4899 55% 57%, #120428 57% 100%);
+    box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .5) !important;
+}
+
+[data-theme="dark"] .sn-tile.is-on .sn-swatch {
+    box-shadow: 0 0 0 2px #111827, 0 0 0 4px #60a5fa;
+}
+
+[data-theme="dark"] .sn-tile.is-on .sn-tile-name {
+    color: #93c5fd;
+}
+
+[data-theme="dark"] .sn-tile-check {
+    box-shadow: 0 0 0 2px #111827;
+}
+
+[data-theme="dark"] .sn-chip-ico {
+    background: rgba(148, 163, 184, .14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sn-swatch {
+        transition: none;
+    }
+}
+
+/* ================= SEASONS ================= */
+.sn-title.is-spring {
+    background-image: linear-gradient(90deg, #db2777, #f59e0b 50%, #16a34a);
+}
+
+.sn-title.is-autumn {
+    background-image: linear-gradient(90deg, #b45309, #ea580c 50%, #dc2626);
+}
+
+.sn-title.is-winter {
+    background-image: linear-gradient(90deg, #0284c7, #7dd3fc 50%, #6366f1);
+}
+
+.sn-dock.sx-spring .sn-dock-btn {
+    background: linear-gradient(180deg, #f472b6, #65a30d);
+}
+
+.sn-dock.sx-autumn .sn-dock-btn {
+    background: linear-gradient(180deg, #f59e0b, #9a3412);
+}
+
+.sn-dock.sx-winter .sn-dock-btn {
+    background: linear-gradient(180deg, #7dd3fc, #1e3a8a);
+}
+
+.sn-fall.is-autumn i {
+    width: calc(var(--sn-size) * 2);
+    height: calc(var(--sn-size) * 2.4);
+    border-radius: 0 70% 0 70%;
+    animation-name: sn-confetti;
+    opacity: .95;
+}
+
+/* SPRING */
+.topbar.sx-spring {
+    background: radial-gradient(120% 140% at 50% -40%, rgba(244, 114, 182, .12), transparent 60%), var(--card, #fff);
+}
+
+.sn-spring-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: repeating-linear-gradient(90deg, #f472b6 0 18px, #facc15 18px 28px, #a78bfa 28px 44px, #4ade80 44px 56px);
+}
+
+.sidebar.sx-spring {
+    background: linear-gradient(180deg, #1e3a2a 0%, #19432c 50%, #10291b 100%) !important;
+}
+
+.sn-spring-sun {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    opacity: .9;
+    filter: drop-shadow(0 0 14px rgba(254, 240, 138, .55));
+}
+
+.sn-butterflies>span {
+    position: absolute;
+    animation: sn-flutter 6s ease-in-out infinite;
+}
+
+.sn-butterflies .b1 {
+    top: 30%;
+    left: 20px;
+}
+
+.sn-butterflies .b2 {
+    top: 52%;
+    right: 30px;
+    animation-delay: -3s;
+    animation-duration: 7s;
+}
+
+.sn-butterfly {
+    animation: sn-flap .35s ease-in-out infinite alternate;
+    transform-origin: 50% 50%;
+}
+
+.sn-tulips {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 6px;
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+}
+
+.sn-tulip {
+    transform-origin: 50% 100%;
+    animation: sn-sway 4s ease-in-out infinite;
+}
+
+.sn-tulips svg:nth-child(2n) {
+    animation-delay: -2s;
+}
+
+.sidebar.sx-spring .brand-badge {
+    background: #ec4899 !important;
+    color: #fff !important;
+}
+
+.sidebar.sx-spring .side-heading {
+    color: #fde68a !important;
+}
+
+.sidebar.sx-spring .side-link.has-active,
+.sidebar.sx-spring .side-link.single-active {
+    background: linear-gradient(90deg, #ec4899, #a855f7) !important;
+    color: #fff !important;
+    box-shadow: 0 6px 18px rgba(236, 72, 153, .35);
+}
+
+.sidebar.sx-spring .side-items a.active {
+    background: rgba(250, 204, 21, .14) !important;
+    color: #fef9c3 !important;
+}
+
+.sidebar.sx-spring .mode-switch [aria-selected="true"],
+.sidebar.sx-spring .mode-switch .active {
+    background: linear-gradient(90deg, #65a30d, #84cc16) !important;
+    color: #fff !important;
+}
+
+/* AUTUMN */
+.topbar.sx-autumn {
+    background: radial-gradient(120% 140% at 50% -40%, rgba(234, 88, 12, .12), transparent 60%), var(--card, #fff);
+}
+
+.sn-autumn-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: repeating-linear-gradient(90deg, #ea580c 0 24px, #f59e0b 24px 36px, #dc2626 36px 50px, #92400e 50px 58px);
+}
+
+.sidebar.sx-autumn {
+    background: linear-gradient(180deg, #3b1a0c 0%, #2e140a 55%, #1c0c05 100%) !important;
+}
+
+.sn-autumn-sun {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fdba74 0 45%, rgba(253, 186, 116, 0) 70%);
+    opacity: .8;
+}
+
+.sn-autumn-tree-wrap {
+    position: absolute;
+    right: 6px;
+    bottom: 14px;
+    transform-origin: 50% 100%;
+    animation: sn-sway 6s ease-in-out infinite;
+}
+
+.sn-leaf-pile {
+    position: absolute;
+    left: 22px;
+    bottom: 10px;
+    font-size: 30px;
+}
+
+.sidebar.sx-autumn .brand-badge {
+    background: #ea580c !important;
+    color: #fff !important;
+}
+
+.sidebar.sx-autumn .side-heading {
+    color: #fdba74 !important;
+}
+
+.sidebar.sx-autumn .side-link.has-active,
+.sidebar.sx-autumn .side-link.single-active {
+    background: linear-gradient(90deg, #ea580c, #b45309) !important;
+    color: #fff !important;
+    box-shadow: 0 6px 18px rgba(234, 88, 12, .35);
+}
+
+.sidebar.sx-autumn .side-items a.active {
+    background: rgba(251, 146, 60, .16) !important;
+    color: #ffedd5 !important;
+}
+
+.sidebar.sx-autumn .mode-switch [aria-selected="true"],
+.sidebar.sx-autumn .mode-switch .active {
+    background: linear-gradient(90deg, #dc2626, #b91c1c) !important;
+    color: #fff !important;
+}
+
+/* WINTER */
+.topbar.sx-winter {
+    background: radial-gradient(120% 140% at 50% -40%, rgba(125, 211, 252, .16), transparent 60%), var(--card, #fff);
+}
+
+.sn-frost-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #bae6fd, #fff, #7dd3fc, #fff, #bae6fd);
+}
+
+.sidebar.sx-winter {
+    background: linear-gradient(180deg, #0b1d3a 0%, #0f2747 55%, #0a1a30 100%) !important;
+}
+
+.sn-aurora {
+    position: absolute;
+    left: -20%;
+    right: -20%;
+    top: 0;
+    height: 45%;
+    background: radial-gradient(60% 50% at 30% 30%, rgba(52, 211, 153, .28), transparent 70%), radial-gradient(50% 40% at 70% 40%, rgba(129, 140, 248, .25), transparent 70%);
+    animation: sn-glow 7s ease-in-out infinite;
+}
+
+.sn-winter .sn-pines.back {
+    bottom: 26px;
+    opacity: .85;
+}
+
+.sn-snowman-wrap {
+    position: absolute;
+    right: 24px;
+    bottom: 12px;
+    animation: sn-bob 4s ease-in-out infinite;
+}
+
+.sidebar.sx-winter .brand-badge {
+    background: #0284c7 !important;
+    color: #fff !important;
+}
+
+.sidebar.sx-winter .side-heading {
+    color: #bae6fd !important;
+}
+
+.sidebar.sx-winter .side-link.has-active,
+.sidebar.sx-winter .side-link.single-active {
+    background: linear-gradient(90deg, #0284c7, #4f46e5) !important;
+    color: #fff !important;
+    box-shadow: 0 6px 18px rgba(2, 132, 199, .4);
+}
+
+.sidebar.sx-winter .side-items a.active {
+    background: rgba(186, 230, 253, .14) !important;
+    color: #e0f2fe !important;
+}
+
+.sidebar.sx-winter .mode-switch [aria-selected="true"],
+.sidebar.sx-winter .mode-switch .active {
+    background: linear-gradient(90deg, #38bdf8, #0ea5e9) !important;
+    color: #fff !important;
+}
+
+/* picker cards */
+.sw-spring {
+    background: linear-gradient(180deg, #bae6fd 0 50%, #86efac 50% 100%);
+}
+
+.sw-autumn {
+    background: radial-gradient(circle at 70% 30%, rgba(253, 186, 116, .6), transparent 40%), linear-gradient(135deg, #ea580c, #7c2d12);
+}
+
+.sw-winter {
+    background: radial-gradient(circle at 30% 25%, rgba(52, 211, 153, .45), transparent 45%), linear-gradient(180deg, #0f2747 0 62%, #e0f2fe 62% 100%);
+}
+
+@keyframes sn-flutter {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+
+    25% {
+        transform: translate(30px, -16px);
+    }
+
+    50% {
+        transform: translate(60px, 6px);
+    }
+
+    75% {
+        transform: translate(24px, 14px);
+    }
+}
+
+@keyframes sn-flap {
+    from {
+        transform: scaleX(1);
+    }
+
+    to {
+        transform: scaleX(.45);
+    }
+}
+
+.sn-butterflies>span,
+.sn-butterfly,
+.sn-tulip,
+.sn-autumn-tree-wrap,
+.sn-aurora,
+.sn-snowman-wrap {
+    will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .sn-butterflies>span,
+    .sn-butterfly,
+    .sn-tulip,
+    .sn-autumn-tree-wrap,
+    .sn-aurora,
+    .sn-snowman-wrap {
+        animation: none !important;
+    }
+}

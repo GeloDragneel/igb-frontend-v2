@@ -9,6 +9,7 @@
 //   Rainy Season      Jul 1 – Aug 31
 //   Halloween         Oct 19 – Nov 16   (2 weeks before and after Nov 2)
 //   Christmas         Dec 1 – Dec 27
+//   Seasons: Spring · Summer (auto) · Rainy (auto) · Autumn · Winter – Spring / Autumn / Winter have no date
 //   Just for fun (no date – pick them any time from the menu):
 //   Reggae · Ocean · Outer Space · Forest · Sakura · Neon City
 //
@@ -271,6 +272,39 @@ const Branch = ({ w = 200 }) => (
     </svg>
 );
 
+const Snowman = ({ w = 60 }) => (
+    <svg width={w} height={w * 1.4} viewBox="0 0 60 84" aria-hidden="true" className="sn-snowman">
+        <circle cx="30" cy="62" r="20" fill="#f8fafc" /><circle cx="30" cy="33" r="14" fill="#f8fafc" />
+        <path d="M17 22h26v-3H17zM21 19V6h18v13z" fill="#1e293b" /><rect x="21" y="15" width="18" height="3" fill="#dc2626" />
+        <circle cx="25" cy="30" r="1.8" fill="#1e293b" /><circle cx="35" cy="30" r="1.8" fill="#1e293b" />
+        <path d="M30 34l9 2-9 2z" fill="#f97316" />
+        <path d="M20 43c6 4 14 4 20 0l2 4c-8 4-16 4-24 0z" fill="#dc2626" /><path d="M36 45l4 12-5-1z" fill="#dc2626" />
+        <circle cx="30" cy="55" r="1.8" fill="#1e293b" /><circle cx="30" cy="63" r="1.8" fill="#1e293b" /><circle cx="30" cy="71" r="1.8" fill="#1e293b" />
+        <path d="M12 52 2 44M48 52l10-8" stroke="#78350f" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+);
+const Tulip = ({ w = 22, c = "#f43f5e" }) => (
+    <svg width={w} height={w * 2.6} viewBox="0 0 22 58" aria-hidden="true" className="sn-tulip">
+        <path d="M11 18v40" stroke="#16a34a" strokeWidth="2.2" />
+        <path d="M11 40c-7-6-11-4-11 0 4 1 7 2 11 0zM11 46c7-6 11-4 11 0-4 1-7 2-11 0z" fill="#22c55e" />
+        <path d="M2 4l4 4 5-7 5 7 4-4c1 10-3 16-9 16S1 14 2 4z" fill={c} />
+    </svg>
+);
+const Butterfly = ({ w = 26, a = "#f472b6", b = "#a78bfa" }) => (
+    <svg width={w} height={w * 0.8} viewBox="0 0 30 24" aria-hidden="true" className="sn-butterfly">
+        <path d="M15 12C11 2 2 0 2 7s7 8 13 5zM15 12c4-10 13-12 13-5s-7 8-13 5z" fill={a} />
+        <path d="M15 12c-4 2-10 4-9 9 1 4 7 0 9-9zM15 12c4 2 10 4 9 9-1 4-7 0-9-9z" fill={b} />
+        <path d="M15 6v14" stroke="#1e293b" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+);
+const AutumnTree = ({ w = 110 }) => (
+    <svg width={w} height={w} viewBox="0 0 100 100" aria-hidden="true" className="sn-autumn-tree">
+        <path d="M47 100V62l-10-12 3-2 9 10V44h4v16l9-10 3 2-10 12v38z" fill="#5b3a1e" />
+        <circle cx="50" cy="34" r="22" fill="#ea580c" /><circle cx="32" cy="44" r="16" fill="#f59e0b" /><circle cx="68" cy="44" r="16" fill="#dc2626" />
+        <circle cx="40" cy="22" r="14" fill="#f97316" /><circle cx="62" cy="24" r="14" fill="#b45309" />
+    </svg>
+);
+
 /* falling (or rising) bits: snow, confetti, hearts, rain, petals, gold, music notes, bubbles, stars, fireflies. Fixed positions so they don't jump on re-render. */
 function Particles({ n = 22, kind = "snow" }) {
     return (
@@ -287,6 +321,7 @@ function Particles({ n = 22, kind = "snow" }) {
                 if (kind === "gold") style.background = ["#fde047", "#f59e0b", "#ef4444", "#facc15"][i % 4];
                 if (kind === "petal") style.background = ["#fbcfe8", "#ddd6fe", "#fef9c3", "#bbf7d0", "#fecdd3"][i % 5];
                 if (kind === "rain") style.animationDuration = `${(1 + ((i * 7) % 9) / 10).toFixed(1)}s`;
+                if (kind === "autumn") style.background = ["#ea580c", "#dc2626", "#f59e0b", "#b45309"][i % 4];
                 if (kind === "leaf") style.background = ["#65a30d", "#ca8a04", "#15803d", "#a16207"][i % 4];
                 if (kind === "sakura") style.background = ["#fbcfe8", "#f9a8d4", "#fce7f3"][i % 3];
                 if (kind === "star" || kind === "firefly") { style.top = `${(i * 53 + 7) % 100}%`; style.animationDuration = `${2 + (i % 5) * 0.7}s`; }
@@ -619,6 +654,73 @@ const THEMES = {
         ),
     },
 };
+// seasons (Spring / Autumn / Winter have no date – the Philippines has no such season; Summer and Rainy go by date)
+Object.assign(THEMES, {
+    spring: {
+        label: "Spring", title: "Hello Spring",
+        icon: <Tulip w={10} />,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <Particles n={12} kind="petal" />
+                <span className="sn-spring-line" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-spring-sun"><Sun w={64} c="#fde68a" core="#fef08a" /></span>
+                <span className="sn-butterflies"><span className="b1"><Butterfly /></span><span className="b2"><Butterfly w={20} a="#fde047" b="#fb923c" /></span></span>
+                <Particles n={16} kind="petal" />
+                <span className="hw-bottom sn-spring">
+                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 92c50-16 100-14 150-4s80 4 110-6v38H0z" fill="#4d7c0f" /><path d="M0 104c60-10 120-8 170 2s70 0 90-6v20H0z" fill="#3f6212" /></svg>
+                    <span className="sn-tulips"><Tulip w={20} /><Tulip w={24} c="#facc15" /><Tulip w={20} c="#a78bfa" /><Tulip w={24} c="#fb7185" /><Tulip w={20} c="#f97316" /></span>
+                </span>
+            </span>
+        ),
+    },
+    autumn: {
+        label: "Autumn", title: "Hello Autumn",
+        icon: <span style={{ fontSize: 15 }}>🍁</span>,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <Particles n={14} kind="autumn" />
+                <span className="sn-autumn-line" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-autumn-sun" />
+                <Particles n={22} kind="autumn" />
+                <span className="hw-bottom sn-autumn">
+                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 96c50-12 100-12 150-4s80 4 110-4v32H0z" fill="#7c2d12" /><path d="M0 108c60-8 120-6 170 2s70 0 90-4v14H0z" fill="#431407" /></svg>
+                    <span className="sn-autumn-tree-wrap"><AutumnTree w={110} /></span>
+                    <span className="sn-leaf-pile">🍂</span>
+                </span>
+            </span>
+        ),
+    },
+    winter: {
+        label: "Winter", title: "Winter Wonderland",
+        icon: <span style={{ fontSize: 15 }}>❄️</span>,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <Particles n={28} kind="snow" />
+                <span className="sn-frost-line" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-aurora" />
+                <Particles n={36} kind="snow" />
+                <span className="hw-bottom sn-winter">
+                    <span className="sn-pines back"><Pine w={50} c="#1e3a5f" /><Pine w={64} c="#1e3a5f" /><Pine w={46} c="#1e3a5f" /></span>
+                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 88c50-18 100-16 150-4s80 4 110-6v42H0z" fill="#e0f2fe" /><path d="M0 102c60-12 120-8 170 2s70 0 90-6v22H0z" fill="#f8fafc" /></svg>
+                    <span className="sn-snowman-wrap"><Snowman w={52} /></span>
+                </span>
+            </span>
+        ),
+    },
+});
+const SEASONS = ["spring", "summer", "rainy", "autumn", "winter"];
 // shown under "Just for fun" in the menu (no date – Auto never picks them)
 const FUN = ["reggae", "ocean", "space", "forest", "sakura", "neon"];
 const titleOf = (k) => (typeof THEMES[k]?.title === "function" ? THEMES[k].title() : THEMES[k]?.title);
@@ -801,14 +903,33 @@ function Switcher({ active, choice, today, onPick }) {
     );
 }
 // the menu lists the themes in calendar order
-const ORDER = ["newyear", "cny", "valentines", "easter", "summer", "independence", "rainy", "halloween", "christmas"];
+const ORDER = ["newyear", "cny", "valentines", "easter", "independence", "halloween", "christmas"];
 /** Auto + every theme + Off (used by the header menu and the settings panel) */
+// big picker icons – one picture that says what the theme is
+const PhFlag = () => (
+    <svg width="34" height="24" viewBox="0 0 36 24" aria-hidden="true">
+        <rect width="36" height="12" fill="#1d4ed8" /><rect y="12" width="36" height="12" fill="#dc2626" />
+        <path d="M0 0l18 12L0 24z" fill="#fff" />
+        <circle cx="6.5" cy="12" r="2.6" fill="#facc15" />
+        <g stroke="#facc15" strokeWidth=".9">{[0, 45, 90, 135].map((a) => <path key={a} d="M2.5 12h8" transform={`rotate(${a} 6.5 12)`} />)}</g>
+        <circle cx="2.2" cy="3" r=".9" fill="#facc15" /><circle cx="2.2" cy="21" r=".9" fill="#facc15" /><circle cx="15" cy="12" r=".9" fill="#facc15" />
+    </svg>
+);
+const TILE_ICON = {
+    newyear: "🎆", cny: "🏮", valentines: "💝", easter: "🐣", summer: "🏖️", independence: <PhFlag />, rainy: "🌧️",
+    halloween: "🎃", christmas: "🎄", spring: "🌷", autumn: "🍁", winter: "⛄", reggae: "🎶", ocean: "🐠", space: "🚀", forest: "🌲", sakura: "🌸", neon: "🌃",
+};
+
 function ThemeOptions({ choice, today, onPick }) {
-    // compact: Auto + Off on one row, then every theme as a small tile (dates in the tooltip)
+    // compact: Auto + Off on one row, then every theme as a small preview card (its colours + one big icon)
     const tile = (k) => (
         <button key={k} type="button" role="menuitemradio" aria-checked={choice === k} title={`${THEMES[k].label} · ${RANGES[k] || "Any time"}`}
             className={`sn-tile is-${k}${choice === k ? " is-on" : ""}${today === k ? " is-today" : ""}`} onClick={() => onPick(k)}>
-            <span className="sn-mi">{THEMES[k].icon}</span>
+            <span className={`sn-swatch sw-${k}`}>
+                <span className="sn-tile-ico">{TILE_ICON[k] || THEMES[k].icon}</span>
+                {choice === k && <span className="sn-tile-check" aria-hidden="true">✓</span>}
+                {today === k && <span className="sn-tile-today">Today</span>}
+            </span>
             <span className="sn-tile-name">{THEMES[k].short || THEMES[k].label}</span>
         </button>
     );
@@ -816,14 +937,16 @@ function ThemeOptions({ choice, today, onPick }) {
         <div className="sn-opts">
             <div className="sn-opts-top">
                 <button type="button" role="menuitemradio" aria-checked={choice === "auto"} className={`sn-chip${choice === "auto" ? " is-on" : ""}`} onClick={() => onPick("auto")}>
-                    <span>📅</span><span><b>Auto</b><small>{today ? `Today: ${THEMES[today].label}` : "No holiday today"}</small></span>
+                    <span className="sn-chip-ico">📅</span><span><b>Auto</b><small>{today ? `Today: ${THEMES[today].label}` : "No holiday today"}</small></span>
                 </button>
                 <button type="button" role="menuitemradio" aria-checked={choice === "off"} className={`sn-chip sn-chip-off${choice === "off" ? " is-on" : ""}`} onClick={() => onPick("off")}>
-                    <span>⛔</span><span><b>Off</b><small>Normal look</small></span>
+                    <span className="sn-chip-ico">🚫</span><span><b>Off</b><small>Normal look</small></span>
                 </button>
             </div>
             <div className="sn-menu-head">Holidays</div>
             <div className="sn-tiles">{ORDER.map(tile)}</div>
+            <div className="sn-menu-head">Seasons</div>
+            <div className="sn-tiles">{SEASONS.map(tile)}</div>
             <div className="sn-menu-head">Just for fun</div>
             <div className="sn-tiles">{FUN.map(tile)}</div>
         </div>
@@ -875,6 +998,7 @@ const RANGES = (() => {
         cny: c ? `${fmtDay(addDays(c, -3))} – ${fmtDay(addDays(c, 7))}, ${cy}` : "Lunar New Year",
         easter: `${fmtDay(addDays(e, -7))} – ${fmtDay(addDays(e, 1))}, ${e.getFullYear()}`,
         summer: "Mar 20 – May 31", independence: "Jun 9 – 13", rainy: "Jul 1 – Aug 31",
+        spring: "Flowers & butterflies", autumn: "Falling leaves", winter: "Snow & a snowman",
         reggae: "Red, gold & green", ocean: "Fish, bubbles & seaweed", space: "Planets, stars & a rocket",
         forest: "Pines, fireflies & leaves", sakura: "Cherry blossoms", neon: "Synthwave city",
     };

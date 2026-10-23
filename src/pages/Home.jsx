@@ -6,24 +6,23 @@ import Icon from "../components/Icons";
 import { fmtDate, money } from "../utils/format";
 
 /* =========================================================
-   BIR filing calendar (Philippines)
-   Weekend due dates move to Monday; holidays and BIR extensions are not applied.
+   BIR filing calendar (Philippines) – the dates of the RETURN DEADLINE schedule, exactly as written
+   (a date on a Saturday / Sunday is NOT moved to Monday)
+     1601-C / 0619-E       10th day after the end of each month
+     1601-EQ               last day of the month after the end of each quarter
+     2550Q / SLSP / 2551Q  25th day after the end of the quarter
+     1701Q                 May 15 · Aug 15 · Nov 15        1702Q   May 29 · Aug 29 · Nov 29
+     1701 / 1702-RT        April 15                         1604-C  January 31 · 1604-E  March 01
 ========================================================= */
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const lastDay = (y, m) => new Date(y, m + 1, 0).getDate();            // m = 0-based
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const nextWorkday = (d) => {
-    const x = new Date(d);
-    if (x.getDay() === 6) x.setDate(x.getDate() + 2);
-    if (x.getDay() === 0) x.setDate(x.getDate() + 1);
-    return x;
-};
-const at = (y, m, day) => nextWorkday(new Date(y, m, Math.min(day, lastDay(y, m))));
+const at = (y, m, day) => new Date(y, m, Math.min(day, lastDay(y, m)));
 
 function birDeadlines(today, { vat, corp }) {
     const out = [];
-    const add = (form, title, due, period, tag) => out.push({ form, title, due: nextWorkday(due), period, tag });
+    const add = (form, title, due, period, tag) => out.push({ form, title, due, period, tag });
     const y0 = today.getFullYear();
 
     for (let y = y0 - 1; y <= y0 + 1; y++) {
@@ -33,14 +32,14 @@ function birDeadlines(today, { vat, corp }) {
             const nm = (m + 1) % 12;
             const quarterEnd = m % 3 === 2;
 
-            // monthly withholding
-            add("1601-C", "Withholding Tax on Compensation", m === 11 ? at(ny, 0, 15) : at(ny, nm, 10), label, "Monthly");
-            if (!quarterEnd) add("0619-E", "Expanded Withholding Tax remittance", at(ny, nm, 10), label, "Monthly");
+            // monthly withholding – every 10th day after the end of each month
+            add("1601-C", "Withholding Tax on Compensation", at(ny, nm, 10), label, "Monthly");
+            add("0619-E", "Expanded Withholding Tax remittance", at(ny, nm, 10), label, "Monthly");
 
             if (quarterEnd) {
                 const q = Math.floor(m / 3) + 1;
                 const ql = `Q${q} ${y}`;
-                add("1601-EQ", "Quarterly Expanded Withholding Tax + QAP", at(ny, nm, 31), ql, "Quarterly");
+                add("1601-EQ", "Quarterly Expanded Withholding Tax + QAP", at(ny, nm, 31), ql, "Quarterly");   // last day of the next month
                 if (vat) {
                     add("2550Q", "Quarterly VAT Return + SAWT", at(ny, nm, 25), ql, "Quarterly");
                     add("SLSP", "Summary List of Sales & Purchases", at(ny, nm, 25), ql, "Quarterly");
@@ -48,13 +47,8 @@ function birDeadlines(today, { vat, corp }) {
                     add("2551Q", "Quarterly Percentage Tax", at(ny, nm, 25), ql, "Quarterly");
                 }
                 if (q <= 3) {
-                    if (corp) {
-                        const d = new Date(y, m + 1, 0); // quarter end
-                        d.setDate(d.getDate() + 60);// within 60 days
-                        add("1702Q", "Quarterly Income Tax (Corporation)", d, ql, "Quarterly");
-                    } else {
-                        add("1701Q", "Quarterly Income Tax (Individual)", at(y, [4, 7, 10][q - 1], 15), ql, "Quarterly");
-                    }
+                    if (corp) add("1702Q", "Quarterly Income Tax (Corporation)", at(y, [4, 7, 10][q - 1], 29), ql, "Quarterly");
+                    else add("1701Q", "Quarterly Income Tax (Individual)", at(y, [4, 7, 10][q - 1], 15), ql, "Quarterly");
                 }
             }
         }
