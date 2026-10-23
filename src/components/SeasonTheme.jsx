@@ -9,6 +9,8 @@
 //   Rainy Season      Jul 1 – Aug 31
 //   Halloween         Oct 19 – Nov 16   (2 weeks before and after Nov 2)
 //   Christmas         Dec 1 – Dec 27
+//   Just for fun (no date – pick them any time from the menu):
+//   Reggae · Ocean · Outer Space · Forest · Sakura · Neon City
 //
 // The title in the middle of the header is a button: pick Auto (by date), any theme to preview it, or Off.
 // The choice is kept in this browser (localStorage "igb-season").
@@ -185,7 +187,91 @@ const Cloud = ({ w = 90, c = "#94a3b8" }) => (
     </svg>
 );
 
-/* falling (or rising) bits: snow, confetti, hearts, rain, petals, gold. Fixed positions so they don't jump on re-render. */
+const Vinyl = ({ w = 80 }) => (
+    <svg width={w} height={w} viewBox="0 0 100 100" aria-hidden="true" className="sn-vinyl">
+        <circle cx="50" cy="50" r="48" fill="#111" />
+        {[40, 34, 28].map((r) => <circle key={r} cx="50" cy="50" r={r} fill="none" stroke="#2a2a2a" strokeWidth="1.2" />)}
+        <path d="M50 2a48 48 0 0 1 34 14" stroke="rgba(255,255,255,.18)" strokeWidth="5" fill="none" />
+        <circle cx="50" cy="50" r="17" fill="#16a34a" />
+        <path d="M33 50a17 17 0 0 1 34 0z" fill="#facc15" />
+        <path d="M36 40a17 17 0 0 1 28 0z" fill="#dc2626" />
+        <circle cx="50" cy="50" r="2.6" fill="#111" />
+    </svg>
+);
+const Note = ({ w = 18, c = "#facc15" }) => (
+    <svg width={w} height={w} viewBox="0 0 24 24" aria-hidden="true"><path fill={c} d="M9 17.5a3.5 3.5 0 1 1-2-3.2V4l12-2v12.5a3.5 3.5 0 1 1-2-3.2V6.3l-8 1.4z" /></svg>
+);
+const Speaker = ({ w = 44 }) => (
+    <svg width={w} height={w * 1.5} viewBox="0 0 40 60" aria-hidden="true" className="sn-speaker">
+        <rect x="2" y="2" width="36" height="56" rx="5" fill="#1c1917" stroke="#44403c" strokeWidth="1.5" />
+        <circle cx="20" cy="16" r="7" fill="#292524" stroke="#facc15" strokeWidth="1.4" /><circle cx="20" cy="16" r="2.4" fill="#facc15" />
+        <circle cx="20" cy="40" r="12" fill="#292524" stroke="#16a34a" strokeWidth="1.6" /><circle cx="20" cy="40" r="4" fill="#dc2626" />
+    </svg>
+);
+
+const Fish = ({ w = 34, c = "#fb923c", f = "#fdba74" }) => (
+    <svg width={w} height={w * 0.6} viewBox="0 0 50 30" aria-hidden="true">
+        <path d="M38 15 50 4v22z" fill={f} />
+        <ellipse cx="22" cy="15" rx="18" ry="11" fill={c} />
+        <path d="M18 5c3 6 3 14 0 20M26 5c3 6 3 14 0 20" stroke="#fff" strokeWidth="2.4" opacity=".85" fill="none" />
+        <circle cx="10" cy="12" r="2" fill="#111" />
+    </svg>
+);
+const Jelly = ({ w = 40 }) => (
+    <svg width={w} height={w * 1.5} viewBox="0 0 40 60" aria-hidden="true" className="sn-jelly">
+        <path d="M2 20a18 18 0 0 1 36 0c0 3-3 4-6 2-3 3-6 3-8 0-3 3-6 3-8 0-3 3-6 3-8 0-3 2-6 1-6-2z" fill="rgba(244,114,182,.75)" />
+        <path d="M10 24c-2 10 2 18-1 30M17 25c2 10-2 20 1 32M24 25c-2 10 2 18-1 30M31 24c2 10-2 18 1 28" stroke="rgba(244,114,182,.6)" strokeWidth="1.6" fill="none" />
+    </svg>
+);
+const Seaweed = ({ h = 90, c = "#15803d" }) => (
+    <svg width={h * 0.3} height={h} viewBox="0 0 30 100" aria-hidden="true" className="sn-seaweed">
+        <path d="M15 100c-10-14 10-22 0-36s10-22 0-36S20 8 15 0" stroke={c} strokeWidth="6" fill="none" strokeLinecap="round" />
+    </svg>
+);
+const Planet = ({ w = 90 }) => (
+    <svg width={w} height={w * 0.7} viewBox="0 0 100 70" aria-hidden="true" className="sn-planet">
+        <ellipse cx="50" cy="38" rx="46" ry="11" fill="none" stroke="#fcd34d" strokeWidth="3" opacity=".55" />
+        <circle cx="50" cy="35" r="22" fill="#f59e0b" />
+        <path d="M30 30c12 4 28 4 40 0M29 40c12 4 30 4 42 0" stroke="#b45309" strokeWidth="3" opacity=".6" fill="none" />
+        <path d="M4 38c0 6 20 11 46 11s46-5 46-11" fill="none" stroke="#fde68a" strokeWidth="3" />
+    </svg>
+);
+const Rocket = ({ w = 34 }) => (
+    <svg width={w} height={w * 2} viewBox="0 0 30 60" aria-hidden="true" className="sn-rocket">
+        <path d="M15 2c8 8 10 20 8 34H7C5 22 7 10 15 2z" fill="#e5e7eb" />
+        <circle cx="15" cy="20" r="4.5" fill="#38bdf8" stroke="#64748b" strokeWidth="1.5" />
+        <path d="M7 30 1 42l7-2zM23 30l6 12-7-2z" fill="#ef4444" />
+        <path d="M10 36h10l-2 6h-6z" fill="#64748b" />
+        <path d="M12 42c0 6 3 10 3 14 0-4 3-8 3-14z" fill="#fb923c" className="sn-flame" />
+    </svg>
+);
+const Moon = ({ w = 50, c = "#e2e8f0" }) => (
+    <svg width={w} height={w} viewBox="0 0 50 50" aria-hidden="true">
+        <circle cx="25" cy="25" r="22" fill={c} />
+        <circle cx="17" cy="18" r="4" fill="#cbd5e1" /><circle cx="31" cy="30" r="5" fill="#cbd5e1" /><circle cx="30" cy="14" r="2.4" fill="#cbd5e1" />
+    </svg>
+);
+const Pine = ({ w = 60, c = "#14532d" }) => (
+    <svg width={w} height={w * 1.6} viewBox="0 0 50 80" aria-hidden="true">
+        <path d="M25 2 6 30h9L2 52h12L0 72h50L36 52h12L35 30h9z" fill={c} /><rect x="22" y="72" width="6" height="8" fill="#3f2a14" />
+    </svg>
+);
+const Blossom = ({ w = 16, c = "#f9a8d4" }) => (
+    <svg width={w} height={w} viewBox="0 0 24 24" aria-hidden="true">
+        {[0, 72, 144, 216, 288].map((a) => <ellipse key={a} cx="12" cy="6" rx="4" ry="5.5" fill={c} transform={`rotate(${a} 12 12)`} />)}
+        <circle cx="12" cy="12" r="2.6" fill="#fde047" />
+    </svg>
+);
+const Branch = ({ w = 200 }) => (
+    <svg width={w} height={w * 0.5} viewBox="0 0 200 100" aria-hidden="true" className="sn-branch">
+        <path d="M200 10C160 18 130 30 104 54 86 70 60 76 30 74M140 26c-6 14-4 26 6 34M100 56c10 6 14 18 12 30" stroke="#3f1d1d" strokeWidth="5" fill="none" strokeLinecap="round" />
+        {[[170, 14], [150, 30], [128, 24], [112, 48], [94, 60], [70, 70], [46, 72], [146, 58], [112, 82], [184, 22]].map(([x, y], i) => (
+            <g key={i} transform={`translate(${x - 9} ${y - 9})`}><Blossom w={18} c={i % 3 ? "#f9a8d4" : "#fbcfe8"} /></g>
+        ))}
+    </svg>
+);
+
+/* falling (or rising) bits: snow, confetti, hearts, rain, petals, gold, music notes, bubbles, stars, fireflies. Fixed positions so they don't jump on re-render. */
 function Particles({ n = 22, kind = "snow" }) {
     return (
         <span className={`sn-fall is-${kind}`} aria-hidden="true">
@@ -201,7 +287,15 @@ function Particles({ n = 22, kind = "snow" }) {
                 if (kind === "gold") style.background = ["#fde047", "#f59e0b", "#ef4444", "#facc15"][i % 4];
                 if (kind === "petal") style.background = ["#fbcfe8", "#ddd6fe", "#fef9c3", "#bbf7d0", "#fecdd3"][i % 5];
                 if (kind === "rain") style.animationDuration = `${(1 + ((i * 7) % 9) / 10).toFixed(1)}s`;
-                return <i key={i} style={style}>{kind === "heart" && <Heart w={20} c={i % 3 ? "#fb7185" : "#fda4af"} />}</i>;
+                if (kind === "leaf") style.background = ["#65a30d", "#ca8a04", "#15803d", "#a16207"][i % 4];
+                if (kind === "sakura") style.background = ["#fbcfe8", "#f9a8d4", "#fce7f3"][i % 3];
+                if (kind === "star" || kind === "firefly") { style.top = `${(i * 53 + 7) % 100}%`; style.animationDuration = `${2 + (i % 5) * 0.7}s`; }
+                return (
+                    <i key={i} style={style}>
+                        {kind === "heart" && <Heart w={20} c={i % 3 ? "#fb7185" : "#fda4af"} />}
+                        {kind === "note" && <Note w={20} c={["#dc2626", "#facc15", "#22c55e"][i % 3]} />}
+                    </i>
+                );
             })}
         </span>
     );
@@ -283,7 +377,7 @@ const THEMES = {
         ),
     },
     cny: {
-        label: "Chinese New Year", title: () => `Gong Xi Fa Cai ${cnyYear()}`,
+        short: "Chinese NY", label: "Chinese New Year", title: () => `Gong Xi Fa Cai ${cnyYear()}`,
         icon: <Lantern w={14} />,
         header: () => (
             <span className="hw-top" aria-hidden="true">
@@ -305,7 +399,7 @@ const THEMES = {
         ),
     },
     easter: {
-        label: "Holy Week & Easter", title: "Happy Easter",
+        short: "Easter", label: "Holy Week & Easter", title: "Happy Easter",
         icon: <Egg w={14} />,
         header: () => (
             <span className="hw-top" aria-hidden="true">
@@ -349,7 +443,7 @@ const THEMES = {
         ),
     },
     independence: {
-        label: "Independence Day", title: "Happy Independence Day",
+        short: "Independence", label: "Independence Day", title: "Happy Independence Day",
         icon: <Sun w={18} rays={8} c="#facc15" core="#facc15" />,
         header: () => (
             <span className="hw-top" aria-hidden="true">
@@ -374,7 +468,7 @@ const THEMES = {
         ),
     },
     rainy: {
-        label: "Rainy Season", title: "Stay Dry",
+        short: "Rainy", label: "Rainy Season", title: "Stay Dry",
         icon: <Umbrella w={18} />,
         header: () => (
             <span className="hw-top" aria-hidden="true">
@@ -393,7 +487,140 @@ const THEMES = {
             </span>
         ),
     },
+    reggae: {
+        label: "Reggae", title: "Good Vibes",
+        icon: <Note w={18} c="#16a34a" />,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <Particles n={12} kind="note" />
+                <span className="sn-rasta-line" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-rasta-glow" />
+                <span className="sn-bigvinyl"><Vinyl w={92} /></span>
+                <Particles n={16} kind="note" />
+                <span className="hw-bottom sn-reggae">
+                    <span className="sn-rasta-stripes"><i /><i /><i /></span>
+                    <span className="sn-speakers"><Speaker w={34} /><Speaker w={42} /></span>
+                    <span className="sn-palm-wrap sn-reggae-palm"><Palm w={74} /></span>
+                </span>
+            </span>
+        ),
+    },
+    ocean: {
+        label: "Ocean", title: "Deep Blue",
+        icon: <Fish w={20} />,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <Particles n={14} kind="bubble" />
+                <span className="sn-wave-line sn-ocean-line" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-rays" />
+                <Particles n={20} kind="bubble" />
+                <span className="sn-fishes">
+                    <span className="f1"><Fish w={36} /></span>
+                    <span className="f2"><Fish w={26} c="#facc15" f="#fde68a" /></span>
+                    <span className="f3"><Fish w={30} c="#38bdf8" f="#7dd3fc" /></span>
+                </span>
+                <span className="sn-jelly-wrap"><Jelly w={36} /></span>
+                <span className="hw-bottom sn-seabed">
+                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 100c50-10 110-12 160-4s70 2 100-2v26H0z" fill="#d6b97a" /></svg>
+                    <span className="sn-weeds"><Seaweed h={96} /><Seaweed h={70} c="#16a34a" /><Seaweed h={84} c="#166534" /></span>
+                    <span className="sn-starfish">★</span>
+                </span>
+            </span>
+        ),
+    },
+    space: {
+        short: "Space", label: "Outer Space", title: "To the Stars",
+        icon: <Rocket w={12} />,
+        header: () => (
+            <span className="hw-top sn-space-top" aria-hidden="true">
+                <Particles n={26} kind="star" />
+                <span className="sn-shoot" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-nebula" />
+                <Particles n={40} kind="star" />
+                <span className="sn-shoot sn-shoot-side" />
+                <span className="sn-planet-wrap"><Planet w={100} /></span>
+                <span className="sn-moon-wrap"><Moon w={40} /></span>
+                <span className="hw-bottom sn-space">
+                    <span className="sn-rocket-wrap"><Rocket w={34} /></span>
+                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 104c40-8 80-10 120-6s100 6 140-2v24H0z" fill="#334155" /><circle cx="60" cy="110" r="5" fill="#1e293b" /><circle cx="190" cy="106" r="7" fill="#1e293b" /></svg>
+                </span>
+            </span>
+        ),
+    },
+    forest: {
+        label: "Forest", title: "Into the Woods",
+        icon: <Pine w={14} c="#16a34a" />,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <Particles n={12} kind="leaf" />
+                <span className="sn-forest-line" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-forest-moon"><Moon w={46} c="#fef9c3" /></span>
+                <Particles n={22} kind="firefly" />
+                <Particles n={10} kind="leaf" />
+                <span className="hw-bottom sn-forest">
+                    <span className="sn-pines back"><Pine w={56} c="#1a3d2b" /><Pine w={70} c="#1a3d2b" /><Pine w={50} c="#1a3d2b" /><Pine w={64} c="#1a3d2b" /></span>
+                    <span className="sn-pines front"><Pine w={64} c="#0b2417" /><Pine w={48} c="#0b2417" /><Pine w={76} c="#0b2417" /></span>
+                </span>
+            </span>
+        ),
+    },
+    sakura: {
+        label: "Sakura", title: "Cherry Blossom",
+        icon: <Blossom w={18} />,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <Particles n={16} kind="sakura" />
+                <span className="sn-sakura-line" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-sakura-moon" />
+                <span className="sn-branch-wrap"><Branch w={230} /></span>
+                <Particles n={26} kind="sakura" />
+                <span className="hw-bottom sn-sakura">
+                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 120V96l40-8 30-30 22 18 18-10 40 34 30-14 40 20 40-10v24z" fill="#3b1d32" /><path d="M70 58l10 10h-20z" fill="#fff" opacity=".7" /></svg>
+                </span>
+            </span>
+        ),
+    },
+    neon: {
+        short: "Neon", label: "Neon City", title: "Neon Nights",
+        icon: <span style={{ fontSize: 16 }}>🌆</span>,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <span className="sn-neon-line" />
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <Particles n={24} kind="star" />
+                <span className="hw-bottom sn-neon">
+                    <span className="sn-neon-sun" />
+                    <span className="sn-grid"><i /></span>
+                </span>
+            </span>
+        ),
+    },
 };
+// shown under "Just for fun" in the menu (no date – Auto never picks them)
+const FUN = ["reggae", "ocean", "space", "forest", "sakura", "neon"];
 const titleOf = (k) => (typeof THEMES[k]?.title === "function" ? THEMES[k].title() : THEMES[k]?.title);
 
 /* header: a row of blinking Christmas lights */
@@ -536,7 +763,7 @@ function Switcher({ active, choice, today, onPick }) {
         if (!open) return;
         const place = () => {
             const r = btn.current?.getBoundingClientRect();
-            if (r) setPos({ top: r.bottom + 8, left: Math.max(8, Math.min(window.innerWidth - 268, r.left + r.width / 2 - 130)) });
+            if (r) setPos({ top: r.bottom + 8, left: Math.max(8, Math.min(window.innerWidth - 324, r.left + r.width / 2 - 158)) });
         };
         place();
         const off = (e) => !pop.current?.contains(e.target) && !btn.current?.contains(e.target) && setOpen(false);
@@ -567,7 +794,6 @@ function Switcher({ active, choice, today, onPick }) {
             </button>
             {open && pos && createPortal(
                 <div ref={pop} className="sn-menu" role="menu" style={pos}>
-                    <div className="sn-menu-head">Holiday theme</div>
                     <ThemeOptions choice={choice} today={today} onPick={pick} />
                     <p className="sn-menu-note">Only changes this browser.</p>
                 </div>, document.body)}
@@ -578,17 +804,30 @@ function Switcher({ active, choice, today, onPick }) {
 const ORDER = ["newyear", "cny", "valentines", "easter", "summer", "independence", "rainy", "halloween", "christmas"];
 /** Auto + every theme + Off (used by the header menu and the settings panel) */
 function ThemeOptions({ choice, today, onPick }) {
-    const opts = [
-        ["auto", "📅", "Auto (by date)", today ? `Today: ${THEMES[today].label}` : "No holiday today"],
-        ...ORDER.map((k) => [k, THEMES[k].icon, THEMES[k].label, RANGES[k]]),
-        ["off", "⛔", "Off", "Normal look"],
-    ];
-    return opts.map(([k, icon, label, sub]) => (
-        <button key={k} type="button" role="menuitemradio" aria-checked={choice === k} className={`sn-opt is-${k}${choice === k ? " is-on" : ""}`} onClick={() => onPick(k)}>
-            <span className="sn-mi">{icon}</span>
-            <span><b>{label}</b><small>{sub}</small></span>
+    // compact: Auto + Off on one row, then every theme as a small tile (dates in the tooltip)
+    const tile = (k) => (
+        <button key={k} type="button" role="menuitemradio" aria-checked={choice === k} title={`${THEMES[k].label} · ${RANGES[k] || "Any time"}`}
+            className={`sn-tile is-${k}${choice === k ? " is-on" : ""}${today === k ? " is-today" : ""}`} onClick={() => onPick(k)}>
+            <span className="sn-mi">{THEMES[k].icon}</span>
+            <span className="sn-tile-name">{THEMES[k].short || THEMES[k].label}</span>
         </button>
-    ));
+    );
+    return (
+        <div className="sn-opts">
+            <div className="sn-opts-top">
+                <button type="button" role="menuitemradio" aria-checked={choice === "auto"} className={`sn-chip${choice === "auto" ? " is-on" : ""}`} onClick={() => onPick("auto")}>
+                    <span>📅</span><span><b>Auto</b><small>{today ? `Today: ${THEMES[today].label}` : "No holiday today"}</small></span>
+                </button>
+                <button type="button" role="menuitemradio" aria-checked={choice === "off"} className={`sn-chip sn-chip-off${choice === "off" ? " is-on" : ""}`} onClick={() => onPick("off")}>
+                    <span>⛔</span><span><b>Off</b><small>Normal look</small></span>
+                </button>
+            </div>
+            <div className="sn-menu-head">Holidays</div>
+            <div className="sn-tiles">{ORDER.map(tile)}</div>
+            <div className="sn-menu-head">Just for fun</div>
+            <div className="sn-tiles">{FUN.map(tile)}</div>
+        </div>
+    );
 }
 
 /* ---------- floating settings button (right edge): open the theme panel any time ---------- */
@@ -617,7 +856,6 @@ function SettingsDock({ choice, today, onPick, classes = [] }) {
                         <b>Theme settings</b>
                         <button type="button" onClick={() => setOpen(false)} aria-label="Close">✕</button>
                     </header>
-                    <div className="sn-menu-head">Holiday theme</div>
                     <div role="menu" className="sn-panel-list">
                         <ThemeOptions choice={choice} today={today} onPick={onPick} />
                     </div>
@@ -637,6 +875,8 @@ const RANGES = (() => {
         cny: c ? `${fmtDay(addDays(c, -3))} – ${fmtDay(addDays(c, 7))}, ${cy}` : "Lunar New Year",
         easter: `${fmtDay(addDays(e, -7))} – ${fmtDay(addDays(e, 1))}, ${e.getFullYear()}`,
         summer: "Mar 20 – May 31", independence: "Jun 9 – 13", rainy: "Jul 1 – Aug 31",
+        reggae: "Red, gold & green", ocean: "Fish, bubbles & seaweed", space: "Planets, stars & a rocket",
+        forest: "Pines, fireflies & leaves", sakura: "Cherry blossoms", neon: "Synthwave city",
     };
 })();
 
