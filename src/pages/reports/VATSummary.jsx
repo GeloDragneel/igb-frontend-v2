@@ -121,6 +121,8 @@ export default function VATSummary() {
   const [daId, setDaId] = useState("0");
   const [query, setQuery] = useState("");
   const [lookups, setLookups] = useState({ statuses: [], analysts: [] });
+  // a data analyst can look (See adjustment, Print, History) but can't undeclare / undo / approve
+  const canEdit = !lookups.my_da;
 
   const [rows, setRows] = useState([]);
   const [used, setUsed] = useState(null); // the filters behind the rows shown
@@ -134,6 +136,7 @@ export default function VATSummary() {
   const [cell, setCell] = useState(null); // documents behind one E-BIR cell
   const [undeclare, setUndeclare] = useState(null);
   const [pending, setPending] = useState(null);          // every undeclared document waiting for approval (From → To month)
+  const [history, setHistory] = useState(null);          // approved undeclared documents (one group per Approve)
   const [confirm, setConfirm] = useState(null);
   const [printing, setPrinting] = useState(false);
   const [pdf, setPdf] = useState(null);              // { url, name, title } PDF preview
@@ -142,7 +145,11 @@ export default function VATSummary() {
   const seq = useRef(0);
 
   useEffect(() => {
-    apiFetch("/reports/vat-clients/lookups").then(setLookups).catch(() => { });
+    apiFetch("/reports/vat-clients/lookups").then((lk) => {
+      setLookups(lk);
+      // a data analyst only sees the clients assigned to him (the server enforces it too)
+      if (lk?.my_da) setDaId(String(lk.my_da));
+    }).catch(() => { });
   }, []);
 
   const load = useCallback(async (f = from, t = to, st = statusId, da = daId) => {
@@ -282,6 +289,18 @@ export default function VATSummary() {
     }
   }, [ebir, used]);
 
+  // approval history of this client (moved out of / into the period)
+  const openHistory = useCallback(async () => {
+    if (!ebir || !used) return;
+    setHistory({ groups: [], loading: true });
+    try {
+      const r = await apiFetch(`/reports/vat-clients/history?${new URLSearchParams({ client_id: ebir.row.client_id, from: used.from, to: used.to })}`);
+      setHistory((h) => h && { ...h, groups: r.groups || [], loading: false, error: "" });
+    } catch (e) {
+      setHistory((h) => h && { ...h, loading: false, error: e.message || "Couldn't load the history." });
+    }
+  }, [ebir, used]);
+
   const afterChange = async () => {
     await Promise.all([
       cell ? openCell(cell, true) : null,
@@ -302,6 +321,7 @@ export default function VATSummary() {
 
   const saveUndeclare = async () => {
     const u = undeclare;
+    if (!canEdit) return notify("Data analysts can't undeclare", "error");
     if (!u.newMonth) return notify("Declared Month is required", "error");
     if ((ebir?.data?.locked_months || []).includes(u.newMonth)) return notify("Declared Month is disabled", "error");
     setBusy(true);
@@ -327,6 +347,7 @@ export default function VATSummary() {
 
   const doConfirm = async () => {
     const c = confirm;
+    if (!canEdit) { setConfirm(null); return notify("Data analysts can view only", "error"); }
     setBusy(true);
     try {
       if (c.kind === "undo") {
@@ -354,6 +375,7 @@ export default function VATSummary() {
   };
 
   const askApprove = () => {
+    if (!canEdit) return;
     if (!ebir?.data?.pending_count) return notify("No adjustment in this transaction", "error");
     setConfirm({ kind: "approve" });
   };
@@ -498,7 +520,8 @@ export default function VATSummary() {
 
   const closeAmounts = useCallback(() => setAmounts(null), []);
   const closeRemarks = useCallback(() => setRemarks(null), []);
-  const closeEbir = useCallback(() => { setEbir(null); setCell(null); setPending(null); }, []);
+  const closeEbir = useCallback(() => { setEbir(null); setCell(null); setPending(null); setHistory(null); }, []);
+  const closeHistory = useCallback(() => setHistory(null), []);
   const closePending = useCallback(() => setPending(null), []);
   const closeCell = useCallback(() => setCell(null), []);
   const closeUndeclare = useCallback(() => setUndeclare(null), []);
@@ -523,8 +546,8 @@ export default function VATSummary() {
         </label>
         <label className="vs-field">
           <span>Data analyst</span>
-          <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)}>
-            <option value="0">All</option>
+          <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)} disabled={!!lookups.my_da}>
+            {!lookups.my_da && <option value="0">All</option>}
             {lookups.analysts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </label>
@@ -615,6 +638,7 @@ export default function VATSummary() {
         <Modal title={`E-BIR : ${ebir.row.client_name}`} onClose={closeEbir} size="xlg">
           <EbirView state={ebir} range={used ? ebirRange(used.from, used.to) : ""} busy={busy || printing}
             onMode={switchMode} onCell={openCell} onApprove={askApprove} onPending={() => openPending()}
+            onHistory={openHistory} canEdit={canEdit}
             onPrintEbir={printEbir} onPrintList={printUndeclared} />
         </Modal>
       )}
@@ -622,7 +646,7 @@ export default function VATSummary() {
       {/* ---------- documents behind one E-BIR cell ---------- */}
       {cell && (
         <Modal title={`Details : ${cell.name}`} onClose={closeCell} size="xlg">
-          <CellList state={cell} busy={busy}
+          <CellList state={cell} busy={busy} canEdit={canEdit}
             onUndeclare={(docs) => setUndeclare({
               items: docs.map((d) => ({ reference: d.reference, oldMonth: d.declared_month, whMonth: d.wh_declared_month || "", amount: d.amount })),
               newMonth: nextMonth(docs[0].declared_month),
@@ -638,8 +662,15 @@ export default function VATSummary() {
       {/* ---------- all undeclared documents waiting for approval ---------- */}
       {pending && (
         <Modal title={`Undeclared transactions : ${ebir?.row?.client_name || ""}`} onClose={closePending} size="xlg">
-          <PendingList state={pending} busy={busy} period={used ? rangeLabel(used.from, used.to) : ""}
+          <PendingList state={pending} busy={busy} canEdit={canEdit} period={used ? rangeLabel(used.from, used.to) : ""}
             onUndo={(docs) => setConfirm({ kind: "undo", items: docs.map((d) => ({ reference: d.reference, oldMonth: d.old_declared_month })) })} />
+        </Modal>
+      )}
+
+      {/* ---------- approval history ---------- */}
+      {history && (
+        <Modal title={`Approval history : ${ebir?.row?.client_name || ""}`} onClose={closeHistory} size="xlg">
+          <HistoryList state={history} period={used ? rangeLabel(used.from, used.to) : ""} />
         </Modal>
       )}
 
@@ -794,7 +825,7 @@ function RemarksModal({ state, period, busy, onClose, onSave }) {
 /* =========================================================
    E-BIR table (old doGet2550MQ HTML)
    ========================================================= */
-function EbirView({ state, range, busy, onMode, onCell, onApprove, onPending, onPrintEbir, onPrintList }) {
+function EbirView({ state, range, busy, canEdit, onMode, onCell, onApprove, onPending, onHistory, onPrintEbir, onPrintList }) {
   const [menu, setMenu] = useState(false);
   const d = state.data;
   const months = d?.months || [];
@@ -834,16 +865,17 @@ function EbirView({ state, range, busy, onMode, onCell, onApprove, onPending, on
           <button type="button" className={state.mode === "adjusted" ? "is-on" : ""} onClick={() => state.mode !== "adjusted" && onMode("adjusted")} disabled={state.loading}>See adjustment</button>
         </div>
         <span className="vs-range">{range}</span>
-        <button type="button" className="vs-chip vs-chip-btn" onClick={onPending} disabled={!d} title="See every undeclared document (From → To month) and undo them">
+        <button type="button" className="vs-chip vs-chip-btn" onClick={onPending} disabled={!d} title={canEdit ? "See every undeclared document (From → To month) and undo them" : "See every undeclared document (From → To month)"}>
           Undeclared amount <b>{n2(d?.undeclared_amount)}</b>
         </button>
         {!!d?.pending_count && (
-          <button type="button" className="vs-chip vs-chip-btn is-warn" onClick={onPending} title="See them and undo">
+          <button type="button" className="vs-chip vs-chip-btn is-warn" onClick={onPending} title={canEdit ? "See them and undo" : "See them"}>
             {d.pending_count} waiting for approval ›
           </button>
         )}
         <div className="vs-ebir-actions">
-          <button type="button" className="btn btn-primary" onClick={onApprove} disabled={!d || busy}>Approve</button>
+          <button type="button" className="btn vs-hist-btn" onClick={onHistory} disabled={!d} title="Approved undeclared documents">History</button>
+          {canEdit && <button type="button" className="btn btn-primary" onClick={onApprove} disabled={!d || busy}>Approve</button>}
           <div className="vs-menu-wrap">
             <button type="button" className="btn" onClick={() => setMenu((m) => !m)} disabled={!d || busy} aria-expanded={menu}>Print ▾</button>
             {menu && (
@@ -911,7 +943,7 @@ function EbirView({ state, range, busy, onMode, onCell, onApprove, onPending, on
           </table>
         </div>
       )}
-      {d && <p className="vs-hint">Click an amount to see its documents and undeclare / undo them. {state.mode === "adjusted" ? "Showing the adjusted figures (undeclared documents moved to their new month). Adjustment = adjusted total − original total." : ""}</p>}
+      {d && <p className="vs-hint">{canEdit ? "Click an amount to see its documents and undeclare / undo them." : "Click an amount to see its documents. Data analysts can view only."} {state.mode === "adjusted" ? "Showing the adjusted figures (undeclared documents moved to their new month). Adjustment = adjusted total − original total." : ""}</p>}
     </div>
   );
 }
@@ -919,7 +951,7 @@ function EbirView({ state, range, busy, onMode, onCell, onApprove, onPending, on
 /* =========================================================
    documents behind one E-BIR cell (old modal_View_Details)
    ========================================================= */
-function CellList({ state, busy, onUndeclare, onUndo }) {
+function CellList({ state, busy, canEdit, onUndeclare, onUndo }) {
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState([]);            // keys of ticked documents
   const keyOf = (r) => `${r.trans_type}|${r.reference}`;
@@ -942,7 +974,7 @@ function CellList({ state, busy, onUndeclare, onUndo }) {
     <div className="vs-docs">
       <div className="vs-docs-bar">
         <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, doc # or reference" />
-        {ticked.length > 0 && (
+        {canEdit && ticked.length > 0 && (
           <div className="vs-bulk">
             <span className="vs-muted">{ticked.length} selected · <b>{n2(sum(ticked))}</b></span>
             {toUndeclare.length > 0 && (
@@ -968,10 +1000,10 @@ function CellList({ state, busy, onUndeclare, onUndo }) {
           <thead>
             <tr>
               <th className="vs-check">
-                <input type="checkbox" checked={allOn} onChange={toggleAll} disabled={!list.length} aria-label="Select all documents" />
+                {canEdit && <input type="checkbox" checked={allOn} onChange={toggleAll} disabled={!list.length} aria-label="Select all documents" />}
               </th>
               <th>Date</th><th>Doc #</th><th>Reference</th><th>Customer / Vendor</th><th>Module</th>
-              <th className="vs-num">VT / IT</th><th>VT / IT declared month</th><th className="vs-num">Amount</th><th className="vs-c">Action</th></tr>
+              <th className="vs-num">VT / IT</th><th>VT / IT declared month</th><th className="vs-num">Amount</th><th className="vs-c">{canEdit ? "Action" : "Status"}</th></tr>
           </thead>
           <tbody>
             {state.loading && !state.rows.length && <tr><td colSpan={10} className="vs-empty">Loading…</td></tr>}
@@ -981,7 +1013,7 @@ function CellList({ state, busy, onUndeclare, onUndo }) {
               return (
                 <tr key={k} className={`${r.undeclared ? "is-undeclared" : ""}${picked.includes(k) ? " is-picked" : ""}`}>
                   <td className="vs-check">
-                    <input type="checkbox" checked={picked.includes(k)} onChange={() => toggle(k)} aria-label={`Select ${r.reference}`} />
+                    {canEdit && <input type="checkbox" checked={picked.includes(k)} onChange={() => toggle(k)} aria-label={`Select ${r.reference}`} />}
                   </td>
                   <td>{fullDate(r.transaction_date)}</td>
                   <td className="vs-mono">{r.document_no}</td>
@@ -992,9 +1024,11 @@ function CellList({ state, busy, onUndeclare, onUndo }) {
                   <td>{r.wh_declared_month ? monthLabel(r.wh_declared_month) : "N/A"}</td>
                   <td className="vs-num">{n2(r.amount)}</td>
                   <td className="vs-c">
-                    {r.undeclared
-                      ? <button type="button" className="btn btn-sm vs-undo" disabled={busy} onClick={() => onUndo([r])}>Undo</button>
-                      : <button type="button" className="btn btn-sm vs-undeclare" disabled={busy} onClick={() => onUndeclare([r])}>Undeclare</button>}
+                    {!canEdit
+                      ? (r.undeclared ? <span className="vs-tag-pend">Undeclared</span> : <span className="vs-muted">—</span>)
+                      : r.undeclared
+                        ? <button type="button" className="btn btn-sm vs-undo" disabled={busy} onClick={() => onUndo([r])}>Undo</button>
+                        : <button type="button" className="btn btn-sm vs-undeclare" disabled={busy} onClick={() => onUndeclare([r])}>Undeclare</button>}
                   </td>
                 </tr>
               );
@@ -1016,7 +1050,7 @@ function CellList({ state, busy, onUndeclare, onUndo }) {
    every undeclared document of the client in the period (waiting for approval):
    what it is, From (declared month now) → To (where Approve moves it), undo one or many
    ========================================================= */
-function PendingList({ state, busy, period, onUndo }) {
+function PendingList({ state, busy, canEdit, period, onUndo }) {
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState([]);            // ids of ticked rows
   const [mod, setMod] = useState("");                  // module filter
@@ -1024,11 +1058,12 @@ function PendingList({ state, busy, period, onUndo }) {
   const list = state.rows.filter((r) =>
     (!mod || r.module === mod) &&
     `${r.fullname} ${r.document_no} ${r.reference}`.toLowerCase().includes(q.trim().toLowerCase()));
-  const sum = (rows) => rows.reduce((t, r) => t + (Number(r.amount) || 0), 0);
+  const sum = (rows, k = "amount") => rows.reduce((t, r) => t + (Number(r[k]) || 0), 0);
 
   useEffect(() => { setPicked([]); }, [state.rows]);   // after an undo the list reloads → ticks cleared
 
   const ticked = list.filter((r) => picked.includes(r.id));
+  const cols = canEdit ? 12 : 10;
   const allOn = list.length > 0 && list.every((r) => picked.includes(r.id));
   const toggleAll = () => setPicked(allOn ? picked.filter((id) => !list.some((r) => r.id === id)) : [...new Set([...picked, ...list.map((r) => r.id)])]);
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -1043,9 +1078,9 @@ function PendingList({ state, busy, period, onUndo }) {
             {modules.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
         )}
-        {ticked.length > 0 && (
+        {canEdit && ticked.length > 0 && (
           <div className="vs-bulk">
-            <span className="vs-muted">{ticked.length} selected · <b>{n2(sum(ticked))}</b></span>
+            <span className="vs-muted">{ticked.length} selected · net <b>{n2(sum(ticked))}</b></span>
             <button type="button" className="btn btn-sm vs-undo" disabled={busy} onClick={() => onUndo(ticked)}>Undo ({ticked.length})</button>
             <button type="button" className="btn btn-sm" onClick={() => setPicked([])}>Clear</button>
           </div>
@@ -1059,21 +1094,27 @@ function PendingList({ state, busy, period, onUndo }) {
         <table className="vs-mini">
           <thead>
             <tr>
-              <th className="vs-check">
-                <input type="checkbox" checked={allOn} onChange={toggleAll} disabled={!list.length} aria-label="Select all" />
-              </th>
+              {canEdit && (
+                <th className="vs-check">
+                  <input type="checkbox" checked={allOn} onChange={toggleAll} disabled={!list.length} aria-label="Select all" />
+                </th>
+              )}
               <th>Date</th><th>Doc #</th><th>Reference</th><th>Customer / Vendor</th><th>Module</th>
-              <th>Declared month</th><th>VT / IT month</th><th className="vs-num">Amount</th><th className="vs-c">Action</th>
+              <th>Declared month</th><th>VT / IT month</th><th>Undeclared by</th>
+              <th className="vs-num" title="Net of VAT + VAT exempt + zero rated">Net amount</th><th className="vs-num">VAT</th>
+              {canEdit && <th className="vs-c">Action</th>}
             </tr>
           </thead>
           <tbody>
-            {state.loading && !state.rows.length && <tr><td colSpan={10} className="vs-empty">Loading…</td></tr>}
-            {!state.loading && !list.length && <tr><td colSpan={10} className="vs-empty">{state.rows.length ? "Nothing matches." : "No undeclared documents in this period."}</td></tr>}
+            {state.loading && !state.rows.length && <tr><td colSpan={cols} className="vs-empty">Loading…</td></tr>}
+            {!state.loading && !list.length && <tr><td colSpan={cols} className="vs-empty">{state.rows.length ? "Nothing matches." : "No undeclared documents in this period."}</td></tr>}
             {list.map((r) => (
               <tr key={r.id} className={`is-undeclared${picked.includes(r.id) ? " is-picked" : ""}`}>
-                <td className="vs-check">
-                  <input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} aria-label={`Select ${r.reference}`} />
-                </td>
+                {canEdit && (
+                  <td className="vs-check">
+                    <input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} aria-label={`Select ${r.reference}`} />
+                  </td>
+                )}
                 <td>{r.transaction_date ? fullDate(r.transaction_date) : "—"}</td>
                 <td className="vs-mono">{r.document_no || "—"}</td>
                 <td className="vs-mono">{r.reference}</td>
@@ -1085,19 +1126,104 @@ function PendingList({ state, busy, period, onUndo }) {
                   <span className="vs-to">{monthLabel(r.new_declared_month)}</span>
                 </td>
                 <td>{r.new_wh_declared_month ? monthLabel(r.new_wh_declared_month) : "—"}</td>
+                <td className="vs-who">{r.undeclared_by || "—"}{r.undeclared_at && <small>{r.undeclared_at}</small>}</td>
                 <td className="vs-num">{n2(r.amount)}</td>
-                <td className="vs-c">
-                  <button type="button" className="btn btn-sm vs-undo" disabled={busy} onClick={() => onUndo([r])}>Undo</button>
-                </td>
+                <td className="vs-num">{n2(r.vat)}</td>
+                {canEdit && (
+                  <td className="vs-c">
+                    <button type="button" className="btn btn-sm vs-undo" disabled={busy} onClick={() => onUndo([r])}>Undo</button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr><th /><th colSpan={7}>Total{ticked.length ? ` · selected ${n2(sum(ticked))}` : ""}</th><th className="vs-num">{n2(sum(list))}</th><th /></tr>
+            <tr>
+              {canEdit && <th />}
+              <th colSpan={8}>Total{ticked.length ? ` · selected ${n2(sum(ticked))}` : ""}</th>
+              <th className="vs-num">{n2(sum(list))}</th><th className="vs-num">{n2(sum(list, "vat"))}</th>{canEdit && <th />}
+            </tr>
           </tfoot>
         </table>
       </div>
-      <p className="vs-hint">Declared month: where the document is declared now → where Approve will move it. Undo takes it back off the list.</p>
+      <p className="vs-hint">Declared month: where the document is declared now → where Approve will move it.{canEdit ? " Undo takes it back off the list." : ""} Net amount = net of VAT + VAT exempt + zero rated (no VAT).</p>
+    </div>
+  );
+}
+
+/* =========================================================
+   approval history: one card per Approve (who / when), its documents From → To
+   ========================================================= */
+function HistoryList({ state, period }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState({});                 // group key → expanded
+  const needle = q.trim().toLowerCase();
+  const groups = state.groups
+    .map((g) => ({ ...g, rows: g.rows.filter((r) => `${r.fullname} ${r.document_no} ${r.reference} ${r.undeclared_by}`.toLowerCase().includes(needle)) }))
+    .filter((g) => g.rows.length || (!needle && !g.rows.length));
+  const isOpen = (g, i) => open[g.key] ?? i === 0;      // newest approval opens by itself
+
+  return (
+    <div className="vs-docs vs-hist">
+      <div className="vs-docs-bar">
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, doc #, reference or user" />
+        <span className="vs-muted vs-docs-count">{period} · {state.groups.length} approval{state.groups.length === 1 ? "" : "s"}</span>
+      </div>
+      {state.error && <div className="alert-error" role="alert">{state.error}</div>}
+      {state.loading && <div className="vs-empty">Loading…</div>}
+      {!state.loading && !groups.length && <div className="vs-empty">{state.groups.length ? "Nothing matches." : "No approved undeclared documents in this period."}</div>}
+      <div className="vs-hist-list">
+        {groups.map((g, i) => (
+          <section key={g.key} className={`vs-hist-card${isOpen(g, i) ? " is-open" : ""}`}>
+            <button type="button" className="vs-hist-head" onClick={() => setOpen((o) => ({ ...o, [g.key]: !isOpen(g, i) }))} aria-expanded={isOpen(g, i)}>
+              <span className="vs-hist-dot" aria-hidden="true">✓</span>
+              <span className="vs-hist-main">
+                <b>Approved {g.approved_at ? fullDate(g.approved_at.slice(0, 10)) : ""}{g.approved_at ? ` · ${g.approved_at.slice(11, 16)}` : ""}</b>
+                <small>by {g.approved_by || "—"}{g.approval_no ? ` · ${g.approval_no}` : ""}</small>
+              </span>
+              <span className="vs-hist-sum">
+                <span>{g.count} doc{g.count === 1 ? "" : "s"}</span>
+                <span>Net <b>{n2(g.net)}</b></span>
+                <span>VAT <b>{n2(g.vat)}</b></span>
+              </span>
+              <span className="vs-hist-caret" aria-hidden="true">▾</span>
+            </button>
+            {isOpen(g, i) && (
+              <div className="vs-docs-scroll">
+                <table className="vs-mini">
+                  <thead>
+                    <tr>
+                      <th>Date</th><th>Doc #</th><th>Reference</th><th>Customer / Vendor</th><th>Module</th>
+                      <th>Declared month</th><th>VT / IT month</th><th>Undeclared by</th>
+                      <th className="vs-num">Net amount</th><th className="vs-num">VAT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.rows.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.transaction_date ? fullDate(r.transaction_date) : "—"}</td>
+                        <td className="vs-mono">{r.document_no || "—"}</td>
+                        <td className="vs-mono">{r.reference}</td>
+                        <td className="vs-name" title={r.fullname || ""}>{r.fullname || "N/A"}</td>
+                        <td>{r.module}</td>
+                        <td className="vs-move">
+                          <span className="vs-from">{monthLabel(r.old_declared_month)}</span>
+                          <span className="vs-arrow" aria-label="to">→</span>
+                          <span className="vs-to is-done">{monthLabel(r.new_declared_month)}</span>
+                        </td>
+                        <td>{r.new_wh_declared_month ? monthLabel(r.new_wh_declared_month) : "—"}</td>
+                        <td className="vs-who">{r.undeclared_by || "—"}{r.undeclared_at && <small>{r.undeclared_at}</small>}</td>
+                        <td className="vs-num">{n2(r.amount)}</td>
+                        <td className="vs-num">{n2(r.vat)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

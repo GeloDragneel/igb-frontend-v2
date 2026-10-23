@@ -58,7 +58,11 @@ export default function PercentageTax() {
     const seq = useRef(0);
 
     useEffect(() => {
-        apiFetch("/reports/vat-clients/lookups").then(setLookups).catch(() => { });
+        apiFetch("/reports/vat-clients/lookups").then((lk) => {
+            setLookups(lk);
+            // a data analyst only sees the clients assigned to him (the server enforces it too)
+            if (lk?.my_da) setDaId(String(lk.my_da));
+        }).catch(() => { });
     }, []);
 
     const load = useCallback(async (f = from, t = to, st = statusId, da = daId) => {
@@ -143,6 +147,11 @@ export default function PercentageTax() {
     return (
         <div className="vs is-pt">
             <section className="card vs-bar">
+                <div className="vs-period">
+                    <span>2551-Q · Reporting period</span>
+                    <b>{used ? rangeLabel(used.from, used.to) : "—"}</b>
+                    {used && <small>{quarterEnd(used.to) ? "Quarter-end: earlier months' tax deducted" : "Not a quarter-end month: no prior filing deducted"}</small>}
+                </div>
                 <label className="vs-field"><span>From</span>
                     <input type="month" className="input" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
                 <label className="vs-field"><span>To</span>
@@ -153,8 +162,8 @@ export default function PercentageTax() {
                         {lookups.statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select></label>
                 <label className="vs-field"><span>Data analyst</span>
-                    <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)}>
-                        <option value="0">All</option>
+                    <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)} disabled={!!lookups.my_da}>
+                        {!lookups.my_da && <option value="0">All</option>}
                         {lookups.analysts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select></label>
                 <label className="vs-field vs-grow"><span>Find</span>

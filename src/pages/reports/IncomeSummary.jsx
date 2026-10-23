@@ -98,7 +98,11 @@ export default function IncomeSummary() {
     const seq = useRef(0);
 
     useEffect(() => {
-        apiFetch("/reports/vat-clients/lookups").then(setLookups).catch(() => { });
+        apiFetch("/reports/vat-clients/lookups").then((lk) => {
+            setLookups(lk);
+            // a data analyst only sees the clients assigned to him (the server enforces it too)
+            if (lk?.my_da) setDaId(String(lk.my_da));
+        }).catch(() => { });
     }, []);
 
     const load = useCallback(async (f = from, t = to, st = statusId, da = daId) => {
@@ -215,6 +219,10 @@ export default function IncomeSummary() {
     return (
         <div className="vs is-page">
             <section className="card vs-bar">
+                <div className="vs-period">
+                    <span>Reporting period</span>
+                    <b>{used ? rangeLabel(used.from, used.to) : "—"}</b>
+                </div>
                 <label className="vs-field"><span>From</span>
                     <input type="month" className="input" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
                 <label className="vs-field"><span>To</span>
@@ -225,8 +233,8 @@ export default function IncomeSummary() {
                         {lookups.statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select></label>
                 <label className="vs-field"><span>Data analyst</span>
-                    <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)}>
-                        <option value="0">All</option>
+                    <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)} disabled={!!lookups.my_da}>
+                        {!lookups.my_da && <option value="0">All</option>}
                         {lookups.analysts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select></label>
                 <label className="vs-field vs-grow"><span>Find</span>
@@ -279,7 +287,7 @@ export default function IncomeSummary() {
             </section>
 
             {stmt && (
-                <Modal title={`Income Statement : ${stmt.row.client_name}`} onClose={closeStmt} size="xlg">
+                <Modal title={`Income Statement : ${stmt.row.client_name}`} onClose={closeStmt} size="xl">
                     <div className="vs-ebir">
                         <div className="vs-ebir-bar">
                             <span className="vs-range">{used ? rangeLabel(used.from, used.to) : ""}</span>
