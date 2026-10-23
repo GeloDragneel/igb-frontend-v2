@@ -125,6 +125,7 @@ import DatabaseSettings from "./pages/administration/DatabaseSettings";
 import Archive from "./pages/administration/Archive";
 import { MessengerPage } from "./components/Messenger";
 import Notifications from "./pages/Notifications";
+import HelpSupport from "./pages/HelpSupport";
 // Built pages. Add new ones here as you make them;
 // everything else in the sidebar shows "Coming soon".
 const PAGES = {
@@ -259,6 +260,7 @@ const PAGES = {
   "/administration/archive": Archive,
 
   "/notifications": Notifications,
+  "/help": HelpSupport,
 };
 
 // Routes that are not in the sidebar (page tabs)

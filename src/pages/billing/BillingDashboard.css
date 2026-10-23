@@ -1210,3 +1210,14 @@
 .bd-total.is-dim {
   opacity: .4;
 }
+
+/* overpaid service: excess shown as a credit */
+.bd td.is-over,
+[class*="bd-"] td.is-over {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .bd td.is-over {
+  color: #4ade80;
+}

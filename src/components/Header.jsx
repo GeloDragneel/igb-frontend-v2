@@ -251,9 +251,9 @@ export default function Header({ onMenu }) {
                 <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
                 {theme === "dark" ? "Light mode" : "Dark mode"}
               </button>
-              <a role="menuitem" className="user-menu-item" href="mailto:support@example.com" onClick={() => setUserOpen(false)}>
+              <button role="menuitem" className="user-menu-item" onClick={() => { setUserOpen(false); navigate("/help"); }}>
                 <Icon name="help" size={17} /> Help &amp; support
-              </a>
+              </button>
 
               <div className="user-menu-sep" />
 

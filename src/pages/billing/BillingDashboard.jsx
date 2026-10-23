@@ -57,6 +57,8 @@ function optionAmounts(total, f = {}) {
 
 const PRINTS = ["C_RETURN", "PT_EO_SOA", "C_EO_SOA", "EO_SOA", "CLOSE", "PT_SOA", "C_SOA", "SOA"];   // CLOSE = Close SOA, same spot as before
 
+const r2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+
 export default function BillingDashboard() {
   const notify = useToast();
   const notifyRef = useRef(notify);          // effects don't re-run when the toast function changes
@@ -436,16 +438,30 @@ export default function BillingDashboard() {
                         {breakdownNote(s) && <small className="bd-net-note">{breakdownNote(s)}</small>}
                       </td>
                       <td className="n">{dead ? "" : n2(s.paid || 0)}</td>
-                      <td className={`n ${s.balance > 0.009 ? "is-due" : ""}`}>{dead ? "" : n2(s.balance)}</td>
+                      {(() => {
+                        // paid more than the bill (e.g. paid the gross 6,720 on a 6,669 bill) → show the excess as a credit
+                        const over = dead ? 0 : r2((Number(s.paid) || 0) - (Number(s.net) || 0));
+                        return (
+                          <td className={`n bd-net-cell ${s.balance > 0.009 ? "is-due" : over > 0.009 ? "is-over" : ""}`}
+                            title={over > 0.009 ? `Overpaid by ${n2(over)} — counted as a credit in the balance` : undefined}>
+                            {dead ? "" : over > 0.009 ? `(${n2(over)})` : n2(s.balance)}
+                            {over > 0.009 && <small className="bd-net-note">overpaid</small>}
+                          </td>
+                        );
+                      })()}
                       <td className="c">
                         <div className="bd-actions">
                           {dead ? (
                             <button className="btn btn-sm" onClick={() => setLogsFor(s)} title="Override logs">Logs</button>
                           ) : (
-                            <button className="btn btn-sm btn-primary" disabled={st === PAID || !(s.balance > 0.009)} onClick={() => payNow(s)}
+                            <button className="btn btn-sm btn-primary"
+                              disabled={st === PAID || !(s.balance > 0.009)}
+                              onClick={() => payNow(s)}
                               title={st === PAID ? "Already paid" : "Add payment for this service"}>Pay</button>
                           )}
-                          <button className="btn btn-sm" disabled={dead || st === PAID} onClick={() => setOptionsFor(s)}
+                          <button className="btn btn-sm"
+                            // disabled={dead || st === PAID} 
+                            onClick={() => setOptionsFor(s)}
                             title="VAT, withholding, discount">Option</button>
                           <button className="btn btn-sm" onClick={() => editService(s, dead)}
                             title={dead ? "View (void / cancelled)" : "Edit service"}>Edit</button>
@@ -459,7 +475,7 @@ export default function BillingDashboard() {
                 <tfoot>
                   <tr>
                     <td /><td colSpan={4}>Total · {rows.length} service{rows.length === 1 ? "" : "s"}{more ? " (first 500 – narrow the filters)" : ""}</td>
-                    <td className="n">{n2(sum("net"))}</td><td className="n">{n2(sum("paid"))}</td><td className="n">{n2(sum("balance"))}</td><td />
+                    <td className="n">{n2(sum("net"))}</td><td className="n">{n2(sum("paid"))}</td><td className="n" title="Total − Paid (overpayments count as credit, same as the Balance box)">{n2(sum("net") - sum("paid"))}</td><td />
                   </tr>
                 </tfoot>
               )}
@@ -538,7 +554,7 @@ export default function BillingDashboard() {
           onNeedOverride={(body) => setOverride({ kind: "price", serviceId: serviceForm.id, body })}
           onClose={() => setServiceForm(null)} onSaved={(m) => { setServiceForm(null); notify(m); load(); }} />
       )}
-      {optionsFor && <OptionsModal service={optionsFor} onClose={() => setOptionsFor(null)} onSaved={(m) => { setOptionsFor(null); notify(m); load(); }}
+      {optionsFor && <OptionsModal service={optionsFor} noteMax={Number(lk?.note_max) || 65535} onClose={() => setOptionsFor(null)} onSaved={(m) => { setOptionsFor(null); notify(m); load(); }}
         onPrint={() => setPrintJob({ type: "SOA2", serviceId: optionsFor.id, trans: optionsFor.trans_number, label: `SOA / item · ${optionsFor.service}` })} />}
       {printJob && <PrintModal transNumber={printJob.trans || t?.trans_number} job={printJob} onClose={() => setPrintJob(null)} />}
       {paymentForm && lk && (
@@ -641,7 +657,7 @@ export function ServiceModal({ initial, lk, transNumber, onClose, onSaved, onNee
 }
 
 /* ---------- VAT / withholding / discount (old modal_ServiceOptions) ---------- */
-export function OptionsModal({ service, onClose, onSaved, onPrint }) {
+export function OptionsModal({ service, onClose, onSaved, onPrint, noteMax = 65535 }) {
   const initialDisc = service.d_less_sc ? "SC" : service.d_less_sp ? "SP" : service.d_less_pwd ? "PWD" : service.d_less_others ? "Others" : "";
   const [vat, setVat] = useState(!!Number(service.d_vat));
   const [wh, setWh] = useState(!!Number(service.d_witholding));
@@ -704,7 +720,10 @@ export function OptionsModal({ service, onClose, onSaved, onPrint }) {
         <dt>Discount amount</dt><dd>({n2(discAmt)})</dd>
         <dt className="strong">Total</dt><dd className="bd-net">{n2(net)}</dd>
       </dl>
-      <Field label="Note"><textarea className="input" rows={3} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+      <Field label="Note">
+        <textarea className="input" rows={3} value={note} maxLength={noteMax} onChange={(e) => setNote(e.target.value.slice(0, noteMax))} />
+        <small className={`muted bd-note-count${note.length >= noteMax ? " is-due" : ""}`}>{note.length} / {noteMax}</small>
+      </Field>
     </Modal>
   );
 }

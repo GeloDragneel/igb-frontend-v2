@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SearchSelect from "../../components/SearchSelect";
-import { apiFetch } from "../../context/AuthContext";
-import { exportCsv } from "../../utils/exportRows";
+import { useAuth, apiFetch, apiBlob } from "../../context/AuthContext";
 import "./CollectionMonitoring.css";
 
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -21,6 +20,7 @@ const COLS = [
     { key: "date", label: "Payment date" },
     { key: "period", label: "Period" },
     { key: "amount", label: "Amount received", cls: "n" },
+    { key: "less", label: "Less / WH", cls: "n", noExport: true },
     { key: "col_type", label: "Col type", cls: "c" },
     { key: "service", label: "Service", cls: "c" },
     { key: "details", label: "Details", cls: "cmo-wide" },
@@ -32,6 +32,7 @@ const COLS = [
 ];
 
 export default function CollectionMonitoring() {
+    const { user } = useAuth();
     const [services, setServices] = useState([]);
     const [from, setFrom] = useState(FROM);
     const [to, setTo] = useState(TODAY);
@@ -96,14 +97,31 @@ export default function CollectionMonitoring() {
         });
         setPanel(null);
     };
+    // Excel: every row of the current filters (all pages) → xlsx
     const doExport = async () => {
         setExporting(true);
         setError("");
         try {
             const res = await apiFetch(`/monitoring/collection?${params({ export: "1" })}`);
-            const columns = COLS.map((c) => ({ label: c.label, money: c.money, value: (r) => r[c.key] }));
-            const totals = { client: `TOTAL (${res.total})`, amount: res.sum };
-            exportCsv(`Collection-Monitoring-${type}-${from}-to-${to}`, columns, res.rows || [], totals);
+            // the Excel template has fixed columns → Less / WH stays out of the file
+            const XCOLS = COLS.filter((c) => !c.noExport);
+            const head = ["#", ...XCOLS.map((c) => c.label)];
+            const rowsOut = (res.rows || []).map((r) => [
+                String(r.id ?? ""),
+                ...XCOLS.map((c) => (c.key === "amount" ? Math.round((Number(r.amount) || 0) * 100) / 100 : String(r[c.key] ?? ""))),
+            ]);
+            const total = ["", ...XCOLS.map((c) => (c.key === "client" ? `TOTAL (${res.total ?? rowsOut.length})` : c.key === "amount" ? Math.round((Number(res.sum) || 0) * 100) / 100 : ""))];
+            const { token } = await apiFetch("/print/collection-monitoring", {
+                method: "POST",
+                body: JSON.stringify({ from, to, type, head, rows: rowsOut, total }),
+            });
+            const blob = await apiBlob(`/print/collection-monitoring/${token}`);
+            const url = URL.createObjectURL(blob);
+            const a = Object.assign(document.createElement("a"), { href: url, download: `CollectionMonitoring-${user?.username || user?.id || ""}.xlsx` });
+            document.body.append(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
         } catch (e) {
             setError(e.message || "Couldn't export the collection monitoring.");
         } finally {
@@ -138,7 +156,7 @@ export default function CollectionMonitoring() {
                 <div className="cmo-actions">
                     {activeFilters > 0 && <button type="button" className="btn" onClick={() => setFilters({})}>Clear {activeFilters} filter{activeFilters > 1 ? "s" : ""}</button>}
                     <button type="button" className="btn btn-primary" onClick={load} disabled={loading}>{loading ? "Loading…" : "Search"}</button>
-                    <button type="button" className="btn" onClick={doExport} disabled={loading || exporting || !total}>{exporting ? "Exporting…" : "CSV"}</button>
+                    <button type="button" className="btn" onClick={doExport} disabled={loading || exporting || !total}>{exporting ? "Exporting…" : "Excel"}</button>
                 </div>
             </section>
 
@@ -179,6 +197,9 @@ export default function CollectionMonitoring() {
                                     <td className="c mono">{r.id}</td>
                                     {COLS.map((c) => {
                                         if (c.key === "amount") return <td key={c.key} className="n">{n2(r.amount)}</td>;
+                                        if (c.key === "less") {
+                                            return <td key={c.key} className="n" title={r.less_note || undefined}>{Number(r.less) ? n2(r.less) : "—"}</td>;
+                                        }
                                         if (c.key === "status") {
                                             return <td key={c.key} className="c">{r.status === "N/A" ? "N/A" : <span className={`cmo-badge ${r.status === "PAID" ? "is-paid" : "is-unpaid"}`}>{r.status}</span>}</td>;
                                         }
@@ -193,7 +214,7 @@ export default function CollectionMonitoring() {
                                 <th />
                                 {COLS.map((c) => (
                                     <th key={c.key} className={c.cls}>
-                                        {c.key === "client" ? "Total (all pages)" : c.key === "amount" ? (loading ? "" : n2(data?.sum)) : ""}
+                                        {c.key === "client" ? "Total (all pages)" : c.key === "amount" ? (loading ? "" : n2(data?.sum)) : c.key === "less" ? (loading ? "" : n2(data?.less_sum)) : ""}
                                     </th>
                                 ))}
                             </tr>
