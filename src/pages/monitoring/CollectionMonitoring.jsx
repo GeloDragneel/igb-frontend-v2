@@ -40,7 +40,7 @@ export default function CollectionMonitoring() {
     const [serviceId, setServiceId] = useState("0");
     const [filters, setFilters] = useState({});       // { key: [values] }
     const [pg, setPg] = useState({ key: "", n: 1 });
-    const [perPage, setPerPage] = useState(15);
+    const [perPage, setPerPage] = useState(25);        // 0 = All
     const [data, setData] = useState(null);           // { rows, total, sum, page, last_page }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -69,7 +69,8 @@ export default function CollectionMonitoring() {
         setLoading(true);
         setError("");
         try {
-            const res = await apiFetch(`/monitoring/collection?${params({ page: String(page), per_page: String(perPage) })}`);
+            // All → every row of the filters (same as the Excel export, max 50,000)
+            const res = await apiFetch(`/monitoring/collection?${params(perPage ? { page: String(page), per_page: String(perPage) } : { all: "1", export: "1" })}`);
             if (id !== reqId.current) return;
             setData(res);
             if (res.page !== page) setPage(res.page);
@@ -85,8 +86,9 @@ export default function CollectionMonitoring() {
     const serviceOpts = useMemo(() => [{ value: "0", label: "All" }, ...services.map((s) => ({ value: String(s.id), label: s.name }))], [services]);
     const rows = data?.rows || [];
     const total = data?.total || 0;
-    const pages = data?.last_page || 1;
-    const start = total ? (page - 1) * perPage + 1 : 0;
+    const pages = perPage ? data?.last_page || 1 : 1;   // All → one page
+    const size = perPage || total || 1;
+    const start = total ? (page - 1) * size + 1 : 0;
     const activeFilters = Object.keys(filters).length;
 
     const applyFilter = (key, values) => {
@@ -186,7 +188,7 @@ export default function CollectionMonitoring() {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading && Array.from({ length: Math.min(perPage, 12) }, (_, k) => (
+                            {loading && Array.from({ length: Math.min(perPage || 12, 12) }, (_, k) => (
                                 <tr key={`sk${k}`} className="cmo-sk">
                                     {Array.from({ length: COLS.length + 1 }, (_, j) => <td key={j}><span className="sk" /></td>)}
                                 </tr>
@@ -222,7 +224,7 @@ export default function CollectionMonitoring() {
                     </table>
                 </div>
                 <footer className="cmo-foot">
-                    <span>{loading ? "Loading…" : `${start ? `${start}–${Math.min(start + perPage - 1, total)}` : 0} of ${total} payment(s)`}</span>
+                    <span>{loading ? "Loading…" : `${start ? `${start}–${Math.min(start + size - 1, total)}` : 0} of ${total} payment(s)`}</span>
                     <Pager page={page} pages={pages} onPage={setPage} perPage={perPage} onPerPage={setPerPage} disabled={loading} />
                 </footer>
             </section>
@@ -248,6 +250,7 @@ function Pager({ page, pages, onPage, perPage, onPerPage, disabled }) {
                 Rows
                 <select className="input" value={perPage} onChange={(e) => onPerPage(Number(e.target.value))} aria-label="Rows per page">
                     {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n}</option>)}
+                    <option value={0}>All</option>
                 </select>
             </label>
             <button type="button" className="cmo-pg" onClick={() => onPage(page - 1)} disabled={disabled || page <= 1} aria-label="Previous page">‹</button>

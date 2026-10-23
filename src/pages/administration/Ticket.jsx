@@ -8,7 +8,7 @@ import "./Ticket.css";
 
 const STATUS = { 0: "Pending", 1: "Approved", 2: "Declined" };
 const TABS = [["0", "Pending"], ["1", "Approved"], ["2", "Declined"], ["all", "All"]];
-const TITLE = { sales: "Sales / Invoicing", purchase: "Purchases / Invoice", expense: "Expenses / Transaction" };
+const TITLE = { sales: "Sales / Invoicing", purchase: "Purchases / Invoice", expense: "Expenses / Transaction", importation: "Importation / Purchase Order", exportation: "Exportation / Sales" };
 const DISCOUNT = { 1: "Senior Citizen", 2: "PWD", 3: "Others" };
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -169,7 +169,7 @@ export default function AdminTicket() {
             </section>
 
             {view && (
-                <Modal size="xxlg" onClose={closeView}
+                <Modal size="xl" onClose={closeView}
                     title={(
                         <span className="at-mtitle">
                             {data ? TITLE[data.type] : view.row.module}
@@ -207,8 +207,13 @@ export default function AdminTicket() {
                                 </div>
                             )}
 
-                            <InvoiceView key={view.side} type={data.type} inv={inv} ticketNo={t.ticket_no} which={view.side}
-                                compare={view.side === "requested" && t.action !== "UNDECLARED" ? data.before : null} />
+                            {data.type === "importation" || data.type === "exportation" ? (
+                                <TradeView key={view.side} type={data.type} inv={inv} ticketNo={t.ticket_no} which={view.side}
+                                    compare={view.side === "requested" ? data.before : null} />
+                            ) : (
+                                <InvoiceView key={view.side} type={data.type} inv={inv} ticketNo={t.ticket_no} which={view.side}
+                                    compare={view.side === "requested" && t.action !== "UNDECLARED" ? data.before : null} />
+                            )}
                         </div>
                     )}
                 </Modal>
@@ -366,6 +371,80 @@ function InvoiceView({ type, inv, compare, ticketNo, which }) {
                 <Field label="Discount Type" changed={diff("discount_type_id")}>{DISCOUNT[inv.discount_type_id] || ""}</Field>
                 <Field label="Discount Amt" changed={diff("discount")}><span className="at-f-num">{n4(inv.discount)}</span></Field>
                 <Field label="Total" changed={diff("total")}><span className="at-f-num is-total">{n4(inv.total)}</span></Field>
+            </div>
+        </div>
+    );
+}
+
+/* Importation / Exportation ticket: their own fields and lines */
+function TradeView({ type, inv, compare, ticketNo, which }) {
+    const imp = type === "importation";
+    const lines = inv.lines || [];
+    const tot = inv.totals || {};
+    const diff = (k) => !!compare && String(compare[k] ?? "") !== String(inv[k] ?? "");
+    const diffTot = (k) => !!compare && String(compare.totals?.[k] ?? "") !== String(tot[k] ?? "");
+    const linesChanged = !!compare && JSON.stringify(compare.lines) !== JSON.stringify(inv.lines);
+    const cols = imp
+        ? [["total_landed_cost", "Total Landed Cost"], ["charges_from_custom", "Charges from Customs"], ["dutiable_value", "Dutiable Value"],
+        ["amount_of_vat", "VAT"], ["taxable_imports", "Taxable Imports"], ["exempt_imports", "Exempt Imports"]]
+        : [["quantity", "Qty"], ["fob_amount", `FOB (${inv.currency || ""})`], ["peso_amount", "Peso Amount"]];
+    const totals = imp
+        ? [["total_landed_cost", "Total Landed Cost"], ["total_charge_before", "Charges from Customs"], ["total_dutiable_value", "Dutiable Value"],
+        ["total_vat", "Total VAT"], ["total_taxable_imports", "Taxable Imports"], ["total_exempt_imports", "Exempt Imports"]]
+        : [["total_fob_amount", `Total FOB (${inv.currency || ""})`], ["total_peso_amount", "Total Peso Amount"]];
+    return (
+        <div className="at-inv">
+            <div className="at-iv-top">
+                <div className="at-form-ro">
+                    <Field label={imp ? "Seller" : "Buyer"} changed={diff("party")}>{inv.party}</Field>
+                    {(inv.party_address || []).map((a, i) => <Field key={i} label="">{a}</Field>)}
+                    <Field label={imp ? "Release Date" : "Export Date"} changed={diff("date")}>{dateLabel(inv.date)}</Field>
+                    <Field label="Invoice No" changed={diff("invoice_no")}>{inv.invoice_no}</Field>
+                    <Field label={imp ? "Import Entry No" : "Export Entry No"} changed={diff("entry_no")}>{inv.entry_no}</Field>
+                    <Field label={imp ? "Origin Country" : "Destination Country"} changed={diff("country")}>{inv.country}</Field>
+                    <Field label={imp ? "VAT Payment Date" : "Payment Date"} changed={diff("pay_date")}>{dateLabel(inv.pay_date)}</Field>
+                    <Field label="Currency" changed={diff("currency")}>{inv.currency}</Field>
+                    <Field label="Exchange Rate" changed={diff("ex_rate")}><span className="at-f-num">{inv.ex_rate}</span></Field>
+                    <Field label="Status" changed={diff("invoice_status_id")}>{inv.invoice_status || (inv.invoice_status_id === 5 ? "VOID" : "ACTIVE")}</Field>
+                    <Field label="Declared Month" changed={diff("declared_month")}>{monthLabel(inv.declared_month)}</Field>
+                    <Field label="Document Type" changed={diff("document_type")}>{inv.document_type}</Field>
+                    <Field label="Accounts" changed={diff("account")}>{inv.account}</Field>
+                    <Field label="Remarks" changed={diff("remarks")}>{inv.remarks}</Field>
+                    <Field label="Attachment" changed={diff("attachment")}>
+                        {inv.attachment ? <span className="at-f-file" title={inv.attachment}>{inv.attachment}</span> : ""}
+                    </Field>
+                </div>
+                <AttachmentViewer ticketNo={ticketNo} which={which} file={inv.attachment} />
+            </div>
+
+            <div className={`at-items${linesChanged ? " is-changed" : ""}`}>
+                <table>
+                    <thead>
+                        <tr>
+                            <th className="at-c-no">#</th><th>Description</th><th>Accounts</th>
+                            {cols.map(([k, l]) => <th key={k} className="at-num">{l}</th>)}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {lines.map((l, i) => (
+                            <tr key={i}>
+                                <td className="at-c-no">{i + 1}</td>
+                                <td title={l.description}>{[l.item_code, l.description].filter(Boolean).join(" - ") || "—"}</td>
+                                <td title={l.account}>{l.account || "—"}</td>
+                                {cols.map(([k]) => <td key={k} className="at-num">{n4(l[k])}</td>)}
+                            </tr>
+                        ))}
+                        {!lines.length && <tr><td colSpan={3 + cols.length} className="at-empty">No items.</td></tr>}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="at-foot-sum">
+                {totals.map(([k, l], i) => (
+                    <Field key={k} label={l} changed={diffTot(k)}>
+                        <span className={`at-f-num${i === totals.length - 1 || k === "total_landed_cost" ? " is-total" : ""}`}>{n4(tot[k])}</span>
+                    </Field>
+                ))}
             </div>
         </div>
     );

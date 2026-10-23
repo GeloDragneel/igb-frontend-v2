@@ -11,6 +11,15 @@ import { usePeriod } from "../../../context/PeriodContext";
 import { TradeTicketModal } from "./TradeDetail";
 import { countryName } from "./tradeConfig";
 
+// search text kept per browser tab (survives F5, going back to the list, switching tabs)
+const searchKey = (k) => `${k}.search`;
+const readSearch = (k) => { try { return sessionStorage.getItem(searchKey(k)) || ""; } catch { return ""; } };
+const saveSearch = (k, v) => { try { v ? sessionStorage.setItem(searchKey(k), v) : sessionStorage.removeItem(searchKey(k)); } catch { /* ignore */ } };
+
+// last loaded rows per list + account + period, kept while the app is open:
+// coming back shows the table right away (no skeleton) and refreshes quietly
+const rowsCache = new Map();
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const TABLE_HEIGHT = "calc(100vh - 375px)";
 
@@ -29,27 +38,49 @@ export default function TradeList({ cfg }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
-  const [journalFor, setJournalFor] = useState(null);
-  const [ticketFor, setTicketFor] = useState(null);
   const fromMonth = from.slice(0, 7);
   const toMonth = to.slice(0, 7);
+  const cacheKey = `${cfg.key}:${user?.id}:${user?.caid}:${fromMonth}:${toMonth}`;
+
+  const [rows, setRows] = useState(() => rowsCache.get(cacheKey) || []);
+  const [loading, setLoading] = useState(true);
+  // skeleton only until the first data has been shown
+  const [loadedOnce, setLoadedOnce] = useState(() => rowsCache.has(cacheKey));
+  const [error, setError] = useState("");
+  const [query, setQueryState] = useState(() => readSearch(cfg.key));
+  const setQuery = useCallback((v) => {
+    setQueryState((cur) => {
+      const next = typeof v === "function" ? v(cur) : v;
+      saveSearch(cfg.key, next);
+      return next;
+    });
+  }, [cfg.key]);
+  const [journalFor, setJournalFor] = useState(null);
+  const [ticketFor, setTicketFor] = useState(null);
+  const reqId = useRef(0);
 
   const load = useCallback(async () => {
+    const id = ++reqId.current;
+    // a period / account already seen → show it straight away while it refreshes
+    if (rowsCache.has(cacheKey)) setRows(rowsCache.get(cacheKey));
     setLoading(true);
     setError("");
     try {
-      setRows(await apiFetch(`${cfg.api}?from=${fromMonth}&to=${toMonth}`));
+      const data = await apiFetch(`${cfg.api}?from=${fromMonth}&to=${toMonth}`);
+      if (id !== reqId.current) return;           // an older request finished late
+      rowsCache.set(cacheKey, data);
+      setRows(data);
     } catch (e) {
+      if (id !== reqId.current) return;
       setError(e.message || `Couldn't load ${cfg.title.toLowerCase()}.`);
-      setRows([]);
+      if (!rowsCache.has(cacheKey)) setRows([]);  // keep what's on screen if we had it
     } finally {
-      setLoading(false);
+      if (id === reqId.current) {
+        setLoading(false);
+        setLoadedOnce(true);
+      }
     }
-  }, [cfg.api, cfg.title, fromMonth, toMonth]);
+  }, [cfg.api, cfg.title, fromMonth, toMonth, cacheKey]);
 
   useEffect(() => { load(); }, [load, user?.id, user?.caid]);
 
@@ -121,23 +152,64 @@ export default function TradeList({ cfg }) {
         </div>
       )}
 
-      <div className="sales-table">
-        <DataTable
-          bodyHeight={TABLE_HEIGHT}
-          columns={columns}
-          rows={loading ? [] : filtered}
-          rowKey="id"
-          exportName={`${cfg.key}-${fromMonth}-to-${toMonth}`}
-          showToolbar={false}
-          emptyText={loading ? "Loading…" : `No ${cfg.title.toLowerCase()} for this period.`}
-          onRowClick={open}
-          rowActions={rowActions}
-        />
-      </div>
+      {loading && !loadedOnce ? (
+        <TableSkeleton columns={columns} bodyHeight={TABLE_HEIGHT} label={`Loading ${cfg.title.toLowerCase()}`} />
+      ) : (
+        <div className="sales-table">
+          <DataTable
+            bodyHeight={TABLE_HEIGHT}
+            columns={columns}
+            rows={filtered}
+            rowKey="id"
+            exportName={`${cfg.key}-${fromMonth}-to-${toMonth}`}
+            showToolbar={false}
+            stateKey={cfg.key}
+            resetKey={query}
+            emptyText={`No ${cfg.title.toLowerCase()} for this period.`}
+            onRowClick={open}
+            rowActions={rowActions}
+          />
+        </div>
+      )}
 
       {journalFor && <JournalModal api={cfg.api} no={journalFor} onClose={() => setJournalFor(null)} />}
       {ticketFor && <TradeTicketModal cfg={cfg} ticketNo={ticketFor} onClose={() => setTicketFor(null)} />}
     </>
+  );
+}
+
+/* ---------- first-load skeleton (same as Sales) ---------- */
+function TableSkeleton({ columns, bodyHeight, label, rows = 10 }) {
+  const widths = ["70%", "55%", "60%", "65%", "60%", "50%", "55%", "45%", "40%"];
+  return (
+    <section className="card table-card" aria-busy="true" aria-label={label}>
+      <div className="table-scroll scroll-body" style={{ maxHeight: bodyHeight }}>
+        <table className="table">
+          <thead>
+            <tr>
+              {columns.map((c) => <th key={c.key} className={c.align ? `ta-${c.align}` : ""}>{c.label}</th>)}
+              <th className="ta-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: rows }).map((_, r) => (
+              <tr key={r}>
+                {columns.map((c, i) => (
+                  <td key={c.key} className={c.align ? `ta-${c.align}` : ""}>
+                    <span className={`sk sk-cell ${c.key === "status" ? "sk-pill" : ""}`} style={{ width: widths[i % widths.length] }} />
+                  </td>
+                ))}
+                <td className="ta-center"><span className="sk sk-dots" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="table-foot">
+        <span className="sk sk-foot" />
+        <span className="sk sk-foot sk-foot-sm" />
+      </div>
+    </section>
   );
 }
 
