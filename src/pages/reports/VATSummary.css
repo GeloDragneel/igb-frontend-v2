@@ -1211,6 +1211,38 @@
   border-top: 8px solid var(--card);
 }
 
+.hs-head {
+  cursor: pointer;
+}
+
+.hs-head:hover td {
+  background: color-mix(in srgb, var(--brand, #2563eb) 12%, var(--card));
+}
+
+.hs-caret {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform .15s;
+}
+
+.hs-caret:hover {
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
+}
+
+.hs-head.is-open .hs-caret {
+  transform: rotate(90deg);
+  color: var(--brand, #2563eb);
+}
+
 .hs-head-in {
   display: flex;
   flex-wrap: wrap;
@@ -1317,6 +1349,10 @@
 
 [data-theme="dark"] .hs-head td {
   background: rgba(59, 130, 246, .14);
+}
+
+[data-theme="dark"] .hs-head:hover td {
+  background: rgba(59, 130, 246, .24);
 }
 
 [data-theme="dark"] .hs-move b {

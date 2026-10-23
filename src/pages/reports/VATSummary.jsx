@@ -1176,6 +1176,9 @@ function HistoryList({ state, period, onSnap, onPrint, busy }) {
     .map((g) => ({ ...g, shown: g.rows.filter((r) => `${r.fullname} ${r.document_no} ${r.reference} ${r.undeclared_by} ${g.approved_by}`.toLowerCase().includes(needle)) }))
     .filter((g) => g.shown.length);
   const when = (ts) => (ts ? `${fullDate(ts.slice(0, 10))} · ${ts.slice(11, 16)}` : "—");
+  const [open, setOpen] = useState({});                 // all collapsed on first load
+  const isOpen = (g) => !!needle || !!open[g.key];      // a search opens the matching approvals
+  const toggle = (g) => setOpen((o) => ({ ...o, [g.key]: !o[g.key] }));
 
   return (
     <div className="hs">
@@ -1205,14 +1208,16 @@ function HistoryList({ state, period, onSnap, onPrint, busy }) {
           )}
           {groups.map((g) => (
             <tbody key={g.key} className="hs-group">
-              <tr className="hs-head">
+              <tr className={`hs-head${isOpen(g) ? " is-open" : ""}`} onClick={() => toggle(g)}>
                 <td colSpan={5}>
                   <div className="hs-head-in">
+                    <button type="button" className="hs-caret" aria-expanded={isOpen(g)} aria-label={isOpen(g) ? "Hide documents" : "Show documents"}
+                      onClick={(e) => { e.stopPropagation(); toggle(g); }}>▸</button>
                     <span className="hs-ok" aria-hidden="true">✓</span>
                     <b>Approved {when(g.approved_at)}</b>
                     <span className="hs-by">by {g.approved_by || "—"}</span>
                     <span className="hs-docs">{g.count} document{g.count === 1 ? "" : "s"}</span>
-                    <span className="hs-tools">
+                    <span className="hs-tools" onClick={(e) => e.stopPropagation()}>
                       {g.approval_no && <PrintMenu onPrint={(t) => onPrint(t, g)} busy={busy} />}
                       {g.snapshot
                         ? <button type="button" className="btn btn-sm hs-compare" onClick={() => onSnap(g)}>Compare before / after</button>
@@ -1223,7 +1228,7 @@ function HistoryList({ state, period, onSnap, onPrint, busy }) {
                 <td className="hs-num"><b>{n2(g.net)}</b></td>
                 <td className="hs-num"><b>{n2(g.vat)}</b></td>
               </tr>
-              {g.shown.map((r) => (
+              {isOpen(g) && g.shown.map((r) => (
                 <tr key={r.id} className="hs-row">
                   <td className="hs-name" title={r.fullname || ""}>{r.fullname || "N/A"}</td>
                   <td>
