@@ -259,6 +259,7 @@ export default function VatSummary() {
                             <>
                                 <Section tag="Sales" section="sales" block={data.sales} />
                                 <Section tag="Purchases" section="purchases" block={data.purchases} />
+                                {data.importation && <Section tag="Importation" section="importation" block={data.importation} />}
                                 <Section tag="Expenses" section="expenses" block={data.expenses} />
 
                                 <Total label="Total Purchases/Expenses" r={data.purch_exp} />
