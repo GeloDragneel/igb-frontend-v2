@@ -84,23 +84,70 @@ function filterStaffSection(section, access) {
   };
 }
 
-// Admin → Team: UserStaff only
-const STAFF_ONLY_LINKS = ["/team"];
+/* Team (m_user_client_staff) access rights: the ticked m_menu_data modules, sent at login as
+   rights (ids) + right_paths (their pages) + right_names (their names). A client-staff login sees only those
+   FEMS pages; NO rights ticked → everything. A menu item is allowed when its "m" id, its page or its name
+   matches a ticked module – so it works whatever routesMeta / m_menu_data look like. */
+// "Receivables" = "Receivable", "Charts of Account" = "Chart of Accounts" (singular / plural don't matter)
+const norm = (v) => String(v ?? "").trim().toLowerCase().split(/\s+/).map((w) => w.replace(/s$/, "")).join(" ");
+const rightsOf = (user) =>
+  user?.type === USER_TYPES.CLIENT_STAFF && Array.isArray(user?.rights) && user.rights.length
+    ? {
+      ids: new Set(user.rights.map(Number)),
+      paths: new Set((user.right_paths || []).map(String)),
+      names: new Set((user.right_names || []).map(norm)),
+    }
+    : null;
+const okRight = (rights, node) => {
+  if (!rights) return true;
+  if (node?.m != null && rights.ids.has(Number(node.m))) return true;
+  if (node?.to && rights.paths.has(node.to)) return true;
+  if (node?.label && rights.names.has(norm(node.label))) return true;
+  return false;
+};
 
-function buildNav(mode, access, userType) {
+function filterByRights(section, rights) {
+  if (!rights) return section;
+  return {
+    ...section,
+    // a group stays when at least one of its pages is ticked (ticking a page is enough)
+    entries: section.entries
+      .filter((e) => e.group || okRight(rights, e))
+      .map((e) => (e.group ? { ...e, items: e.items.filter((i) => okRight(rights, i)) } : e))
+      .filter((e) => !e.group || e.items.length),
+  };
+}
+
+// the menu node (entry or group item) that owns this URL
+function nodeOf(pathname) {
+  let best = null;
+  for (const s of NAV)
+    for (const e of s.entries) {
+      const nodes = e.group ? e.items.map((i) => ({ node: i, parent: e })) : [{ node: e, parent: null }];
+      for (const n of nodes) {
+        if (matches(pathname, n.node.to) && (!best || n.node.to.length > best.node.to.length)) best = n;
+      }
+    }
+  return best;
+}
+
+function buildNav(mode, access, userType, rights = null) {
   return NAV.filter((s) => MODES[mode].sections.includes(s.section))
     .map((s) => (s.section === "Staff" ? filterStaffSection(s, access) : s))
-    .map((s) => userType === USER_TYPES.STAFF ? s : { ...s, entries: s.entries.filter((e) => e.group || !STAFF_ONLY_LINKS.includes(e.to)) })
+    .map((s) => (s.section === "Staff" ? s : filterByRights(s, rights)))
     .filter((s) => s.entries.length);
 }
 
 // Is this URL allowed for this login? null = still loading (don't decide yet)
-function canOpen(pathname, userType, access, only) {
-  if (STAFF_ONLY_LINKS.some((to) => matches(pathname, to)) && userType !== USER_TYPES.STAFF) return false;
+function canOpen(pathname, userType, access, only, rights = null) {
   const m = modeOfPath(pathname);
   if (!m) return true;                                   // not a sidebar page (e.g. /profile)
-  if (only && m !== only) return false;                  // Client → FEMS only · Staff without clients → STAFF only
-  if (m !== "staff") return true;
+  if (only && m !== only) return false;                  // Client / client staff → FEMS only · Staff without clients → STAFF only
+  if (m !== "staff") {
+    if (!rights) return true;
+    const n = nodeOf(pathname);                          // client staff: the page must be ticked in Team
+    return !n || okRight(rights, n.node);
+  }
   if (!access) return null;
   if (access.all || !access.paths?.length) return true;  // no access set → everything
   return access.paths.some((to) => matches(pathname, to));
@@ -117,7 +164,7 @@ function lastTabOf(mode, user, access, only) {
   try {
     const tabs = JSON.parse(sessionStorage.getItem(`igb-tabs:${user?.id ?? user?.username ?? "guest"}`) || "[]");
     const mine = (Array.isArray(tabs) ? tabs : [])
-      .filter((t) => t?.key && t?.path && modeOfPath(t.key) === mode && canOpen(t.key, user?.type, access, only) === true)
+      .filter((t) => t?.key && t?.path && modeOfPath(t.key) === mode && canOpen(t.key, user?.type, access, only, rightsOf(user)) === true)
       .sort((a, b) => (b.used || 0) - (a.used || 0));
     return mine[0]?.path || null;
   } catch {
@@ -141,12 +188,19 @@ export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
   const { user } = useAuth();
 
   // /staff-access decides the switch:
-  //   UserClient → FEMS only · UserClientStaff → switch
+  //   UserClient / UserClientStaff (Team) → FEMS only (client staff: only the pages ticked in Team, none ticked → all)
   //   UserStaff  → switch if clients are assigned (or IT Officer / CEO / Supervisor / Audit Supervisor), else STAFF only
-  const isStaffType = user?.type === USER_TYPES.STAFF || user?.type === USER_TYPES.CLIENT_STAFF;
+  const isStaffType = user?.type === USER_TYPES.STAFF;
   const access = useStaffAccess(isStaffType, user?.id);
   const canSwitch = isStaffType && !!access?.switch;
   const only = !isStaffType ? "fems" : access?.only || null;
+  // Team rights; if they match NO FEMS page at all (menu names / pages set up differently) show everything
+  // instead of an empty menu, so nobody is locked out
+  const rights = useMemo(() => {
+    const r = rightsOf(user);
+    if (!r) return null;
+    return buildNav("fems", null, user?.type, r).length ? r : null;
+  }, [user]);
 
   const [savedMode, setSavedMode] = useState(
     () => modeOfPath(pathname) || readSavedMode() || "fems"
@@ -169,7 +223,7 @@ export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
 
   // until we know who this is (and, for staff, their /staff-access), show no menu at all
   const deciding = !user || (isStaffType && !access);
-  const nav = useMemo(() => (deciding ? [] : buildNav(mode, access, user?.type)), [deciding, mode, access, user?.type]);
+  const nav = useMemo(() => (deciding ? [] : buildNav(mode, access, user?.type, rights)), [deciding, mode, access, user?.type, rights]);
 
   const activeGroup = groupOf(pathname);
   const [expanded, setExpanded] = useState(activeGroup); // one group open at a time
@@ -190,7 +244,7 @@ export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
       return;
     }
     // last tab you used on that side; its start page only when it has no tabs yet
-    const target = lastTabOf(m, user, access, only) || firstLink(buildNav(m, access, user?.type));
+    const target = lastTabOf(m, user, access, only) || firstLink(buildNav(m, access, user?.type, rights));
     if (target) {
       navigate(target);
       onNavigate?.();
@@ -200,7 +254,7 @@ export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
   useEffect(() => {
     if (!pendingNav.current || !access || mode !== "staff") return;
     pendingNav.current = false;
-    const target = lastTabOf("staff", user, access, only) || firstLink(buildNav("staff", access, user?.type));
+    const target = lastTabOf("staff", user, access, only) || firstLink(buildNav("staff", access, user?.type, rights));
     if (target) {
       navigate(target);
       onNavigate?.();
@@ -210,20 +264,20 @@ export default function Sidebar({ open, collapsed, onNavigate, onReady }) {
   // typing a URL you have no access to → back to your first allowed page
   const notify = useToast();
   useEffect(() => {
-    const isStaffType = user?.type === USER_TYPES.STAFF || user?.type === USER_TYPES.CLIENT_STAFF;
+    const isStaffType = user?.type === USER_TYPES.STAFF;
     if (!user || (isStaffType && !access)) return;       // wait for /staff-access
-    if (canOpen(pathname, user.type, access, only) !== false) return;
+    if (canOpen(pathname, user.type, access, only, rights) !== false) return;
     notify("You don't have access to that page.", "error");
-    const home = firstLink(buildNav(only || modeOfPath(pathname) || "fems", access, user.type))
-      || firstLink(buildNav(only || "fems", access, user.type))
+    const home = firstLink(buildNav(only || modeOfPath(pathname) || "fems", access, user.type, rights))
+      || firstLink(buildNav(only || "fems", access, user.type, rights))
       || "/profile";
     navigate(home === pathname ? "/profile" : home, { replace: true });
-  }, [pathname, user?.type, access, only]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pathname, user?.type, access, only, rights]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const staffLoading = deciding;
 
   // tell the Layout when the page may be shown (login known + this URL allowed)
-  const ready = !deciding && canOpen(pathname, user.type, access, only) === true;
+  const ready = !deciding && canOpen(pathname, user.type, access, only, rights) === true;
   useEffect(() => {
     onReady?.(ready);
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps

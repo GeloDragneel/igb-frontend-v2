@@ -119,7 +119,7 @@ const readFilters = () => { try { return JSON.parse(sessionStorage.getItem(FKEY)
 const saveFilters = (f) => { try { sessionStorage.setItem(FKEY, JSON.stringify(f)); } catch { /* ignore */ } };
 // last client list per From / To / Status / DA, kept while the app is open → shown at once, refreshed quietly
 const rowsCache = new Map();
-const rowsKey = (f, t, st, da) => `${f}|${t}|${st}|${da}`;
+const rowsKey = (f, t, st, da, bs) => `${bs}|${f}|${t}|${st}|${da}`;
 
 export default function VATSummary() {
   const notify = useToast();
@@ -127,15 +127,25 @@ export default function VATSummary() {
   const [from, setFrom] = useState(saved.from || QUARTER_START);
   const [to, setTo] = useState(saved.to || THIS_MONTH);
   const [statusId, setStatusId] = useState(saved.statusId || "0");
-  const [daId, setDaId] = useState(saved.daId || "0");
+  // no Data analyst filter on screen any more: all analysts (a data analyst still gets only his clients – the server decides)
+  const [daId, setDaId] = useState("0");
   const [query, setQuery] = useState(saved.query || "");
-  const firstHit = rowsCache.get(rowsKey(from, to, statusId, daId));
+  // DM = declared month (default) · DE = date entry (when it was keyed in)
+  const [basis, setBasis] = useState(saved.basis === "DE" ? "DE" : "DM");
+  // Date entry → whole dates (date added), not months
+  const lastDay = (ym) => { const [y, m] = ym.split("-").map(Number); return `${ym}-${pad(new Date(y, m, 0).getDate())}`; };
+  const [dFrom, setDFrom] = useState(saved.dFrom || `${saved.from || QUARTER_START}-01`);
+  const [dTo, setDTo] = useState(saved.dTo || lastDay(saved.to || THIS_MONTH));
+  const qF = basis === "DE" ? dFrom : from;   // what the server is asked for
+  const qT = basis === "DE" ? dTo : to;
+  const firstHit = rowsCache.get(rowsKey(qF, qT, statusId, daId, basis));
   const [lookups, setLookups] = useState({ statuses: [], analysts: [] });
   // a data analyst can look (See adjustment, Print, History) but can't undeclare / undo / approve
   const canEdit = !lookups.my_da;
 
   const [rows, setRows] = useState(() => firstHit || []);
-  const [used, setUsed] = useState(() => (firstHit ? { from, to } : null)); // the filters behind the rows shown
+  // the filters behind the rows shown · from / to = months (E-BIR etc.) · qFrom / qTo = what was searched (months or dates)
+  const [used, setUsed] = useState(() => (firstHit ? { from: qF.slice(0, 7), to: qT.slice(0, 7), qFrom: qF, qTo: qT, basis } : null));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [branches, setBranches] = useState({}); // client_num → rows | "loading"
@@ -163,37 +173,39 @@ export default function VATSummary() {
     }).catch(() => { });
   }, []);
 
-  const load = useCallback(async (f = from, t = to, st = statusId, da = daId) => {
-    if (!f || !t) return notify("Pick the From and To months.", "error");
+  const load = useCallback(async (f, t, st = statusId, da = daId, bs = basis) => {
+    f = f ?? (bs === "DE" ? dFrom : from);
+    t = t ?? (bs === "DE" ? dTo : to);
+    if (!f || !t) return notify("Pick the From and To dates.", "error");
     if (f > t) return notify("From must be on or before To.", "error");
     const my = ++seq.current;
-    const key = rowsKey(f, t, st, da);
+    const key = rowsKey(f, t, st, da, bs);
     // seen before → show it straight away and refresh quietly (no "Loading…" over the table)
     if (rowsCache.has(key)) {
       setRows(rowsCache.get(key));
-      setUsed({ from: f, to: t });
+      setUsed({ from: f.slice(0, 7), to: t.slice(0, 7), qFrom: f, qTo: t, basis: bs });
     }
     setLoading(true);
     setError("");
     try {
-      const r = await apiFetch(`/reports/vat-clients?${new URLSearchParams({ from: f, to: t, status_id: st, da_id: da })}`);
+      const r = await apiFetch(`/reports/vat-clients?${new URLSearchParams({ from: f, to: t, status_id: st, da_id: da, basis: bs })}`);
       if (my !== seq.current) return;
       rowsCache.set(key, r.rows || []);
       setRows(r.rows || []);
-      setUsed({ from: f, to: t });
+      setUsed({ from: f.slice(0, 7), to: t.slice(0, 7), qFrom: f, qTo: t, basis: bs });
       setBranches({});
     } catch (e) {
       if (my === seq.current) setError(e.message || "Couldn't load the VAT summary.");
     } finally {
       if (my === seq.current) setLoading(false);
     }
-  }, [from, to, statusId, daId, notify]);
+  }, [from, to, dFrom, dTo, statusId, daId, basis, notify]);
 
   // remember the filters + search box
-  useEffect(() => { saveFilters({ from, to, statusId, daId, query }); }, [from, to, statusId, daId, query]);
+  useEffect(() => { saveFilters({ from, to, dFrom, dTo, statusId, daId, query, basis }); }, [from, to, dFrom, dTo, statusId, daId, query, basis]);
 
   // first load + the old page reloaded when Status / Data analyst changed
-  useEffect(() => { load(from, to, statusId, daId); }, [statusId, daId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(undefined, undefined, statusId, daId, basis); }, [statusId, daId, basis]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -215,7 +227,7 @@ export default function VATSummary() {
     }
     setBranches((b) => ({ ...b, [r.client_num]: "loading" }));
     try {
-      const res = await apiFetch(`/reports/vat-clients/branches?${new URLSearchParams({ from: used.from, to: used.to, client_num: r.client_num })}`);
+      const res = await apiFetch(`/reports/vat-clients/branches?${new URLSearchParams({ from: used.qFrom || used.from, to: used.qTo || used.to, basis: used.basis || "DM", client_num: r.client_num })}`);
       setBranches((b) => ({ ...b, [r.client_num]: res.rows || [] }));
     } catch (e) {
       setBranches((b) => { const n = { ...b }; delete n[r.client_num]; return n; });
@@ -227,7 +239,7 @@ export default function VATSummary() {
   const openAmount = async (r, col) => {
     setAmounts({ title: `${r.client_name} · ${col.label}`, rows: [], loading: true });
     try {
-      const list = await apiFetch(`/reports/vat-clients/amounts?${new URLSearchParams({ type: col.key, user_ids: r.user_ids, from: used.from, to: used.to })}`);
+      const list = await apiFetch(`/reports/vat-clients/amounts?${new URLSearchParams({ type: col.key, user_ids: r.user_ids, from: used.qFrom || used.from, to: used.qTo || used.to, basis: used.basis || "DM" })}`);
       setAmounts((a) => a && { ...a, rows: list, loading: false });
     } catch (e) {
       setAmounts((a) => a && { ...a, loading: false, error: e.message || "Couldn't load the documents." });
@@ -388,7 +400,7 @@ export default function VATSummary() {
         notify("Record successfully approved", "success");
         setConfirm(null);
         await loadEbir(ebir.row, "initial");
-        load(used.from, used.to);
+        load(used.qFrom || used.from, used.qTo || used.to);
       }
     } catch (e) {
       notify(e.message || "Something went wrong.", "error");
@@ -557,26 +569,43 @@ export default function VATSummary() {
   return (
     <div className="vs">
       <section className="card vs-bar">
-        <label className="vs-field">
-          <span>From</span>
-          <input type="month" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label className="vs-field">
-          <span>To</span>
-          <input type="month" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
+        <div className="vs-field">
+          <span>Filter by</span>
+          <div className="vs-seg vs-basis" role="radiogroup" aria-label="Filter by">
+            {[["DM", "Declared month"], ["DE", "Date entry"]].map(([v, l]) => (
+              <button key={v} type="button" role="radio" aria-checked={basis === v}
+                className={basis === v ? "is-on" : ""} onClick={() => setBasis(v)}>{l}</button>
+            ))}
+          </div>
+        </div>
+        {basis === "DE" ? (
+          <>
+            <label className="vs-field">
+              <span>Date from</span>
+              <input type="date" className="input" value={dFrom} onChange={(e) => setDFrom(e.target.value)} />
+            </label>
+            <label className="vs-field">
+              <span>Date to</span>
+              <input type="date" className="input" value={dTo} onChange={(e) => setDTo(e.target.value)} />
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="vs-field">
+              <span>From</span>
+              <input type="month" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label className="vs-field">
+              <span>To</span>
+              <input type="month" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
+            </label>
+          </>
+        )}
         <label className="vs-field">
           <span>Status</span>
           <select className="input" value={statusId} onChange={(e) => setStatusId(e.target.value)}>
             <option value="0">All status</option>
             {lookups.statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </label>
-        <label className="vs-field">
-          <span>Data analyst</span>
-          <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)} disabled={!!lookups.my_da}>
-            {!lookups.my_da && <option value="0">All</option>}
-            {lookups.analysts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </label>
         <label className="vs-field vs-grow">

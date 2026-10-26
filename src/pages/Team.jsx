@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Modal from "../components/Modal";
-import SearchSelect from "../components/SearchSelect";
 import { useToast } from "../components/Toast";
 import { useAuth, apiFetch } from "../context/AuthContext";
 
@@ -204,10 +203,6 @@ export default function Team() {
     const showingTo = Math.min(start + pageSize, members.length);
 
     const totalModules = data?.modules?.reduce((a, m) => a + 1 + m.children.length, 0) || 0;
-    const empOpts = [
-        { value: "", label: "Select employee" },
-        ...(data?.employees || []).map((e) => ({ value: String(e.id), label: e.name })),
-    ];
     const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
     const openForm = (m) => {
@@ -220,6 +215,7 @@ export default function Team() {
     };
 
     const save = async () => {
+        if (!form.fullname.trim()) return setFormError("Enter the full name.");
         if (!form.username.trim()) return setFormError("Enter a username.");
         if (!form.id && form.password.length < 4) return setFormError("Enter a password (at least 4 characters).");
         if (form.id && form.password && form.password.length < 4) return setFormError("The new password needs at least 4 characters.");
@@ -228,7 +224,7 @@ export default function Team() {
         try {
             const body = {
                 employee_id: form.employee_id ? Number(form.employee_id) : null,
-                fullname: form.fullname,
+                fullname: form.fullname.trim(),
                 username: form.username.trim(),
                 password: form.password || null,
                 is_active: form.is_active,
@@ -461,20 +457,17 @@ export default function Team() {
                     <div className="tm-form">
                         <fieldset className="tm-fs">
                             <legend>Information</legend>
-                            <div className="field">
-                                <span className="field-label">Employee</span>
-                                <SearchSelect
-                                    value={form.employee_id}
-                                    options={empOpts}
-                                    aria-label="Employee"
-                                    onChange={(v) =>
-                                        set({
-                                            employee_id: v,
-                                            fullname: data.employees.find((e) => String(e.id) === v)?.name || form.fullname,
-                                        })
-                                    }
+                            <label className="field">
+                                <span className="field-label">Full name</span>
+                                <input
+                                    className="input"
+                                    value={form.fullname || ""}
+                                    autoComplete="off"
+                                    placeholder="e.g. Juan Dela Cruz"
+                                    maxLength={150}
+                                    onChange={(e) => set({ fullname: e.target.value })}
                                 />
-                            </div>
+                            </label>
                             <label className="field">
                                 <span className="field-label">Username</span>
                                 <input
