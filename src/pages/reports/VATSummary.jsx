@@ -113,19 +113,29 @@ function cleanHtml(html) {
 /* =========================================================
    page
    ========================================================= */
+// filters kept per browser tab (survive F5, leaving the page and coming back, switching tabs)
+const FKEY = "reports.vatclients.filters";
+const readFilters = () => { try { return JSON.parse(sessionStorage.getItem(FKEY) || "null") || {}; } catch { return {}; } };
+const saveFilters = (f) => { try { sessionStorage.setItem(FKEY, JSON.stringify(f)); } catch { /* ignore */ } };
+// last client list per From / To / Status / DA, kept while the app is open → shown at once, refreshed quietly
+const rowsCache = new Map();
+const rowsKey = (f, t, st, da) => `${f}|${t}|${st}|${da}`;
+
 export default function VATSummary() {
   const notify = useToast();
-  const [from, setFrom] = useState(QUARTER_START);
-  const [to, setTo] = useState(THIS_MONTH);
-  const [statusId, setStatusId] = useState("0");
-  const [daId, setDaId] = useState("0");
-  const [query, setQuery] = useState("");
+  const saved = useMemo(readFilters, []);
+  const [from, setFrom] = useState(saved.from || QUARTER_START);
+  const [to, setTo] = useState(saved.to || THIS_MONTH);
+  const [statusId, setStatusId] = useState(saved.statusId || "0");
+  const [daId, setDaId] = useState(saved.daId || "0");
+  const [query, setQuery] = useState(saved.query || "");
+  const firstHit = rowsCache.get(rowsKey(from, to, statusId, daId));
   const [lookups, setLookups] = useState({ statuses: [], analysts: [] });
   // a data analyst can look (See adjustment, Print, History) but can't undeclare / undo / approve
   const canEdit = !lookups.my_da;
 
-  const [rows, setRows] = useState([]);
-  const [used, setUsed] = useState(null); // the filters behind the rows shown
+  const [rows, setRows] = useState(() => firstHit || []);
+  const [used, setUsed] = useState(() => (firstHit ? { from, to } : null)); // the filters behind the rows shown
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [branches, setBranches] = useState({}); // client_num → rows | "loading"
@@ -157,11 +167,18 @@ export default function VATSummary() {
     if (!f || !t) return notify("Pick the From and To months.", "error");
     if (f > t) return notify("From must be on or before To.", "error");
     const my = ++seq.current;
+    const key = rowsKey(f, t, st, da);
+    // seen before → show it straight away and refresh quietly (no "Loading…" over the table)
+    if (rowsCache.has(key)) {
+      setRows(rowsCache.get(key));
+      setUsed({ from: f, to: t });
+    }
     setLoading(true);
     setError("");
     try {
       const r = await apiFetch(`/reports/vat-clients?${new URLSearchParams({ from: f, to: t, status_id: st, da_id: da })}`);
       if (my !== seq.current) return;
+      rowsCache.set(key, r.rows || []);
       setRows(r.rows || []);
       setUsed({ from: f, to: t });
       setBranches({});
@@ -171,6 +188,9 @@ export default function VATSummary() {
       if (my === seq.current) setLoading(false);
     }
   }, [from, to, statusId, daId, notify]);
+
+  // remember the filters + search box
+  useEffect(() => { saveFilters({ from, to, statusId, daId, query }); }, [from, to, statusId, daId, query]);
 
   // first load + the old page reloaded when Status / Data analyst changed
   useEffect(() => { load(from, to, statusId, daId); }, [statusId, daId]); // eslint-disable-line react-hooks/exhaustive-deps

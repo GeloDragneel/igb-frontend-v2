@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../../components/Modal";
 import SearchSelect from "../../components/SearchSelect";
 import { useAuth, apiFetch, apiBlob } from "../../context/AuthContext";
@@ -16,6 +16,15 @@ const quarter = () => {
     return [`${y}-${p(s)}`, `${y}-${p(s + 2)}`];
 };
 
+// filters kept per browser tab and per client (survive F5, going to another page and back, switching tabs)
+const FKEY = (u) => `bir.vatsum.filters:${u?.id ?? ""}:${u?.caid ?? ""}`;
+const readFilters = (u) => { try { return JSON.parse(sessionStorage.getItem(FKEY(u)) || "null"); } catch { return null; } };
+const saveFilters = (u, f) => { try { sessionStorage.setItem(FKEY(u), JSON.stringify(f)); } catch { /* ignore */ } };
+
+// last results per client + filters, kept while the app is open: coming back shows the table at once
+// (no skeleton) and refreshes quietly
+const dataCache = new Map();
+
 /* =========================================================
    BIR & Tax → VAT Summary (2550-M/Q Summary)
    ========================================================= */
@@ -23,28 +32,43 @@ export default function VatSummary() {
     const { user } = useAuth();
     const { from: pFrom, to: pTo } = usePeriod();
 
-    const [filterType, setFilterType] = useState("DM");
-    const [mFrom, setMFrom] = useState(pFrom.slice(0, 7));   // e.g. 2026-01
-    const [mTo, setMTo] = useState(pTo.slice(0, 7)); // e.g. 2026-09
-    const [dFrom, setDFrom] = useState(pFrom); // e.g. 2026-01-01
-    const [dTo, setDTo] = useState(pTo); // e.g. 2026-09-30
-    const [account, setAccount] = useState("0");
-    const [branch, setBranch] = useState("all");
+    const saved = useMemo(() => readFilters(user), []); // eslint-disable-line react-hooks/exhaustive-deps
+    const [filterType, setFilterType] = useState(saved?.filterType || "DM");
+    const [mFrom, setMFrom] = useState(saved?.mFrom || pFrom.slice(0, 7));   // e.g. 2026-01
+    const [mTo, setMTo] = useState(saved?.mTo || pTo.slice(0, 7)); // e.g. 2026-09
+    const [dFrom, setDFrom] = useState(saved?.dFrom || pFrom); // e.g. 2026-01-01
+    const [dTo, setDTo] = useState(saved?.dTo || pTo); // e.g. 2026-09-30
+    const [account, setAccount] = useState(saved?.account || "0");
+    const [branch, setBranch] = useState(saved?.branch || "all");
 
-    // follow the Reporting Period when it changes
+    // follow the Reporting Period when it CHANGES (not on open — the saved filters win then)
+    const lastPeriod = useRef(`${pFrom}|${pTo}`);
     useEffect(() => {
+        const key = `${pFrom}|${pTo}`;
+        if (key === lastPeriod.current) return;
+        lastPeriod.current = key;
         setMFrom(pFrom.slice(0, 7));
         setMTo(pTo.slice(0, 7));
         setDFrom(pFrom);
         setDTo(pTo);
     }, [pFrom, pTo]);
 
-    const [data, setData] = useState(null);
+    // remember the filters
+    useEffect(() => {
+        saveFilters(user, { filterType, mFrom, mTo, dFrom, dTo, account, branch });
+    }, [user, filterType, mFrom, mTo, dFrom, dTo, account, branch]);
+
+    const cacheKey = (params) => `${user?.id}:${user?.caid}:${JSON.stringify(params)}`;
+    const firstParams = { filter_type: filterType, from: filterType === "DM" ? mFrom : dFrom, to: filterType === "DM" ? mTo : dTo, account_code: account, branch };
+    const firstHit = dataCache.get(cacheKey(firstParams));
+
+    const [data, setData] = useState(firstHit?.data || null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [used, setUsed] = useState(null);           // filters behind the data shown
-    const [paid1, setPaid1] = useState("0.00");
-    const [paid2, setPaid2] = useState("0.00");
+    const [used, setUsed] = useState(firstHit ? firstParams : null);           // filters behind the data shown
+    const [paid1, setPaid1] = useState(firstHit?.paid1 ?? "0.00");
+    const [paid2, setPaid2] = useState(firstHit?.paid2 ?? "0.00");
+    const reqId = useRef(0);
     const [detail, setDetail] = useState(null);       // popup
     const [printing, setPrinting] = useState(false);
 
@@ -53,20 +77,44 @@ export default function VatSummary() {
         const to = filterType === "DM" ? mTo : dTo;
         if (!from || !to) return setError("Choose both dates.");
         const params = { filter_type: filterType, from, to, account_code: account, branch };
-        setLoading(true);
+        const key = cacheKey(params);
+        const hit = dataCache.get(key);
+        const id = ++reqId.current;
+        // seen before → show it straight away (no skeleton) and refresh quietly
+        if (hit) {
+            setData(hit.data);
+            setUsed(params);
+            setPaid1(hit.paid1);
+            setPaid2(hit.paid2);
+        } else {
+            setLoading(true);
+        }
         setError("");
         try {
             const r = await apiFetch(`/reports/vat-summary?${new URLSearchParams(params)}`);
+            if (id !== reqId.current) return;             // an older search finished late
+            const p1 = hit ? hit.paid1 : n2(r.less.first);   // keep what the user typed
+            const p2 = hit ? hit.paid2 : n2(r.less.second);
+            dataCache.set(key, { data: r, paid1: p1, paid2: p2 });
             setData(r);
             setUsed(params);
-            setPaid1(n2(r.less.first));
-            setPaid2(n2(r.less.second));
+            setPaid1(p1);
+            setPaid2(p2);
         } catch (e) {
+            if (id !== reqId.current) return;
             setError(e.message || "Couldn't load the VAT summary.");
         } finally {
-            setLoading(false);
+            if (id === reqId.current) setLoading(false);
         }
-    }, [filterType, mFrom, mTo, dFrom, dTo, account, branch]);
+    }, [filterType, mFrom, mTo, dFrom, dTo, account, branch, user?.id, user?.caid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // typed 1st / 2nd month tax paid are kept with the cached result
+    useEffect(() => {
+        if (!used) return;
+        const key = cacheKey(used);
+        const hit = dataCache.get(key);
+        if (hit) dataCache.set(key, { ...hit, paid1, paid2 });
+    }, [paid1, paid2]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // search on open, when the client changes, and when the Reporting Period changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
