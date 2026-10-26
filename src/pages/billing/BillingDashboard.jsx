@@ -7,6 +7,7 @@ import SearchSelect from "../../components/SearchSelect";
 import Badge from "../../components/Badge";
 import { useToast } from "../../components/Toast";
 import { apiFetch, apiBlob } from "../../context/AuthContext";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./BillingDashboard.css";
 
 const PAID = 1, VOID = 5, CANCELLED = 9;
@@ -96,6 +97,30 @@ export default function BillingDashboard() {
   const [confirmClose, setConfirmClose] = useState(false);
   const [printJob, setPrintJob] = useState(null);     // { type, serviceId?, label }
 
+  // opened from a notification (or any link): /billing/dashboard?ca_id=12&groups=eo&status=open
+  const location = useLocation();
+  const navigate = useNavigate();
+  const keepTrans = useRef("");                       // SOA to pick once the account's periods are loaded
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    if (![...p.keys()].length) return;
+    const ca = p.get("ca_id") || "";
+    const cn = p.get("client_num") || "";
+    if (ca) {
+      setViewBy("business"); setClientNum(""); setCPeriod("");
+      keepTrans.current = p.get("trans_number") || "";
+      setCaid(ca);
+    } else if (cn) {
+      setViewBy("client"); setCaid(""); setTransNumber("");
+      setClientNum(cn);
+    }
+    setGroups((p.get("groups") || "").split(",").filter((g) => TYPE_OPTS.some(([v]) => v === g)));
+    setStatus(p.get("status") || "");
+    setQuery(p.get("q") || "");
+    setTab("services");
+    navigate(location.pathname, { replace: true });   // clean address: a refresh doesn't fill it again
+  }, [location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     let alive = true;
     (lookupsCache ??= apiFetch("/billing/lookups").catch((e) => { lookupsCache = null; throw e; }))
@@ -128,8 +153,15 @@ export default function BillingDashboard() {
     setAccount(null);
     setTransNumber("");
     if (!caid) return;
-    apiFetch(`/billing/accounts/${caid}`).then((a) => alive && setAccount(a)).catch((e) => alive && notifyRef.current(e.message, "error"));
+    apiFetch(`/billing/accounts/${caid}`).then((a) => {
+      if (!alive) return;
+      setAccount(a);
+      // a link asked for one SOA – pick it when this account has it
+      if (keepTrans.current && (a?.periods || []).some((p) => p.trans_number === keepTrans.current)) setTransNumber(keepTrans.current);
+      keepTrans.current = "";
+    }).catch((e) => alive && notifyRef.current(e.message, "error"));
     return () => { alive = false; };
+
   }, [caid]);
 
   const params = useMemo(() => {
