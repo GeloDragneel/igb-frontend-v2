@@ -54,12 +54,24 @@ export default function ReportGenerator() {
     const [openList, setOpenList] = useState(false);
     const [error, setError] = useState("");
 
-    const [run, setRun] = useState(null);        // { items: [{key,label,status,rows,ms,error}], zipping, done, file }
+    const [run, setRun] = useState(null); // { items: [{key,label,status,rows,ms,error}], zipping, done, file }
     const stop = useRef(false);
 
     useEffect(() => {
-        apiFetch("/report-generator/clients").then((c) => setClients(c || [])).catch((e) => setError(e.message || "Couldn't load the clients."));
+        apiFetch("/report-generator/clients")
+            .then((c) => {
+                const list = c || [];
+                setClients(list);
+                if (list.length === 1) { setClientNum(list[0].client_num); setBranch("all"); return; } // client / client staff → his own client, all branches
+                // staff → preselect the branch he is currently on (still shows every client & branch)
+                for (const c of list) {
+                    const cur = (c.branches || []).find((b) => b.current);
+                    if (cur) { setClientNum(c.client_num); setBranch(String(cur.id)); break; }
+                }
+            })
+            .catch((e) => setError(e.message || "Couldn't load the clients."));
     }, []);
+
     useEffect(() => { setFrom(pFrom.slice(0, 7)); setTo(pTo.slice(0, 7)); setDFrom(pFrom); setDTo(pTo); }, [pFrom, pTo]);
 
     const client = clients.find((c) => c.client_num === clientNum);

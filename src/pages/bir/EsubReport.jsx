@@ -56,6 +56,34 @@ async function saveWithDialog(filename, content) {
     return { status: "downloaded", name: filename };
 }
 
+// several DAT files (one per month): pick a folder once where the browser supports it, normal downloads otherwise
+async function saveManyDat(files) {
+    if (window.showDirectoryPicker) {
+        try {
+            const dir = await window.showDirectoryPicker({ mode: "readwrite" });
+            for (const f of files) {
+                const handle = await dir.getFileHandle(f.filename, { create: true });
+                const writable = await handle.createWritable();
+                await writable.write(new Blob([f.content], { type: "text/plain" }));
+                await writable.close();
+            }
+            return { status: "saved", folder: dir.name };
+        } catch (e) {
+            if (e.name === "AbortError") return { status: "cancelled" };
+        }
+    }
+    for (const f of files) {
+        const url = URL.createObjectURL(new Blob([f.content], { type: "application/octet-stream" }));
+        const a = Object.assign(document.createElement("a"), { href: url, download: f.filename });
+        document.body.append(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        await new Promise((ok) => setTimeout(ok, 400));   // a short gap so the browser takes every file
+    }
+    return { status: "downloaded" };
+}
+
 /* =========================================================
    BIR & Tax → E-Sub Report (DAT files)
    ========================================================= */
@@ -129,6 +157,21 @@ export default function EsubReport() {
     const current = async () => (data?.key === paramsKey ? data : await load());
 
     const saveDat = async (r) => {
+        // more than one month (e.g. Jul 2026 – Sep 2026) → one DAT per month: Jul, Aug, Sep
+        const months = r.dat.files;
+        if (Array.isArray(months) && months.length) {
+            const ok = months.filter((f) => f.content);
+            const bad = months.filter((f) => !f.content);
+            if (!ok.length) { notify(`No DAT saved – ${bad.map((f) => f.label).join(", ")} still ha${bad.length === 1 ? "s" : "ve"} errors. View that month to fix them.`); return; }
+            const res = await saveManyDat(ok);
+            if (res.status === "cancelled") return;
+            const names = ok.map((f) => f.label).join(", ");
+            notify(res.status === "saved"
+                ? `Saved ${ok.length} DAT file${ok.length === 1 ? "" : "s"} (${names}) to ${res.folder}`
+                : `Downloaded ${ok.length} DAT file${ok.length === 1 ? "" : "s"} (${names}) to your Downloads folder`);
+            if (bad.length) notify(`Not saved: ${bad.map((f) => `${f.label} (${f.errors} error${f.errors === 1 ? "" : "s"})`).join(", ")} – view that month to fix them.`);
+            return;
+        }
         const res = await saveWithDialog(r.dat.filename, r.dat.content);
         if (res.status === "saved") notify(`Saved ${res.name}`);
         else if (res.status === "downloaded") notify(`Downloaded ${res.name} to your Downloads folder`);
@@ -315,7 +358,7 @@ export default function EsubReport() {
 
                             <div className="es-meta no-print">
                                 <span>{shown.rows.length} line{shown.rows.length === 1 ? "" : "s"}</span>
-                                <span className="mono">{shown.dat.filename}</span>
+                                <span className="mono">{shown.dat.files?.length ? shown.dat.files.map((f) => f.filename).join(" · ") : shown.dat.filename}</span>
                             </div>
 
                             <div className="rp-scroll es-scroll">
@@ -448,7 +491,7 @@ function DatCheck({ check, onClose, onLine, onDownload }) {
             size="xlg"
             footer={
                 <>
-                    <span className="muted small es-chk-foot">{check.data.dat?.filename}</span>
+                    <span className="muted small es-chk-foot">{check.data.dat?.files?.length ? `${check.data.dat.files.length} DAT files (one per month)` : check.data.dat?.filename}</span>
                     <button className="btn" onClick={onClose}>Close</button>
                     {canDownload && <button className="btn btn-primary" onClick={onDownload}>{v.warnings.length ? "Download anyway" : "Download DAT"}</button>}
                 </>
@@ -482,12 +525,13 @@ function DatCheck({ check, onClose, onLine, onDownload }) {
                 <div className="es-chk-scroll">
                     <table className="table es-chk-table">
                         <thead>
-                            <tr><th className="ta-right">Line</th><th>Reference</th><th>TIN</th><th>Registered name</th><th>Field</th><th>Problem</th></tr>
+                            <tr><th className="ta-right">Line</th><th>Branch</th><th>Reference</th><th>TIN</th><th>Registered name</th><th>Field</th><th>Problem</th></tr>
                         </thead>
                         <tbody>
                             {list.map((x, i) => (
                                 <tr key={i} className={x.line ? "is-link" : ""} onClick={() => onLine(x.line)} title={x.line ? "Show this line in the report" : undefined}>
                                     <td className="ta-right mono">{x.line ?? "Header"}</td>
+                                    <td className="es-chk-branch" title={x.branch}>{x.branch || "—"}</td>
                                     <td className="mono">{x.ref || "—"}</td>
                                     <td className="mono">{x.tin ? fmtTin(x.tin) : "—"}</td>
                                     <td className="es-chk-name" title={x.name}>{x.name || "—"}</td>
