@@ -116,6 +116,7 @@ import IncomeSummary from "./pages/reports/IncomeSummary";
 import PercentageTax from "./pages/reports/PercentageTax";
 import ExpandedWithholdingTax from "./pages/reports/ExpandedWithholdingTax";
 import RevertedSummary from "./pages/reports/RevertedSummary";
+import BirReturnSummary from "./pages/reports/BirReturnSummary";
 
 import Ticket from "./pages/administration/Ticket";
 import DeclaredMonthSettings from "./pages/administration/DeclaredMonthSettings";
@@ -251,6 +252,7 @@ const PAGES = {
   "/reports/percentage-tax": PercentageTax,
   "/reports/expanded-withholding-tax": ExpandedWithholdingTax,
   "/reports/reverted-summary": RevertedSummary,
+  "/reports/bir-return-summary": BirReturnSummary,
 
   "/administration/admin-ticket": Ticket,
   "/administration/declared-month-settings": DeclaredMonthSettings,

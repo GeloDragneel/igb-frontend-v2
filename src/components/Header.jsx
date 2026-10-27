@@ -100,13 +100,30 @@ export default function Header({ onMenu }) {
     : <Avatar name={profile.name} size={size} />);
 
   /* ---------- Staff: branch list (same rules as the old query) ---------- */
-  /* ---------- branch list (all user types) ---------- */
-  const [branches, setBranches] = useState([]);
+  /* ---------- branch list (all user types) – cached per login in this browser ---------- */
+  const branchKey = user ? `hd-branches:${user.type}:${user.login_id ?? user.id}` : null;
+  const readBranches = (k) => {
+    if (!k) return [];
+    try { return JSON.parse(localStorage.getItem(k) || "[]") || []; } catch { return []; }
+  };
+  const [branches, setBranches] = useState(() => readBranches(branchKey));
 
   useEffect(() => {
-    if (!user) return;
-    apiFetch("/branches").then(setBranches).catch(() => setBranches([]));
-  }, [user]);
+    if (!user || !branchKey) return;
+    let alive = true;
+    const cached = readBranches(branchKey);
+    if (cached.length) setBranches(cached);                       // instant
+    apiFetch("/branches")
+      .then((list) => {
+        if (!alive) return;
+        const rows = Array.isArray(list) ? list : [];
+        setBranches(rows);
+        try { localStorage.setItem(branchKey, JSON.stringify(rows)); } catch { /* full / private window */ }
+      })
+      .catch(() => { if (alive && !cached.length) setBranches([]); });   // offline → keep the cached list
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchKey]);
 
   // The account you're logged in to right now
   const currentCaid = user?.caid ?? null;
@@ -172,6 +189,7 @@ export default function Header({ onMenu }) {
         value={currentCaid != null ? String(currentCaid) : ""}
         onChange={pickBranch}
         options={branchOptions}
+        rememberKey={`hd-branch-search:${user?.login_id ?? user?.id ?? ""}`}
         placeholder={user?.type === "Staff" ? "NO CLIENT SELECTED" : user?.business_name || "Select branch"}
         searchPlaceholder="Search branch..."
         aria-label="Select client account"

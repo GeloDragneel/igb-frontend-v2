@@ -13,6 +13,7 @@ import Icon from "./Icons";
     variant="input" | "cell"      // "cell" = borderless, for the spreadsheet grid
     onAddNew={(typedText) => ...} // optional: shows an "Add new" button at the bottom
     addNewLabel="Add new account"
+    rememberKey="hd-branch-search" // optional: keeps the last search (this browser) – shown again, selected, on the next open
   />
 
   Any extra props (aria-label, data-*, onKeyDown...) go on the trigger button.
@@ -29,6 +30,7 @@ export default function SearchSelect({
     onKeyDown,
     onAddNew,
     addNewLabel = "Add new",
+    rememberKey,
     ...rest
 }) {
     const [open, setOpen] = useState(false);
@@ -38,6 +40,18 @@ export default function SearchSelect({
     const trigger = useRef(null);
     const pop = useRef(null);
     const list = useRef(null);
+    const search = useRef(null);
+
+    // last search, kept in this browser when rememberKey is given
+    const recall = () => {
+        if (!rememberKey) return "";
+        try { return localStorage.getItem(`ss-q:${rememberKey}`) || ""; } catch { return ""; }
+    };
+    const keep = (q) => {
+        if (!rememberKey) return;
+        try { q ? localStorage.setItem(`ss-q:${rememberKey}`, q) : localStorage.removeItem(`ss-q:${rememberKey}`); } catch { /* private window */ }
+    };
+    const typeQuery = (q) => { setQuery(q); keep(q); };
 
     // one option per value: duplicate values made React reuse old rows, so the list didn't follow the search
     const unique = useMemo(() => {
@@ -66,22 +80,32 @@ export default function SearchSelect({
         const r = trigger.current?.getBoundingClientRect();
         if (!r) return;
         const width = Math.max(r.width, 300);
-        const spaceBelow = window.innerHeight - r.bottom;
-        const up = spaceBelow < 300 && r.top > spaceBelow;
+        // the whole popup (search + list + "Add new") must fit on screen: open on the side with more room
+        // and shrink the list to the space there – the "Add new" button was cut off at the bottom
+        const want = 320;
+        const spaceBelow = window.innerHeight - r.bottom - 12;
+        const spaceAbove = r.top - 12;
+        const up = spaceBelow < want && spaceAbove > spaceBelow;
+        const maxHeight = Math.max(150, Math.min(want, up ? spaceAbove : spaceBelow));
         setPos({
-            left: Math.min(r.left, window.innerWidth - width - 8),
+            left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
             width,
+            maxHeight,
             ...(up ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
         });
     };
 
     const openWith = (text = "") => {
         if (disabled) return;
-        setQuery(text);
+        const remembered = !text ? recall() : "";
+        if (text) keep(text);
+        setQuery(text || remembered);
         const idx = unique.findIndex((o) => String(o.value) === String(value));
-        setActive(text ? 0 : Math.max(0, idx));
+        setActive(text || remembered ? 0 : Math.max(0, idx));
         place();
         setOpen(true);
+        // the remembered search comes back selected: type to replace it, or keep it and pick
+        if (remembered) requestAnimationFrame(() => search.current?.select());
     };
 
     const close = (refocus = true) => {
@@ -129,7 +153,13 @@ export default function SearchSelect({
         list.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
     }, [active, open]);
 
-    useEffect(() => setActive(0), [query]);
+    useEffect(() => {
+        if (!open) return;
+        // keep the current account highlighted when it's in the (remembered) results
+        const idx = filtered.findIndex((o) => String(o.value) === String(value));
+        setActive(idx >= 0 ? idx : 0);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [query]);
 
     /* ---------- keyboard ---------- */
     const onTriggerKey = (e) => {
@@ -197,12 +227,13 @@ export default function SearchSelect({
             {open && pos &&
                 createPortal(
                     <div className="ss-pop" ref={pop} style={pos}>
-                        <div className="ss-search">
+                        <div className="ss-search" style={{ flex: "none" }}>
                             <Icon name="search" size={15} />
                             <input
                                 autoFocus
+                                ref={search}
                                 value={query}
-                                onChange={(e) => setQuery(e.target.value)}
+                                onChange={(e) => typeQuery(e.target.value)}
                                 onKeyDown={onSearchKey}
                                 placeholder={searchPlaceholder}
                                 role="combobox"
@@ -212,7 +243,7 @@ export default function SearchSelect({
                                 aria-label="Search options"
                             />
                         </div>
-                        <ul className="ss-list" role="listbox" id={listId} ref={list}>
+                        <ul className="ss-list" role="listbox" id={listId} ref={list} style={{ flex: "1 1 auto", minHeight: 0 }}>
                             {filtered.length === 0 && <li className="ss-empty">No results for “{query}”</li>}
                             {filtered.map((o, i) => (
                                 <li
@@ -238,6 +269,7 @@ export default function SearchSelect({
                             <button
                                 type="button"
                                 className="ss-add"
+                                style={{ flex: "none" }}
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={addNew}
                             >

@@ -9,6 +9,10 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 import SearchSelect from "../../components/SearchSelect";
 import { useToast } from "../../components/Toast";
 import { useAuth, apiFetch } from "../../context/AuthContext";
+import { ContactForm } from "../setup/Contacts";
+import { AccountForm } from "../setup/ChartOfAccounts";
+import { ACCOUNT_TYPES } from "../../data/sampleData";
+import { useLookups } from "../../context/LookupsContext";
 
 const API = "/fixed-assets";
 const ROUTE = "/task/fixed-assets";
@@ -36,6 +40,7 @@ export default function FixedAssets() {
 
   const [rows, setRows] = useState([]);
   const [accounts, setAccounts] = useState(null);
+  const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -61,12 +66,13 @@ export default function FixedAssets() {
 
   useEffect(() => { load(); }, [load, user?.id, user?.caid]);
   useEffect(() => { apiFetch(`${API}/accounts`).then(setAccounts).catch(() => setAccounts([])); }, [user?.id, user?.caid]);
+  useEffect(() => { apiFetch(`${API}/vendors`).then((v) => setVendors(v || [])).catch(() => setVendors([])); }, [user?.id, user?.caid]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) =>
       (!status || r.status === status) &&
-      (!q || [r.asset_no, r.name, r.category, r.location, r.serial_no].join(" ").toLowerCase().includes(q))
+      (!q || [r.asset_no, r.name, r.category, r.location, r.serial_no, r.vendor_name].join(" ").toLowerCase().includes(q))
     );
   }, [rows, query, status]);
 
@@ -78,12 +84,12 @@ export default function FixedAssets() {
   }), [filtered]);
 
   const openNew = () => setEdit({
-    id: null, name: "", category: "", description: "", location: "", serial_no: "",
+    id: null, name: "", category: "", description: "", location: "", serial_no: "", vendor_id: "",
     acquisition_date: today(), depreciation_start: thisMonth(), cost: "", salvage_value: "0", useful_life_months: "60",
     asset_account: "", accum_dep_account: "", dep_expense_account: "", remarks: "", locked: false,
   });
   const openEdit = (r) => setEdit({
-    ...r, cost: String(r.cost), salvage_value: String(r.salvage_value), useful_life_months: String(r.useful_life_months),
+    ...r, vendor_id: r.vendor_id ? String(r.vendor_id) : "", cost: String(r.cost), salvage_value: String(r.salvage_value), useful_life_months: String(r.useful_life_months),
     locked: !!r.last_posted,
   });
 
@@ -110,7 +116,7 @@ export default function FixedAssets() {
       key: "name", label: "Asset", render: (r) => (
         <div>
           <div className="strong">{r.name}</div>
-          <div className="muted small">{[r.category, r.location].filter(Boolean).join(" · ")}</div>
+          <div className="muted small">{[r.category, r.location, r.vendor_name].filter(Boolean).join(" · ")}</div>
         </div>
       )
     },
@@ -125,7 +131,7 @@ export default function FixedAssets() {
   ];
 
   const rowActions = (r) => [
-    { label: "Schedule", onClick: () => setSchedule(r) },
+    { label: "Depreciation Schedule", onClick: () => setSchedule(r) },
     { label: "Edit", onClick: () => openEdit(r) },
     r.status === "active"
       ? { label: "Dispose", onClick: () => setDispose({ id: r.id, name: r.name, disposed_date: today(), disposal_amount: "", remarks: "" }) }
@@ -139,6 +145,7 @@ export default function FixedAssets() {
         query={query}
         setQuery={setQuery}
         placeholder="Search asset no, name, category, location..."
+        navTabs={[{ to: ROUTE, label: "Fixed Assets", end: true }]}
         actions={[
           { label: loading ? "Loading…" : "Refresh", icon: "refresh", onClick: load, disabled: loading },
           { label: "Post Depreciation", icon: "calendar", onClick: () => setPost(true) },
@@ -178,7 +185,18 @@ export default function FixedAssets() {
         />
       </div>
 
-      {edit && accounts && <AssetModal initial={edit} accounts={accounts} onClose={() => setEdit(null)} onSaved={(m) => { setEdit(null); notify(m); load(); }} />}
+      {edit && accounts && (
+        <AssetModal
+          initial={edit}
+          accounts={accounts}
+          vendors={vendors}
+          onAccountAdded={(a) => setAccounts((list) => (list || []).some((x) => x.account_code === a.account_code) ? list
+            : [...(list || []), a].sort((x, y) => String(x.account_code).localeCompare(String(y.account_code), undefined, { numeric: true })))}
+          onVendorAdded={(v) => setVendors((list) => [...list, v].sort((a, b) => String(a.name).localeCompare(String(b.name))))}
+          onClose={() => setEdit(null)}
+          onSaved={(m) => { setEdit(null); notify(m); load(); }}
+        />
+      )}
       {schedule && <ScheduleModal asset={schedule} onClose={() => setSchedule(null)} />}
       {dispose && <DisposeModal initial={dispose} onClose={() => setDispose(null)} onSaved={(m) => { setDispose(null); notify(m); load(); }} />}
       {post && <PostModal onClose={() => setPost(false)} onPosted={(m) => { setPost(false); notify(m); load(); }} />}
@@ -191,11 +209,64 @@ export default function FixedAssets() {
 }
 
 /* ---------- Add / Edit asset ---------- */
-function AssetModal({ initial, accounts, onClose, onSaved }) {
+function AssetModal({ initial, accounts, vendors, onAccountAdded, onVendorAdded, onClose, onSaved }) {
+  const notify = useToast();
+  const lookups = useLookups();
   const [f, setF] = useState(initial);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+
+  /* ---------- + New Vendor (same popup as Expenses) ---------- */
+  const [newVendor, setNewVendor] = useState(null);       // typed name
+  const vendorOpts = [{ value: "", label: "— None —" }, ...vendors.map((v) => ({
+    value: String(v.id), label: v.name, hint: [v.tin, v.branch_code].filter(Boolean).join(" · ") || undefined,
+  }))];
+
+  /* ---------- + New Account (same popup as Setup → Charts of Account) ---------- */
+  const [adding, setAdding] = useState(null);             // { field, name }
+  const [coa, setCoa] = useState(null);                   // /accounts – full chart (types, parents)
+  const coaTree = useMemo(() => {
+    const list = coa || [];
+    const byCode = Object.fromEntries(list.map((a) => [a.code, a]));
+    const kids = {};
+    list.forEach((a) => { if (a.parent && byCode[a.parent]) (kids[a.parent] ??= []).push(a); });
+    const descendants = (code) => {
+      const out = [];
+      const walk = (c) => (kids[c] || []).forEach((k) => { out.push(k.code); walk(k.code); });
+      walk(code);
+      return out;
+    };
+    const typeOptions = [...new Set([...(ACCOUNT_TYPES || []), ...list.map((a) => a.type).filter(Boolean)])];
+    return { byCode, childrenOf: (c) => kids[c] || [], descendants, typeOptions };
+  }, [coa]);
+  // where the new account goes: under the header of an account like the one this dropdown is for
+  const FIELD_HINT = { asset_account: /equipment|property|furniture|vehicle|building|machinery|fixed/i, accum_dep_account: /accum/i, dep_expense_account: /deprec/i };
+  const suggestParent = (field) => {
+    const list = coa || [];
+    const current = list.find((a) => a.code === f[field]);
+    if (current?.parent) return current.parent;
+    const like = list.find((a) => !a.isGroup && a.parent && FIELD_HINT[field]?.test(a.name));
+    return like?.parent || "";
+  };
+  const openNewAccount = async (field, typed) => {
+    try {
+      const list = coa || await apiFetch("/accounts");
+      setCoa(list);
+      setAdding({ field, name: typed || "" });
+    } catch (e) {
+      notify(e.message || "Couldn't load the chart of accounts.", "error");
+    }
+  };
+  const saveNewAccount = async (acc) => {
+    const res = await apiFetch("/accounts", { method: "POST", body: JSON.stringify(acc) });
+    setCoa((list) => [...(list || []), { ...acc, isGroup: false }]);
+    onAccountAdded({ account_code: acc.code, account_name: acc.name });
+    set(adding.field, acc.code);
+    notify(res.message || `${acc.code} – ${acc.name} added`);
+    lookups?.refresh?.();
+    setAdding(null);
+  };
 
   const opts = (pred) => [{ value: "", label: "— Select —" }, ...accounts.filter(pred).map((a) => ({ value: a.account_code, label: `${a.account_code} - ${a.account_name}` }))];
   const allOpts = opts(() => true);
@@ -217,7 +288,7 @@ function AssetModal({ initial, accounts, onClose, onSaved }) {
     setSaving(true);
     try {
       const body = {
-        name: f.name.trim(), category: f.category || null, description: f.description || null, location: f.location || null,
+        name: f.name.trim(), vendor_id: f.vendor_id ? Number(f.vendor_id) : null, category: f.category || null, description: f.description || null, location: f.location || null,
         serial_no: f.serial_no || null, acquisition_date: f.acquisition_date, depreciation_start: f.depreciation_start,
         cost, salvage_value: salvage, useful_life_months: life,
         asset_account: f.asset_account, accum_dep_account: f.accum_dep_account, dep_expense_account: f.dep_expense_account, remarks: f.remarks || null,
@@ -244,6 +315,9 @@ function AssetModal({ initial, accounts, onClose, onSaved }) {
         <Field label="Asset name *"><input className="input" value={f.name} onChange={(e) => set("name", e.target.value)} autoFocus /></Field>
         <Field label="Category"><input className="input" placeholder="e.g. Office Equipment" value={f.category || ""} onChange={(e) => set("category", e.target.value)} /></Field>
         <Field label="Location"><input className="input" value={f.location || ""} onChange={(e) => set("location", e.target.value)} /></Field>
+        <div className="field" style={{ gridColumn: "1 / -1" }}><span className="field-label">Vendor</span>
+          <SearchSelect value={f.vendor_id || ""} onChange={(v) => set("vendor_id", v)} options={vendorOpts} placeholder="— None —"
+            searchPlaceholder="Search name or TIN..." aria-label="Vendor" onAddNew={(typed) => setNewVendor(typed)} addNewLabel="New Vendor" /></div>
         <Field label="Serial No"><input className="input" value={f.serial_no || ""} onChange={(e) => set("serial_no", e.target.value)} /></Field>
         <Field label="Acquisition date *"><input type="date" className="input" value={f.acquisition_date} onChange={(e) => set("acquisition_date", e.target.value)} /></Field>
         <Field label="Depreciation starts *"><input type="month" className="input" value={f.depreciation_start} disabled={f.locked} onChange={(e) => set("depreciation_start", e.target.value)} /></Field>
@@ -259,15 +333,47 @@ function AssetModal({ initial, accounts, onClose, onSaved }) {
 
       <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
         <div className="field"><span className="field-label">Asset account *</span>
-          <SearchSelect value={f.asset_account || ""} onChange={(v) => set("asset_account", v)} options={allOpts} searchPlaceholder="Search account..." aria-label="Asset account" /></div>
+          <SearchSelect value={f.asset_account || ""} onChange={(v) => set("asset_account", v)} options={allOpts} searchPlaceholder="Search account..." aria-label="Asset account"
+            onAddNew={(typed) => openNewAccount("asset_account", typed)} addNewLabel="New Account" /></div>
         <div className="field"><span className="field-label">Accumulated depreciation *</span>
           {f.locked ? <input className="input" readOnly value={f.accum_dep_account} /> :
-            <SearchSelect value={f.accum_dep_account || ""} onChange={(v) => set("accum_dep_account", v)} options={allOpts} searchPlaceholder="Search account..." aria-label="Accumulated depreciation account" />}</div>
+            <SearchSelect value={f.accum_dep_account || ""} onChange={(v) => set("accum_dep_account", v)} options={accumOpts} searchPlaceholder="Search account..." aria-label="Accumulated depreciation account"
+              onAddNew={(typed) => openNewAccount("accum_dep_account", typed)} addNewLabel="New Account" />}</div>
         <div className="field"><span className="field-label">Depreciation expense *</span>
           {f.locked ? <input className="input" readOnly value={f.dep_expense_account} /> :
-            <SearchSelect value={f.dep_expense_account || ""} onChange={(v) => set("dep_expense_account", v)} options={expOpts} searchPlaceholder="Search account..." aria-label="Depreciation expense account" />}</div>
+            <SearchSelect value={f.dep_expense_account || ""} onChange={(v) => set("dep_expense_account", v)} options={expOpts} searchPlaceholder="Search account..." aria-label="Depreciation expense account"
+              onAddNew={(typed) => openNewAccount("dep_expense_account", typed)} addNewLabel="New Account" />}</div>
       </div>
       <Field label="Remarks"><input className="input" value={f.remarks || ""} onChange={(e) => set("remarks", e.target.value)} /></Field>
+
+      {newVendor !== null && (
+        <ContactForm
+          userType="Vendor"
+          record={null}
+          defaultName={newVendor}
+          onClose={() => setNewVendor(null)}
+          onSave={async (body) => {
+            const res = await apiFetch("/contacts/vendor", { method: "POST", body: JSON.stringify(body) });
+            onVendorAdded({ id: res.id, name: body.name, tin: body.tin, branch_code: body.branch_code });
+            set("vendor_id", String(res.id));
+            notify(res.message || `${body.name} added`);
+            setNewVendor(null);
+          }}
+        />
+      )}
+      {adding && coa && (
+        <AccountForm
+          defaultParent={suggestParent(adding.field) || null}
+          defaultName={adding.name}
+          accounts={coa}
+          byCode={coaTree.byCode}
+          typeOptions={coaTree.typeOptions}
+          childrenOf={coaTree.childrenOf}
+          descendants={coaTree.descendants}
+          onClose={() => setAdding(null)}
+          onSave={saveNewAccount}
+        />
+      )}
     </Modal>
   );
 }

@@ -127,6 +127,7 @@ export const NAV = [
           { to: "/reports/percentage-tax", label: "Percentage Tax Sum." },
           { to: "/reports/expanded-withholding-tax", label: "Expanded WHT" },
           { to: "/reports/reverted-summary", label: "Reverted Summary" },
+          { to: "/reports/bir-return-summary", label: "BIR Return Summary" },
         ],
       },
       {

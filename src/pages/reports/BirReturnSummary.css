@@ -1,0 +1,639 @@
+/* Reports → BIR Return Summary */
+.brs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---- top bar ---- */
+.brs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 14px;
+  padding: 14px 16px;
+}
+
+.brs-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  margin-right: 6px;
+}
+
+.brs-title span {
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.brs-title b {
+  font-size: 15px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.brs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+}
+
+.brs-field>span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.brs-grow {
+  flex: 1 1 280px;
+}
+
+.brs-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.brs-error {
+  margin: 0;
+}
+
+.brs-empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.brs-empty h3 {
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.brs-empty p {
+  max-width: 560px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+/* ---- tabs ---- */
+.brs-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brs-tabs>button {
+  background: none;
+  border: 0;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.brs-tabs>button.is-on {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+
+.brs-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+
+.brs-key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  vertical-align: -2px;
+}
+
+.brs-key.is-auto {
+  background: var(--card-2);
+  border-color: var(--muted);
+}
+
+.brs-key.is-typed {
+  background: linear-gradient(135deg, var(--brand) 0 35%, transparent 35%);
+  border-color: var(--line);
+}
+
+.brs-dirty {
+  color: #d97706;
+}
+
+.brs-link {
+  background: none;
+  border: 0;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.brs-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- layout ---- */
+.brs-grid {
+  display: grid;
+  grid-template-columns: minmax(420px, 5fr) minmax(0, 7fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.brs-col,
+.brs-audit {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.brs-audit {
+  max-width: 980px;
+}
+
+@media (max-width: 1280px) {
+  .brs-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.brs-sec {
+  padding: 0;
+  overflow: hidden;
+}
+
+.brs-sec-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brs-sec-head h3 {
+  margin: 0;
+  font-size: 13.5px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.brs-sec-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brs-scroll {
+  overflow-x: auto;
+}
+
+/* ---- tables ---- */
+.brs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.brs-table th {
+  position: sticky;
+  top: 0;
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  text-align: right;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.brs-table th:first-child {
+  text-align: left;
+}
+
+.brs-table td {
+  padding: 2px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  white-space: nowrap;
+  height: 32px;
+}
+
+.brs-table td.brs-label {
+  text-align: left;
+  padding-left: 14px;
+  white-space: normal;
+  color: var(--ink);
+  min-width: 180px;
+}
+
+.brs-table .brs-indent {
+  padding-left: 28px !important;
+}
+
+.brs-table .brs-wa {
+  width: 170px;
+}
+
+.brs-narrow {
+  max-width: 620px;
+}
+
+.brs-group td {
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 6px 14px;
+  height: auto;
+}
+
+.brs-sub td {
+  text-align: left;
+  padding: 10px 14px 4px;
+  font-weight: 700;
+  color: var(--ink);
+  border-bottom: 0;
+  height: auto;
+  white-space: normal;
+}
+
+.brs-mini-head td {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  height: auto;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.brs-total td {
+  font-weight: 600;
+}
+
+.brs-total.is-strong td {
+  background: color-mix(in srgb, var(--brand-soft) 45%, transparent);
+  font-weight: 700;
+}
+
+.brs-total.is-grand td {
+  background: var(--brand-soft);
+  font-weight: 800;
+  font-size: 13.5px;
+  border-top: 2px solid var(--brand);
+}
+
+.brs-diff td {
+  color: #b45309;
+}
+
+.brs-qstart td {
+  border-top: 1px solid var(--line);
+}
+
+.brs-muted {
+  color: var(--muted);
+  font-style: italic;
+  text-align: left !important;
+}
+
+/* totals */
+.brs-tot {
+  display: inline-block;
+  padding: 0 6px;
+}
+
+.brs-tot.is-strong {
+  font-weight: 800;
+}
+
+.brs-tot.is-neg {
+  color: var(--red, #dc2626);
+}
+
+/* ---- inputs: Excel-like cells ---- */
+.brs-table td:has(.brs-amt) {
+  padding: 0;
+}
+
+.brs-amt {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 31px;
+}
+
+.brs-in {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: right;
+  padding: 6px 10px;
+  outline: none;
+  cursor: cell;
+}
+
+.brs-in:focus {
+  cursor: text;
+  background: var(--card);
+  box-shadow: inset 0 0 0 2px #21a366;
+  position: relative;
+  z-index: 1;
+}
+
+.brs-amt.is-auto .brs-in {
+  color: var(--muted);
+}
+
+.brs-amt.is-auto .brs-in:focus {
+  color: var(--ink);
+}
+
+.brs-amt.is-typed .brs-in {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.brs-amt.is-typed::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-top: 7px solid var(--brand);
+  border-right: 7px solid transparent;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.brs-reset {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: 0;
+  color: var(--brand);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  opacity: 0;
+  z-index: 2;
+}
+
+.brs-amt:hover .brs-reset {
+  opacity: 1;
+}
+
+/* gridlines like a sheet */
+.brs-table td,
+.brs-table th {
+  border: 1px solid var(--line);
+}
+
+.brs-table tr> :first-child {
+  border-left: 0;
+}
+
+.brs-table tr> :last-child {
+  border-right: 0;
+}
+
+.brs-table td:has(.brs-amt):hover {
+  background: color-mix(in srgb, var(--brand) 5%, transparent);
+}
+
+.brs-in-label {
+  text-align: left;
+  max-width: calc(100% - 22px);
+  font-weight: 500;
+}
+
+.brs-in-group {
+  text-align: left;
+  width: 140px;
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-right: 4px;
+}
+
+.brs-label {
+  position: relative;
+}
+
+.brs-label .brs-in-label+.brs-x,
+.brs-label .brs-x {
+  opacity: 0;
+}
+
+tr:hover .brs-label .brs-x,
+.brs-x.is-inline {
+  opacity: 1;
+}
+
+.brs-x {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.brs-x:hover {
+  color: var(--red, #dc2626);
+}
+
+.brs-add {
+  background: none;
+  border: 1px dashed var(--line);
+  color: var(--brand);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  margin: 2px 8px;
+}
+
+.brs-add:hover {
+  border-color: var(--brand);
+}
+
+.brs-table tr.no-print td {
+  height: auto;
+  text-align: left;
+  border-bottom: 0;
+}
+
+.brs-pair {
+  display: flex;
+  width: 100%;
+}
+
+.brs-pair .brs-amt {
+  flex: 1;
+  border-left: 1px solid var(--line);
+}
+
+.brs-check {
+  margin-left: 10px;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brs-rates {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brs-rates label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.brs-rates .brs-amt {
+  width: 86px;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+/* ---- print ---- */
+.brs-print-head {
+  display: none;
+}
+
+@media print {
+
+  .no-print,
+  .brs-bar,
+  .brs-tabs,
+  .brs-reset,
+  .brs-x,
+  .brs-add {
+    display: none !important;
+  }
+
+  .brs-print-head {
+    display: block;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .brs-print-head h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .brs-print-head p {
+    margin: 2px 0 0;
+    font-size: 12px;
+  }
+
+  .brs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brs-sec {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #999;
+  }
+
+  .brs-in,
+  .brs-amt.is-auto .brs-in,
+  .brs-amt.is-typed .brs-in {
+    background: transparent !important;
+    border: 0 !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  .brs-amt.is-typed::before {
+    display: none;
+  }
+
+  .brs-table td,
+  .brs-table th {
+    color: #000;
+  }
+}
+
+/* label cells: the text box fills the cell, × floats on the right (rows stay one line high) */
+.brs-table td.brs-label:has(.brs-in-label) {
+  padding: 0 26px 0 6px;
+}
+
+.brs-table td.brs-indent:has(.brs-in-label) {
+  padding-left: 20px !important;
+}
+
+.brs-in-label {
+  width: 100%;
+  max-width: none;
+  padding: 6px 8px;
+  cursor: text;
+}
+
+.brs-label .brs-x {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.brs-label:has(.brs-in-group) {
+  white-space: nowrap;
+}
+
+.brs-label .brs-in-group+.brs-in-label {
+  width: calc(100% - 150px);
+}

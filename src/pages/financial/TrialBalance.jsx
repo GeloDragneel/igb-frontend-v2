@@ -38,6 +38,7 @@ export default function TrialBalance() {
     const [pdf, setPdf] = useState(null);             // { url, name } for the preview
     const menuRef = useRef(null);
     const [view, setView] = useState(null); // account row for the popup
+    const [offOpen, setOffOpen] = useState(false); // documents whose debit ≠ credit
 
     const changeType = (t) => {
         setFilterType(t);
@@ -67,6 +68,8 @@ export default function TrialBalance() {
         (t, r) => ({ debit: t.debit + r.debit, credit: t.credit + r.credit, balance: t.balance + r.balance }),
         { debit: 0, credit: 0, balance: 0 }
     );
+    const off = Math.round((total.debit - total.credit) * 100) / 100;          // ≠ 0 → not balanced
+    const unbalanced = data?.unbalanced || [];
 
     const accountOpts = [
         { value: "", label: "All" },
@@ -223,6 +226,51 @@ export default function TrialBalance() {
                     )}
                 </table>
             </div>
+            {!loading && rows.length > 0 && Math.abs(off) >= 0.01 && (
+                <div className="tb-off no-print" role="alert">
+                    <span>
+                        <b>Not balanced:</b> Debit is {off > 0 ? "more" : "less"} than Credit by <b className="mono">{n2(Math.abs(off))}</b>.
+                        {unbalanced.length
+                            ? ` ${unbalanced.length} document${unbalanced.length === 1 ? " has" : "s have"} a debit that isn't equal to the credit.`
+                            : " Every document is balanced – the difference comes from an account filter."}
+                    </span>
+                    {unbalanced.length > 0 && <button type="button" className="btn btn-sm" onClick={() => setOffOpen(true)}>See documents</button>}
+                </div>
+            )}
+            {offOpen && (
+                <Modal title="Documents not balanced (Debit ≠ Credit)" onClose={() => setOffOpen(false)} size="xlg"
+                    footer={<button className="btn" onClick={() => setOffOpen(false)}>Close</button>}>
+                    <p className="muted small" style={{ marginTop: 0 }}>
+                        Each document should post the same Debit and Credit. Open these and check their totals, lines, VAT and 2307 –
+                        the differences add up to {n2(Math.abs(off))}.
+                    </p>
+                    <div className="table-scroll" style={{ maxHeight: "60vh" }}>
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th><th>Doc#</th><th>Reference</th><th>Customer / Vendor</th><th>Module</th>
+                                    <th className="ta-right">Debit</th><th className="ta-right">Credit</th><th className="ta-right">Difference</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {unbalanced.map((d, i) => (
+                                    <tr key={i}>
+                                        <td>{d.date}</td><td>{d.document_no}</td><td className="mono">{d.reference}</td><td>{d.name}</td><td>{d.module}</td>
+                                        <td className="ta-right mono">{n2(d.debit)}</td><td className="ta-right mono">{n2(d.credit)}</td>
+                                        <td className="ta-right mono strong">{n2(d.difference)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colSpan={7} className="strong">Total difference</td>
+                                    <td className="ta-right mono strong">{n2(unbalanced.reduce((n, d) => n + Number(d.difference || 0), 0))}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </Modal>
+            )}
             {view && (
                 <Modal title={`Details : ${view.account_code} ${view.account_name}`} onClose={() => setView(null)} size="lg"
                     footer={<button className="btn" onClick={() => setView(null)}>Close</button>}>

@@ -3372,3 +3372,151 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
         animation: none !important;
     }
 }
+
+/* ---------- CLOUDY (no date – pick it in the menu) ---------- */
+.sn-title.is-cloudy {
+    background-image: linear-gradient(90deg, #475569, #94a3b8 50%, #f59e0b);
+}
+
+.sn-dock.sx-cloudy .sn-dock-btn {
+    background: linear-gradient(180deg, #94a3b8, #475569);
+}
+
+.topbar.sx-cloudy {
+    background: linear-gradient(180deg, rgba(148, 163, 184, .16), transparent 70%), var(--card, #fff);
+}
+
+.sn-cloudy-head>svg {
+    position: absolute;
+    top: -10px;
+    opacity: .9;
+    animation: sn-drift 18s ease-in-out infinite;
+}
+
+.sn-cloudy-head>svg:nth-child(1) {
+    left: 14%;
+}
+
+.sn-cloudy-head>svg:nth-child(2) {
+    left: 38%;
+    top: -4px;
+    animation-delay: -5s;
+    animation-duration: 22s;
+}
+
+.sn-cloudy-head>svg:nth-child(3) {
+    left: 62%;
+    top: -12px;
+    animation-delay: -9s;
+}
+
+.sn-cloudy-head>svg:nth-child(4) {
+    left: 86%;
+    top: -2px;
+    animation-delay: -13s;
+    animation-duration: 24s;
+}
+
+.sidebar.sx-cloudy {
+    background: linear-gradient(180deg, #475569 0%, #334155 45%, #1e293b 100%) !important;
+}
+
+.sn-cloudy-side>svg {
+    position: absolute;
+    opacity: .55;
+    animation: sn-drift 20s ease-in-out infinite;
+}
+
+.sn-cloudy-side>svg:nth-child(1) {
+    top: 6px;
+    right: -24px;
+}
+
+.sn-cloudy-side>svg:nth-child(2) {
+    top: 70px;
+    left: -22px;
+    animation-delay: -6s;
+    animation-duration: 24s;
+}
+
+.sn-cloudy-side>svg:nth-child(3) {
+    top: 160px;
+    right: -30px;
+    opacity: .35;
+    animation-delay: -11s;
+}
+
+.sn-cloudy-side>svg:nth-child(4) {
+    top: 250px;
+    left: -10px;
+    opacity: .3;
+    animation-delay: -15s;
+    animation-duration: 26s;
+}
+
+.sn-cloudy-sun {
+    position: absolute;
+    right: 34px;
+    bottom: 58px;
+    opacity: .9;
+}
+
+.sn-cloudy-sun .sn-sun {
+    animation-duration: 60s;
+}
+
+.sn-cloudy-front>svg {
+    position: absolute;
+    bottom: 44px;
+    animation: sn-drift 14s ease-in-out infinite;
+}
+
+.sn-cloudy-front>svg:nth-child(1) {
+    right: 6px;
+}
+
+.sn-cloudy-front>svg:nth-child(2) {
+    left: 10px;
+    bottom: 30px;
+    animation-delay: -6s;
+}
+
+.sidebar.sx-cloudy .brand-badge {
+    background: #64748b !important;
+    color: #fff !important;
+}
+
+.sidebar.sx-cloudy .side-heading {
+    color: #fcd34d !important;
+}
+
+.sidebar.sx-cloudy .side-link.has-active,
+.sidebar.sx-cloudy .side-link.single-active {
+    background: linear-gradient(90deg, #64748b, #475569) !important;
+    color: #fff !important;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, .35);
+}
+
+.sidebar.sx-cloudy .side-items a.active {
+    background: rgba(226, 232, 240, .14) !important;
+    color: #f1f5f9 !important;
+}
+
+.sidebar.sx-cloudy .mode-switch [aria-selected="true"],
+.sidebar.sx-cloudy .mode-switch .active {
+    background: linear-gradient(90deg, #f59e0b, #d97706) !important;
+    color: #fff !important;
+}
+
+.sw-cloudy {
+    background: radial-gradient(circle at 78% 30%, rgba(253, 224, 71, .55), transparent 30%), linear-gradient(180deg, #cbd5e1, #64748b);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .sn-cloudy-head>svg,
+    .sn-cloudy-side>svg,
+    .sn-cloudy-front>svg {
+        animation: none !important;
+    }
+}

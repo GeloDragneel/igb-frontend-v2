@@ -47,3 +47,23 @@
     border-radius: 8px;
     background: #525659;
 }
+
+/* ADD to TrialBalance.css – the "Not balanced" bar under the table */
+.tb-off {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 10px 0 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    background: color-mix(in srgb, #dc2626 9%, transparent);
+    border: 1px solid color-mix(in srgb, #dc2626 35%, transparent);
+    color: var(--ink);
+}
+
+.tb-off b {
+    color: #dc2626;
+}

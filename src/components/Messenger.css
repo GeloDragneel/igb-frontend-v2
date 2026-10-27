@@ -764,7 +764,7 @@ body.ai-chat-open .ms-dock {
     border-radius: 50%;
     background: none;
     cursor: pointer;
-    box-shadow: var(--ms-shadow);
+    /* box-shadow: var(--ms-shadow); */
 }
 
 .ms-bubble-x {

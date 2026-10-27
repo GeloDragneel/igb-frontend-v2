@@ -9,7 +9,7 @@
 //   Rainy Season      Jul 1 – Aug 31
 //   Halloween         Oct 19 – Nov 16   (2 weeks before and after Nov 2)
 //   Christmas         Dec 1 – Dec 27
-//   Seasons: Spring · Summer (auto) · Rainy (auto) · Autumn · Winter – Spring / Autumn / Winter have no date
+//   Seasons: Spring · Summer (auto) · Rainy (auto) · Cloudy · Autumn · Winter – Spring / Cloudy / Autumn / Winter have no date
 //   Just for fun (no date – pick them any time from the menu):
 //   Reggae · Ocean · Outer Space · Forest · Sakura · Neon City
 //
@@ -522,6 +522,29 @@ const THEMES = {
             </span>
         ),
     },
+    cloudy: {
+        short: "Cloudy", label: "Cloudy", title: "Cloudy Skies",
+        icon: <span style={{ fontSize: 15 }}>⛅</span>,
+        header: () => (
+            <span className="hw-top" aria-hidden="true">
+                <span className="sn-cloudy-head">
+                    <Cloud w={70} c="#e2e8f0" /><Cloud w={48} c="#cbd5e1" /><Cloud w={58} c="#f1f5f9" /><Cloud w={40} c="#e2e8f0" />
+                </span>
+            </span>
+        ),
+        sidebar: () => (
+            <span className="hw-side" aria-hidden="true">
+                <span className="sn-cloudy-side">
+                    <Cloud w={130} c="#64748b" /><Cloud w={96} c="#475569" /><Cloud w={110} c="#94a3b8" /><Cloud w={80} c="#64748b" />
+                </span>
+                <span className="hw-bottom sn-cloudy">
+                    <span className="sn-cloudy-sun"><Sun w={64} c="#fcd34d" core="#fde68a" /></span>
+                    <span className="sn-cloudy-front"><Cloud w={120} c="#cbd5e1" /><Cloud w={90} c="#e2e8f0" /></span>
+                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 92c50-14 110-16 160-6s70 6 100-2v36H0z" fill="#334155" /><path d="M0 106c70-10 130-8 180 0s60 2 80-2v18H0z" fill="#1e293b" /></svg>
+                </span>
+            </span>
+        ),
+    },
     reggae: {
         label: "Reggae", title: "Good Vibes",
         icon: <Note w={18} c="#16a34a" />,
@@ -720,7 +743,7 @@ Object.assign(THEMES, {
         ),
     },
 });
-const SEASONS = ["spring", "summer", "rainy", "autumn", "winter"];
+const SEASONS = ["spring", "summer", "rainy", "cloudy", "autumn", "winter"];
 // shown under "Just for fun" in the menu (no date – Auto never picks them)
 const FUN = ["reggae", "ocean", "space", "forest", "sakura", "neon"];
 const titleOf = (k) => (typeof THEMES[k]?.title === "function" ? THEMES[k].title() : THEMES[k]?.title);
@@ -916,7 +939,7 @@ const PhFlag = () => (
     </svg>
 );
 const TILE_ICON = {
-    newyear: "🎆", cny: "🏮", valentines: "💝", easter: "🐣", summer: "🏖️", independence: <PhFlag />, rainy: "🌧️",
+    newyear: "🎆", cny: "🏮", valentines: "💝", easter: "🐣", summer: "🏖️", independence: <PhFlag />, rainy: "🌧️", cloudy: "⛅",
     halloween: "🎃", christmas: "🎄", spring: "🌷", autumn: "🍁", winter: "⛄", reggae: "🎶", ocean: "🐠", space: "🚀", forest: "🌲", sakura: "🌸", neon: "🌃",
 };
 
@@ -998,7 +1021,7 @@ const RANGES = (() => {
         cny: c ? `${fmtDay(addDays(c, -3))} – ${fmtDay(addDays(c, 7))}, ${cy}` : "Lunar New Year",
         easter: `${fmtDay(addDays(e, -7))} – ${fmtDay(addDays(e, 1))}, ${e.getFullYear()}`,
         summer: "Mar 20 – May 31", independence: "Jun 9 – 13", rainy: "Jul 1 – Aug 31",
-        spring: "Flowers & butterflies", autumn: "Falling leaves", winter: "Snow & a snowman",
+        spring: "Flowers & butterflies", cloudy: "Grey skies & drifting clouds", autumn: "Falling leaves", winter: "Snow & a snowman",
         reggae: "Red, gold & green", ocean: "Fish, bubbles & seaweed", space: "Planets, stars & a rocket",
         forest: "Pines, fireflies & leaves", sakura: "Cherry blossoms", neon: "Synthwave city",
     };
