@@ -7,7 +7,6 @@ import SearchSelect from "../../components/SearchSelect";
 import RowMenu from "../../components/RowMenu";
 import Icon from "../../components/Icons";
 import { ACCOUNT_TYPES } from "../../data/sampleData";
-import { downloadCSV } from "../../utils/format";
 import { apiFetch, useAuth } from "../../context/AuthContext";
 import { useLookups } from "../../context/LookupsContext";
 
@@ -169,15 +168,83 @@ export default function ChartOfAccounts() {
         return c;
     }, [accounts]);
 
-    const exportCSV = () => {
-        const flat = [];
-        const walk = (key, level) =>
-            (children[key] || []).forEach((a) => {
-                flat.push([a.code, `${"  ".repeat(level)}${a.name}`, a.type, normalBalance(a.type), a.isGroup ? "Header" : "Posting", a.parent || "", a.description || ""]);
+    /* ---------- Export Excel: the tree as it is (search / type filter applied), headers bold, sub-accounts indented ---------- */
+    const [exporting, setExporting] = useState(false);
+    const exportExcel = async () => {
+        if (!accounts.length) return notify("No accounts to export.", "error");
+        setExporting(true);
+        try {
+            const ExcelJS = (await import("exceljs")).default;
+            const wb = new ExcelJS.Workbook();
+            wb.creator = "IGB";
+            wb.created = new Date();
+            const ws = wb.addWorksheet("Chart of Accounts", {
+                views: [{ state: "frozen", ySplit: 4, showGridLines: false }],
+                pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "4:4" },
+            });
+            ws.columns = [
+                { key: "code", width: 12 }, { key: "name", width: 46 }, { key: "type", width: 16 }, { key: "normal", width: 15 },
+                { key: "kind", width: 11 }, { key: "parent", width: 12 }, { key: "used", width: 26 }, { key: "description", width: 40 },
+            ];
+
+            // title
+            const company = user?.business_name || user?.trade_name || "";
+            ws.mergeCells("A1:H1");
+            ws.getCell("A1").value = company ? `${company} – Chart of Accounts` : "Chart of Accounts";
+            ws.getCell("A1").font = { bold: true, size: 14 };
+            ws.mergeCells("A2:H2");
+            ws.getCell("A2").value = `${counts.total} accounts · ${counts.groups} headers · ${counts.posting} posting accounts`
+                + (filtering ? ` · filtered${q ? ` "${query.trim()}"` : ""}${type ? ` · ${type}` : ""}` : "")
+                + ` · exported ${new Date().toLocaleString("en-PH")}`;
+            ws.getCell("A2").font = { size: 10, color: { argb: "FF64748B" } };
+
+            // header row
+            const head = ws.getRow(4);
+            head.values = ["Code", "Account Name", "Type", "Normal Balance", "Kind", "Parent", "Used in", "Description"];
+            head.height = 20;
+            head.eachCell((c) => {
+                c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+                c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A8A" } };
+                c.alignment = { vertical: "middle" };
+                c.border = { bottom: { style: "thin", color: { argb: "FF1E3A8A" } } };
+            });
+
+            // rows: walk the tree (only what the search / filter shows)
+            let r = 5;
+            const walk = (key, level) => (children[key] || []).filter((a) => !visibleSet || visibleSet.has(a.code)).forEach((a) => {
+                const used = [a.is_sales && "Sales", a.is_purchases && "Purchases", a.is_expenses && "Expenses", a.is_for_paid && "Payments"].filter(Boolean).join(", ");
+                const row = ws.getRow(r++);
+                row.values = [a.code, a.name, a.type || "", normalBalance(a.type), a.isGroup ? "Header" : "Posting", a.parent || "", used, a.description || ""];
+                row.getCell(1).alignment = { horizontal: "left" };
+                row.getCell(2).alignment = { indent: Math.min(level * 2, 15) };
+                if (a.isGroup) {
+                    row.font = { bold: true };
+                    if (level === 0) row.eachCell({ includeEmpty: true }, (c, n) => {
+                        if (n <= 8) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E7FF" } };
+                    });
+                }
+                row.eachCell({ includeEmpty: true }, (c, n) => {
+                    if (n <= 8) c.border = { bottom: { style: "hair", color: { argb: "FFCBD5E1" } } };
+                });
                 walk(a.code, level + 1);
             });
-        walk("__root", 0);
-        downloadCSV("chart-of-accounts.csv", ["Code", "Account Name", "Type", "Normal Balance", "Kind", "Parent", "Description"], flat);
+            walk("__root", 0);
+            ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: Math.max(4, r - 1), column: 8 } };
+
+            const buf = await wb.xlsx.writeBuffer();
+            const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+            const name = `Chart-of-Accounts${company ? `-${company.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "")}` : ""}.xlsx`;
+            const link = Object.assign(document.createElement("a"), { href: url, download: name });
+            document.body.append(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            notify(`Downloaded ${name}`);
+        } catch (e) {
+            notify(e.message || "Couldn't make the Excel file.", "error");
+        } finally {
+            setExporting(false);
+        }
     };
 
     return (
@@ -195,7 +262,7 @@ export default function ChartOfAccounts() {
                     </div>
                 }
                 actions={[
-                    { label: "Export CSV", icon: "download", onClick: exportCSV },
+                    { label: exporting ? "Exporting…" : "Export Excel", icon: "download", onClick: exportExcel, disabled: exporting || loading },
                     { label: "Add Account", icon: "plus", variant: "primary", onClick: () => setForm({ parent: null }) },
                 ]}
                 sticky

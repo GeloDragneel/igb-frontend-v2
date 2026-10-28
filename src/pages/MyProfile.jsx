@@ -9,6 +9,7 @@ import Modal from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { PROFILE_SECTIONS, SectionGrid, toBody, toForm, useEmployeeLookups } from "./hr/Employeeform";
 import { Badge, DataTable, Field, api, fmtDate, fmtTime, mins, todayPH, useForm } from "./hr/HRShared";
+import { ChangePasswordButton } from "../components/ChangePassword";
 import "./Profile.css";
 
 const TABS = [
@@ -165,6 +166,7 @@ export default function Profile() {
                             </div>
                             {designation && <span>{designation}</span>}
                             {company && <span>{company}</span>}
+                            <ChangePasswordButton />
                         </div>
                     </aside>
 
