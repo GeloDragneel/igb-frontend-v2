@@ -10,6 +10,7 @@ import { useToast } from "../components/Toast";
 import { PROFILE_SECTIONS, SectionGrid, toBody, toForm, useEmployeeLookups } from "./hr/Employeeform";
 import { Badge, DataTable, Field, api, fmtDate, fmtTime, mins, todayPH, useForm } from "./hr/HRShared";
 import { ChangePasswordButton } from "../components/ChangePassword";
+import SocialLinks from "../components/SocialLinks";
 import "./Profile.css";
 
 const TABS = [
@@ -167,6 +168,7 @@ export default function Profile() {
                             {designation && <span>{designation}</span>}
                             {company && <span>{company}</span>}
                             <ChangePasswordButton />
+                            <SocialLinks />
                         </div>
                     </aside>
 

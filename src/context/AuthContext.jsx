@@ -34,6 +34,8 @@ export async function apiFetch(path, options = {}) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
+        // 15-day trial ended → the lock screen (TrialGate) shows
+        if (res.status === 402 && body.trial_expired) window.dispatchEvent(new CustomEvent("igb-trial-expired", { detail: body }));
         const msg = body.message || Object.values(body.errors || {})[0]?.[0] || `Request failed (${res.status})`;
         throw Object.assign(new Error(msg), { status: res.status });
     }

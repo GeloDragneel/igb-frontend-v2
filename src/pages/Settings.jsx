@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import SocialLinks from "../components/SocialLinks";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Modal from "../components/Modal";
 import SearchSelect from "../components/SearchSelect";
@@ -16,7 +18,10 @@ const SECTIONS = [
     ["engagement", "Engagement"],
     ["ids", "Valid IDs"],
     ["accounts", "Business Accounts"],
+    ["signin", "Sign-in (Google / Facebook)"],
 ];
+// new client from Google / Facebook sign-up: walk through these, then Save changes
+const WELCOME_STEPS = SECTIONS.filter(([k]) => k !== "signin");
 const INSTITUTIONS = ["BIR", "SSS", "PHILHEALTH", "PAG-IBIG", "DTI", "SEC", "MAYOR'S PERMIT", "OTHERS"];
 // BIR TIN: digits only, shown as 000-000-000
 const TIN_RE = /^\d{3}-\d{3}-\d{3}$/;
@@ -169,6 +174,19 @@ export default function Settings() {
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
     const [section, setSection] = useState("profile");
+    // ?welcome=1 (just signed up): guided fill-up of every section
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [welcome, setWelcome] = useState(() => {
+        try { return new URLSearchParams(location.search).get("welcome") === "1" || sessionStorage.getItem("igb-welcome") === "1"; } catch { return false; }
+    });
+    useEffect(() => {
+        if (new URLSearchParams(location.search).get("welcome") !== "1") return;
+        try { sessionStorage.setItem("igb-welcome", "1"); } catch { /* blocked */ }
+        navigate("/settings", { replace: true });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const endWelcome = () => { setWelcome(false); try { sessionStorage.removeItem("igb-welcome"); } catch { /* blocked */ } };
     const [form, setForm] = useState(null);
     const [saved, setSaved] = useState(null);
     const [saving, setSaving] = useState(false);
@@ -505,6 +523,36 @@ export default function Settings() {
                 </div>
             </header>
 
+            {welcome && (() => {
+                const i = Math.max(0, WELCOME_STEPS.findIndex(([k]) => k === section));
+                const onStep = WELCOME_STEPS.some(([k]) => k === section);
+                return (
+                    <div className="st-welcome" role="status">
+                        <div className="st-welcome-top">
+                            <div>
+                                <b>Welcome! Let's set up your business.</b>
+                                <span>Fill up each part, then press <b>Save changes</b>. Your 15-day free trial has started.</span>
+                            </div>
+                            <button type="button" className="st-welcome-x" onClick={endWelcome} aria-label="Hide the guide">×</button>
+                        </div>
+                        <ol className="st-welcome-steps">
+                            {WELCOME_STEPS.map(([k, l], n) => (
+                                <li key={k} className={`${k === section ? "is-on" : ""}${onStep && n < i ? " is-done" : ""}`}>
+                                    <button type="button" onClick={() => go(k)}><em>{n + 1}</em>{l}</button>
+                                </li>
+                            ))}
+                        </ol>
+                        <div className="st-welcome-nav">
+                            <span>Step {i + 1} of {WELCOME_STEPS.length}</span>
+                            <button type="button" className="btn btn-sm" onClick={() => go(WELCOME_STEPS[Math.max(0, i - 1)][0])} disabled={i === 0}>Back</button>
+                            {i < WELCOME_STEPS.length - 1
+                                ? <button type="button" className="btn btn-sm btn-primary" onClick={() => go(WELCOME_STEPS[i + 1][0])}>Next: {WELCOME_STEPS[i + 1][1]}</button>
+                                : <button type="button" className="btn btn-sm btn-primary" onClick={() => { if (dirty) setAskSave(true); endWelcome(); }}>Finish{dirty ? " & save" : ""}</button>}
+                        </div>
+                    </div>
+                );
+            })()}
+
             <div className="st-layout">
                 {/* ---------- left nav ---------- */}
                 <nav className="card st-nav" aria-label="Settings sections">
@@ -755,6 +803,15 @@ export default function Settings() {
                                     <input type="date" className="input" value={form.date_registered} onChange={(e) => set({ date_registered: e.target.value })} />
                                 </label>
                             </div>
+                        </>
+                    )}
+
+                    {/* SIGN-IN: Google / Facebook */}
+                    {section === "signin" && (
+                        <>
+                            <h2 className="st-h">Sign-in with Google / Facebook</h2>
+                            <p className="st-note st-note-top">Link your Google or Facebook account to sign in without typing your username and password.</p>
+                            <div style={{ maxWidth: 520 }}><SocialLinks compact /></div>
                         </>
                     )}
 

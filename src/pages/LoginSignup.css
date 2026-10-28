@@ -1,0 +1,16 @@
+/* Login: Google / Facebook sign-up card (new client, 15-day trial) */
+.lg-su-hint { margin: 2px 0 0; text-align: center; font-size: 12.5px; color: var(--muted, #64748b); }
+.lg-su-hint b { color: var(--ink, #0f172a); }
+.lg-su-who { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line, #e2e8f0); border-radius: 12px; background: var(--card-2, #f8fafc); }
+.lg-su-who img, .lg-su-who > span { width: 40px; height: 40px; border-radius: 50%; flex: none; object-fit: cover; display: grid; place-items: center; background: #4f46e5; color: #fff; font-weight: 700; }
+.lg-su-who b { display: block; font-size: 14px; color: var(--ink, #0f172a); }
+.lg-su-who small { font-size: 12px; color: var(--muted, #64748b); }
+.lg-su-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .lg-su-two { grid-template-columns: 1fr; } }
+.lg-field.lg-field-plain input { padding-left: 14px; }
+.lg-field.lg-field-plain label { left: 14px; }
+.lg-su-points { list-style: none; margin: 2px 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; color: var(--muted, #64748b); }
+.lg-su-points li { display: flex; align-items: center; gap: 8px; }
+.lg-su-points svg { color: #16a34a; flex: none; }
+.lg-su-back { align-self: center; margin-top: 4px; }
+.lg-spinner.lg-spinner-dark { border-color: rgba(15, 23, 42, .15); border-top-color: #4f46e5; }
