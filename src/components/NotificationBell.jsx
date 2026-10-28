@@ -139,7 +139,8 @@ export default function NotificationBell({ alerts = [], open, setOpen, onOpen })
     };
 
     const count = isEmployee ? unread : alerts.length;
-
+    // client logins (UserClient): no notifications at all – the bell isn't shown
+    if (user?.type === "Client") return null;
     return (
         <div className="pop-wrap" ref={ref}>
             <button className="icon-btn round" onClick={toggle} aria-label={`Notifications${count ? ` (${count})` : ""}`} aria-expanded={open}>

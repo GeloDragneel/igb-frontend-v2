@@ -86,6 +86,7 @@ export const NAV = [
     section: "Admin",
     entries: [
       { to: "/settings", label: "Settings", icon: "settings" },
+      { to: "/employees", label: "Employee", icon: "users" },
       { to: "/team", label: "Team", icon: "users" },
     ],
   },

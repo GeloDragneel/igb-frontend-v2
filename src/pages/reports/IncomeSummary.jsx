@@ -2,10 +2,10 @@
 // Every client: sales, cost of goods sold, gross, expenses, income subject to income tax · branch rows
 // Client name → Income Statement (month by month) with 2550-M/Q and 0619-E/1601-EQ figures · print · CSV.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { apiFetch } from "../../context/AuthContext";
+import IncomeTaxSummary from "../bir/IncomeTaxSummary";
 import "./VATSummary.css";
 import "./IncomeSummary.css";
 
@@ -45,41 +45,6 @@ function download(name, rows) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** the statement as ordered lines (screen, print and CSV all use this) */
-function statementLines(s) {
-    const L = [];
-    const row = (label, cell, kind = "row", fmt = n2) => L.push({ label, cell, kind, fmt });
-    const head = (label) => L.push({ label, kind: "head" });
-    const gap = () => L.push({ kind: "gap" });
-    head("SALES");
-    s.sales.forEach((a) => row(a.name || a.code, a));
-    row("TOTAL SALES", s.total_sales, "total");
-    head("COST OF SALES");
-    row("Merchandise Inventory, Beginning", s.beginning);
-    s.cogs.forEach((a) => row(a.name || a.code, a));
-    row("Total cost of goods available for sale", s.cogs_available, "sub");
-    row("Merchandise Inventory, Ending", s.ending);
-    row("TOTAL COST OF GOODS SOLD", s.total_cogs, "total");
-    gap();
-    row("GROSS AMOUNT", s.gross_amount, "total");
-    row("Gross Profit Rate", s.gross_profit_rate, "row", (v) => (Number(v) || 0).toFixed(2));
-    head("EXPENSES");
-    s.expenses.forEach((a) => row(a.name || a.code, a));
-    row("TOTAL EXPENSES", s.total_expenses, "total");
-    row("INCOME SUBJECT TO INCOME TAX", s.income_subject, "grand");
-    head("2550-M / 2550-Q");
-    row("Output VAT (Sales)", s.output_vat);
-    row("Input VAT (Purchases)", s.input_vat_purchases);
-    row("Input VAT (Expenses)", s.input_vat_expenses);
-    row("Total Input VAT", s.total_input_vat, "sub");
-    row("Payable / (Excess)", s.vat_payable, "total");
-    head("0619-E / 1601-EQ");
-    row("EWT (Purchases)", s.ewt_purchases);
-    row("EWT (Expenses)", s.ewt_expenses);
-    row("Total EWT", s.total_ewt, "total");
-    return L;
-}
-
 export default function IncomeSummary() {
     const notify = useToast();
     const [from, setFrom] = useState(QUARTER_START);
@@ -94,15 +59,10 @@ export default function IncomeSummary() {
     const [error, setError] = useState("");
     const [branches, setBranches] = useState({});
     const [stmt, setStmt] = useState(null); // { row, data, loading, error }
-    const [printing, setPrinting] = useState(false);
     const seq = useRef(0);
 
     useEffect(() => {
-        apiFetch("/reports/vat-clients/lookups").then((lk) => {
-            setLookups(lk);
-            // a data analyst only sees the clients assigned to him (the server enforces it too)
-            if (lk?.my_da) setDaId(String(lk.my_da));
-        }).catch(() => { });
+        apiFetch("/reports/vat-clients/lookups").then(setLookups).catch(() => { });
     }, []);
 
     const load = useCallback(async (f = from, t = to, st = statusId, da = daId) => {
@@ -152,40 +112,16 @@ export default function IncomeSummary() {
         }
     };
 
-    const openStatement = async (row) => {
-        setStmt({ row, data: null, loading: true });
-        try {
-            const data = await apiFetch(`/reports/income-clients/statement?${new URLSearchParams({ user_ids: row.user_ids, from: used.from, to: used.to })}`);
-            setStmt((s) => s && s.row === row ? { ...s, data, loading: false } : s);
-        } catch (e) {
-            setStmt((s) => s && { ...s, loading: false, error: e.message || "Couldn't load the income statement." });
-        }
-    };
+    // the popup loads its own statement (IncomeTaxSummary embedded)
+    const openStatement = (row) => setStmt({ row });
     const closeStmt = useCallback(() => setStmt(null), []);
 
-    useEffect(() => {
-        if (!printing) return undefined;
-        const done = () => setPrinting(false);
-        window.addEventListener("afterprint", done);
-        const t = setTimeout(() => window.print(), 50);
-        return () => { clearTimeout(t); window.removeEventListener("afterprint", done); };
-    }, [printing]);
 
     const exportList = () => {
         const out = [["#", "Client", ...COLS.map((c) => c.label)]];
         shown.forEach((r, i) => out.push([i + 1, r.client_name, ...COLS.map((c) => (Number(r[c.key]) || 0).toFixed(2))]));
         out.push(["", "TOTAL", ...COLS.map((c) => (c.pct ? "" : totals[c.key].toFixed(2)))]);
         download(`Income-Summary-${used.from}-to-${used.to}.csv`, out);
-    };
-    const exportStatement = () => {
-        const d = stmt.data;
-        const out = [[stmt.row.client_name], [rangeLabel(used.from, used.to)], [], ["", ...d.months.map(monthLabel), "Total"]];
-        statementLines(d).forEach((l) => {
-            if (l.kind === "gap") out.push([]);
-            else if (l.kind === "head") out.push([l.label]);
-            else out.push([l.label, ...d.months.map((m) => (Number(l.cell.values[m]) || 0).toFixed(2)), (Number(l.cell.total) || 0).toFixed(2)]);
-        });
-        download(`Income-Statement-${stmt.row.client_num}-${used.from}-to-${used.to}.csv`, out);
     };
 
     const renderRow = (r, num, child) => (
@@ -233,8 +169,8 @@ export default function IncomeSummary() {
                         {lookups.statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select></label>
                 <label className="vs-field"><span>Data analyst</span>
-                    <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)} disabled={!!lookups.my_da}>
-                        {!lookups.my_da && <option value="0">All</option>}
+                    <select className="input" value={daId} onChange={(e) => setDaId(e.target.value)}>
+                        <option value="0">All</option>
                         {lookups.analysts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select></label>
                 <label className="vs-field vs-grow"><span>Find</span>
@@ -287,58 +223,13 @@ export default function IncomeSummary() {
             </section>
 
             {stmt && (
-                <Modal title={`Income Statement : ${stmt.row.client_name}`} onClose={closeStmt} size="xl">
-                    <div className="vs-ebir">
-                        <div className="vs-ebir-bar">
-                            <span className="vs-range">{used ? rangeLabel(used.from, used.to) : ""}</span>
-                            <div className="vs-ebir-actions">
-                                <button type="button" className="btn" onClick={exportStatement} disabled={!stmt.data}>Export CSV</button>
-                                <button type="button" className="btn btn-primary" onClick={() => setPrinting(true)} disabled={!stmt.data}>Print</button>
-                            </div>
-                        </div>
-                        {stmt.error && <div className="alert-error" role="alert">{stmt.error}</div>}
-                        {!stmt.data && <div className="vs-empty vs-ebir-empty">{stmt.loading ? "Loading the income statement…" : ""}</div>}
-                        {stmt.data && <StatementTable data={stmt.data} />}
-                    </div>
+                <Modal title={`Income Statement : ${stmt.row.client_name}`} onClose={closeStmt} size="xxlg">
+                    {/* the same statement as BIR & Tax → Income Tax Summary, for this client */}
+                    <IncomeTaxSummary embedded key={`${stmt.row.user_ids}|${used.from}|${used.to}`}
+                        userIds={stmt.row.user_ids} from={used.from} to={used.to} />
                 </Modal>
             )}
 
-            {printing && stmt?.data && createPortal(
-                <div className="vs-print-root">
-                    <h2>{stmt.row.client_name}</h2>
-                    <div className="vp-meta"><span>Income Statement</span><span>{rangeLabel(used.from, used.to)}</span></div>
-                    <StatementTable data={stmt.data} print />
-                </div>, document.body)}
-        </div>
-    );
-}
-
-function StatementTable({ data, print = false }) {
-    const months = data.months;
-    const lines = statementLines(data);
-    return (
-        <div className={print ? "" : "vs-ebir-scroll"}>
-            <table className={print ? "vp-table" : "vs-ebir-table is-stmt"}>
-                <thead>
-                    <tr><th className="is-label">&nbsp;</th>{months.map((m) => <th key={m} className="vs-num vp-num">{MON[+m.slice(5, 7) - 1]} {m.slice(2, 4)}</th>)}<th className="vs-num vp-num">Total</th></tr>
-                </thead>
-                <tbody>
-                    {lines.map((l, i) => {
-                        if (l.kind === "gap") return <tr key={i} className="vs-gap"><td colSpan={months.length + 2} /></tr>;
-                        if (l.kind === "head") return <tr key={i} className="is-sec"><td colSpan={months.length + 2}>{l.label}</td></tr>;
-                        return (
-                            <tr key={i} className={`is-${l.kind}${l.kind === "total" || l.kind === "grand" ? " vp-sub" : ""}`}>
-                                <td className="is-label">{l.label}</td>
-                                {months.map((m) => {
-                                    const v = Number(l.cell.values[m]) || 0;
-                                    return <td key={m} className={`vs-num vp-num${v < 0 ? " is-neg" : ""}`}>{l.fmt(v)}</td>;
-                                })}
-                                <td className={`vs-num vp-num vs-total${(Number(l.cell.total) || 0) < 0 ? " is-neg" : ""}`}>{l.fmt(l.cell.total)}</td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
         </div>
     );
 }

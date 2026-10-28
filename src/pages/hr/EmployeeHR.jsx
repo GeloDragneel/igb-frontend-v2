@@ -1,12 +1,17 @@
 // HR → Employees: every active employee · click one → popup with shift, salary history, bank accounts, leave credits
+// <EmployeeHR branchMode />  FEMS → Admin → Employee: only the branch picked at the top, no leave credits
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import { useAuth } from "../../context/AuthContext";
 import { PROFILE_SECTIONS, SectionGrid, toBody, toForm, useEmployeeLookups } from "./Employeeform";
 import { Badge, DataTable, Field, PageHead, Pager, api, fmtDate, n2, todayPH, useForm, usePaged } from "./HRShared";
 
-export default function EmployeeHR() {
+export default function EmployeeHR({ branchMode = false }) {
   const notify = useToast();
+  const { user } = useAuth();
+  const branchCaid = branchMode ? Number(user?.caid) || 0 : 0;   // changes when the branch at the top is switched
+  const branchName = [user?.branch_code, user?.business_name].filter(Boolean).join(" – ");
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
@@ -19,17 +24,20 @@ export default function EmployeeHR() {
   const load = useCallback(() => {
     setError("");
     setRows(null);
-    api.get(`/hr/employees?status=${status}`).then(setRows).catch((e) => { setError(e.message || "Couldn't load the employees."); setRows([]); });
-  }, [status]);
+    if (branchMode && !branchCaid) { setError("Pick a branch at the top first."); setRows([]); return; }
+    api.get(`/hr/employees?status=${status}${branchMode ? "&branch=current" : ""}`).then(setRows).catch((e) => { setError(e.message || "Couldn't load the employees."); setRows([]); });
+  }, [status, branchMode, branchCaid]);
   useEffect(() => { load(); }, [load]);
+  // another branch picked at the top → close what is open, the list reloads by itself
+  useEffect(() => { setOpen(null); setAdding(false); setCompany(""); }, [branchCaid]);
 
   const companies = useMemo(() => [...new Set((rows || []).map((e) => e.company).filter(Boolean))].sort(), [rows]);
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (rows || [])
-      .filter((e) => !company || (company === "none" ? !e.company : e.company === company))
+      .filter((e) => branchMode || !company || (company === "none" ? !e.company : e.company === company))
       .filter((e) => !term || [e.name, e.shift, e.company, e.user_type].some((v) => String(v || "").toLowerCase().includes(term)));
-  }, [rows, q, company]);
+  }, [rows, q, company, branchMode]);
 
   const paged = usePaged(list, `${q}|${company}|${status}`);
 
@@ -38,23 +46,28 @@ export default function EmployeeHR() {
 
   return (
     <div className="hr">
-      <PageHead title="Employees" sub="Click an employee to see and edit his shift, salary history, bank accounts and leave credits">
+      <PageHead title="Employees"
+        sub={branchMode
+          ? <>Employees of <b>{branchName || "the branch at the top"}</b> · click one to see and edit his shift, salary history and bank accounts</>
+          : "Click an employee to see and edit his shift, salary history, bank accounts and leave credits"}>
         <div className="hr-actions">
           <Field label="Status">
             <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option>
             </select>
           </Field>
-          <Field label="Company">
-            <select className="input" value={company} onChange={(e) => setCompany(e.target.value)}>
-              <option value="">All companies</option>
-              {companies.map((c) => <option key={c} value={c}>{c}</option>)}
-              <option value="none">No company</option>
-            </select>
-          </Field>
-          <Field label="Search"><input className="input" type="search" placeholder="Name, company, shift or user type…" value={q} onChange={(e) => setQ(e.target.value)} /></Field>
-          <button type="button" className="btn" onClick={generate} title="Every active employee gets each leave type's default days">Generate {year} leave credits</button>
-          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>New employee</button>
+          {!branchMode && (
+            <Field label="Company">
+              <select className="input" value={company} onChange={(e) => setCompany(e.target.value)}>
+                <option value="">All companies</option>
+                {companies.map((c) => <option key={c} value={c}>{c}</option>)}
+                <option value="none">No company</option>
+              </select>
+            </Field>
+          )}
+          <Field label="Search"><input className="input" type="search" placeholder={branchMode ? "Name, shift or user type…" : "Name, company, shift or user type…"} value={q} onChange={(e) => setQ(e.target.value)} /></Field>
+          {!branchMode && <button type="button" className="btn" onClick={generate} title="Every active employee gets each leave type's default days">Generate {year} leave credits</button>}
+          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)} disabled={branchMode && !branchCaid}>New employee</button>
         </div>
       </PageHead>
       {error && <div className="alert-error" role="alert">{error}</div>}
@@ -62,7 +75,7 @@ export default function EmployeeHR() {
       <section className="card hr-section">
         <DataTable loading={!rows} rows={paged.pageRows} onRow={setOpen} empty="No employee found." cols={[
           { key: "name", label: "Employee", render: (e) => <><b>{e.name}</b> {!e.is_active && <Badge status="inactive" />}</> },
-          { key: "company", label: "Company", cls: "wrap", render: (e) => e.company || "—" },
+          ...(branchMode ? [] : [{ key: "company", label: "Company", cls: "wrap", render: (e) => e.company || "—" }]),
           { key: "shift", label: "Shift", render: (e) => <>{e.shift || "—"} {e.shift_is_default && <Badge status="default" />}</> },
           { key: "user_type", label: "User type", render: (e) => e.user_type || "—" },
           { key: "birthdate", label: "Birthday", render: (e) => (e.birthdate ? fmtDate(e.birthdate) : "—") },
@@ -71,9 +84,9 @@ export default function EmployeeHR() {
         {rows && <Pager {...paged} label="employee(s)" />}
       </section>
 
-      {open && <EmployeePopup key={open.id} emp={open} notify={notify} onClose={() => setOpen(null)} onChanged={load} />}
+      {open && <EmployeePopup key={`${branchCaid}:${open.id}`} emp={open} notify={notify} branchMode={branchMode} branch={{ caid: branchCaid, name: branchName }} onClose={() => setOpen(null)} onChanged={load} />}
       {adding && (
-        <EmployeePopup emp={{}} notify={notify} onClose={() => setAdding(false)} onChanged={load}
+        <EmployeePopup key={`${branchCaid}:new`} emp={{}} notify={notify} branchMode={branchMode} branch={{ caid: branchCaid, name: branchName }} onClose={() => setAdding(false)} onChanged={load}
           onAdded={(r) => { notify(r.message); setAdding(false); load(); setOpen({ id: r.employee.id, name: r.employee.name, is_active: true, startTab: "salary" }); }} />
       )}
     </div>
@@ -86,6 +99,8 @@ const NAV = [
   ["Profile", [["personal", "Personal"], ["contact", "Contact"], ["work", "Work"], ["gov", "Gov't & pay"]]],
   ["Payroll", [["shift", "Shift"], ["salary", "Salary"], ["bank", "Banks"], ["leave", "Leave"]]],
 ];
+// branch page: no Leave tab
+const NAV_BRANCH = NAV.map(([g, items]) => [g, items.filter(([k]) => k !== "leave")]);
 const SUBTITLE = {
   personal: "Name, birth and civil details", contact: "How to reach the employee and where he lives", work: "Company, position and contract",
   gov: "SSS, PhilHealth, Pag-IBIG, TIN and payroll account",
@@ -114,14 +129,23 @@ function Blank({ children }) {
 }
 
 /** one popup for BOTH: new employee (emp = {}) and an existing employee */
-function EmployeePopup({ emp, notify, onClose, onChanged, onAdded }) {
+function EmployeePopup({ emp, notify, onClose, onChanged, onAdded, branchMode = false, branch = null }) {
   const isNew = !emp.id;
-  const [tab, setTab] = useState(emp.startTab || "personal");
+  const [tab, setTab] = useState(branchMode && emp.startTab === "leave" ? "personal" : emp.startTab || "personal");
+  const nav = branchMode ? NAV_BRANCH : NAV;
+  const scope = branchMode ? { branch: "current" } : {};
   const [year, setYear] = useState(Number(todayPH().slice(0, 4)));
   const [data, setData] = useState(null);
   const [lk, setLk] = useState({ shifts: [], leaveTypes: [] });
   const [edit, setEdit] = useState(null); // { type: shift | salary | bank | credit, row? }
-  const elk = useEmployeeLookups();
+  const elk0 = useEmployeeLookups();
+  // branch page: the Company is always the branch at the top (the backend keeps it too)
+  const elk = useMemo(() => {
+    if (!elk0 || !branchMode || !branch?.caid) return elk0;
+    const own = (elk0.companies || []).filter((c) => Number(c.value) === branch.caid);
+    const list = own.length ? own : [{ value: branch.caid, label: branch.name || `Branch ${branch.caid}` }];
+    return { ...elk0, companies: list, my_companies: list, my_company: branch.caid };
+  }, [elk0, branchMode, branch?.caid, branch?.name]);
 
   // photo: picked here, sent to S3 (Employee_Profile) only when Save is clicked
   const [photo, setPhoto] = useState(null); // saved photo url
@@ -151,6 +175,8 @@ function EmployeePopup({ emp, notify, onClose, onChanged, onAdded }) {
   };
 
   const [pf, setPf] = useState(() => (isNew ? toForm(null) : null)); // profile form (all 4 profile tabs)
+  // branch page, new employee: company = the branch at the top
+  useEffect(() => { if (isNew && branchMode && branch?.caid) setPf((p) => (p ? { ...p, company_caid: String(branch.caid) } : p)); }, [isNew, branchMode, branch?.caid]);
   // new employee: shift, salary, banks and leave are kept here and saved together with "Add employee"
   const [draft, setDraft] = useState({ shift_id: "", salary: null, banks: [], credits: [] });
   const setDraftKey = (k, v) => setDraft((p) => ({ ...p, [k]: typeof v === "function" ? v(p[k]) : v }));
@@ -180,7 +206,7 @@ function EmployeePopup({ emp, notify, onClose, onChanged, onAdded }) {
     setSaving(true);
     try {
       const msgs = [];
-      if (dirty) msgs.push((await api.put(`/hr/employees/${emp.id}`, toBody(pf))).message);
+      if (dirty) msgs.push((await api.put(`/hr/employees/${emp.id}`, { ...toBody(pf), ...scope })).message);
       if (photoChanged) { const r = await sendPhoto(emp.id); msgs.push(r.message); setPhoto(r.photo_url || null); setPending(undefined); }
       notify(msgs.filter(Boolean).join(" ") || "Saved.");
       load();
@@ -203,7 +229,7 @@ function EmployeePopup({ emp, notify, onClose, onChanged, onAdded }) {
         shift: draft.shift_id ? { shift_id: Number(draft.shift_id), effective_from: today, reason: "New employee" } : null,
         salary: draft.salary,
         banks: draft.banks.map(({ key, ...b }) => b),
-        leave_credits: draft.credits.map(({ key, ...c }) => c),
+        ...(branchMode ? scope : { leave_credits: draft.credits.map(({ key, ...c }) => c) }),
         photo: pending || null,
       });
       onAdded(r);
@@ -224,13 +250,14 @@ function EmployeePopup({ emp, notify, onClose, onChanged, onAdded }) {
   const count = isNew
     ? { shift: draft.shift_id ? 1 : 0, salary: draft.salary ? 1 : 0, bank: draft.banks.length, leave: draft.credits.length }
     : { salary: data?.salaries?.length, bank: banks.length, leave: data?.leave_credits?.length };
-  const includes = [draft.shift_id && "shift", draft.salary && "salary", draft.banks.length && `${draft.banks.length} bank account(s)`, draft.credits.length && `${draft.credits.length} leave credit(s)`].filter(Boolean);
+  const includes = [draft.shift_id && "shift", draft.salary && "salary", draft.banks.length && `${draft.banks.length} bank account(s)`, !branchMode && draft.credits.length && `${draft.credits.length} leave credit(s)`].filter(Boolean);
+  const optional = branchMode ? "Shift, salary and banks are optional." : "Shift, salary, banks and leave are optional.";
 
   return (
     <Modal title={isNew ? "New employee" : "Employee information"} onClose={onClose} size="xlg"
       footer={isNew ? (
         <>
-          <span className="hr-muted hr-foot-note">{!nameOk ? "Last name and first name are required." : includes.length ? `Saves the profile${pending ? ", photo" : ""}, ${includes.join(", ")}.` : `Saves the profile${pending ? " and photo" : ""}. Shift, salary, banks and leave are optional.`}</span>
+          <span className="hr-muted hr-foot-note">{!nameOk ? "Last name and first name are required." : includes.length ? `Saves the profile${pending ? ", photo" : ""}, ${includes.join(", ")}.` : `Saves the profile${pending ? " and photo" : ""}. ${optional}`}</span>
           <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" onClick={addEmployee} disabled={saving || !nameOk}>{saving ? "Saving…" : "Add employee"}</button>
         </>
@@ -258,7 +285,7 @@ function EmployeePopup({ emp, notify, onClose, onChanged, onAdded }) {
         <div className="hr-emp-main">
           {/* tabs across the top */}
           <nav className="hr-emp-tabs" role="tablist" aria-label="Employee">
-            {NAV.map(([group, items]) => (
+            {nav.map(([group, items]) => (
               <div key={group} className="hr-emp-tabgroup" role="group" aria-label={group}>
                 <div>
                   {items.map(([k, l]) => (
@@ -297,7 +324,7 @@ function EmployeePopup({ emp, notify, onClose, onChanged, onAdded }) {
               onSubmit={(b) => { setDraftKey("banks", (list) => upsertDraft(b.is_default ? list.map((x) => ({ ...x, is_default: false })) : list, b, edit.row)); setEdit(null); }} />
             : <DraftBanks list={draft.banks} onAdd={() => setEdit({ type: "bank" })} onEdit={(row) => setEdit({ type: "bank", row })}
               onRemove={(row) => setDraftKey("banks", (list) => list.filter((x) => x.key !== row.key))} />)}
-          {isNew && tab === "leave" && (edit?.type === "credit"
+          {!branchMode && isNew && tab === "leave" && (edit?.type === "credit"
             ? <CreditForm year={year} row={edit.row} leaveTypes={lk.leaveTypes} back={() => setEdit(null)}
               onSubmit={(c) => { setDraftKey("credits", (list) => upsertDraft(list.filter((x) => x.key === edit.row?.key || String(x.leave_type_id) !== String(c.leave_type_id)), c, edit.row)); setEdit(null); }} />
             : <DraftCredits list={draft.credits} year={year} leaveTypes={lk.leaveTypes} onAdd={() => setEdit({ type: "credit" })} onEdit={(row) => setEdit({ type: "credit", row })}
@@ -427,7 +454,7 @@ function EmployeePopup({ emp, notify, onClose, onChanged, onAdded }) {
             ))}
 
           {/* LEAVE */}
-          {data && tab === "leave" && (edit?.type === "credit"
+          {!branchMode && data && tab === "leave" && (edit?.type === "credit"
             ? <CreditForm {...forms} year={year} row={edit.row} leaveTypes={lk.leaveTypes} />
             : (
               <section className="hr-pop-sec">

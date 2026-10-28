@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Modal from "../components/Modal";
+import SearchSelect from "../components/SearchSelect";
 import { useToast } from "../components/Toast";
 import { useAuth, apiFetch } from "../context/AuthContext";
 
@@ -10,6 +11,7 @@ const EMPTY = {
     fullname: "",
     username: "",
     password: "",
+    password2: "",
     is_active: true,
     is_web: true,
     is_scan_suite: true,
@@ -17,6 +19,42 @@ const EMPTY = {
 };
 
 const PAGE_SIZES = [10, 25, 50];
+
+/* password box with its own show / hide eye */
+function PwBox({ value, onChange, placeholder, bad = false, label }) {
+    const [show, setShow] = useState(false);
+    return (
+        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <input
+                className="input"
+                type={show ? "text" : "password"}
+                autoComplete="new-password"
+                spellCheck={false}
+                value={value}
+                placeholder={placeholder}
+                aria-label={label}
+                aria-invalid={bad}
+                onChange={(e) => onChange(e.target.value)}
+                style={{ width: "100%", paddingRight: 42, ...(bad ? { borderColor: "#dc2626", boxShadow: "0 0 0 3px rgba(220,38,38,.12)" } : {}) }}
+            />
+            <button
+                type="button"
+                className="tm-icon"
+                onClick={() => setShow((x) => !x)}
+                tabIndex={-1}
+                aria-label={show ? "Hide password" : "Show password"}
+                title={show ? "Hide" : "Show"}
+                style={{ position: "absolute", right: 6, width: 30, height: 30, border: 0, background: "transparent", display: "grid", placeItems: "center", cursor: "pointer", color: "var(--muted)" }}
+            >
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+                    <circle cx="12" cy="12" r="3" />
+                    {show && <path d="M3 3l18 18" />}
+                </svg>
+            </button>
+        </div>
+    );
+}
 
 const initials = (m) =>
     (m.fullname || m.username || "?")
@@ -205,20 +243,31 @@ export default function Team() {
     const totalModules = data?.modules?.reduce((a, m) => a + 1 + m.children.length, 0) || 0;
     const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
+    // employees of the branch at the top · the ones that already have a login are left out (except this member's own)
+    const employeeOptions = useMemo(() => (data?.employees || [])
+        .filter((e) => !e.member_id || (form && e.member_id === form.id))
+        .map((e) => ({ value: String(e.id), label: e.name })), [data, form?.id]);
+    const pickEmployee = (v) => {
+        const e = (data?.employees || []).find((x) => String(x.id) === String(v));
+        set({ employee_id: v ? String(v) : "", ...(e ? { fullname: e.name } : {}) });
+    };
+
     const openForm = (m) => {
         setFormError("");
         setForm(
             m
-                ? { ...EMPTY, ...m, employee_id: m.employee_id ? String(m.employee_id) : "", password: "" }
+                ? { ...EMPTY, ...m, employee_id: m.employee_id ? String(m.employee_id) : "", password: "", password2: "" }
                 : { ...EMPTY }
         );
     };
 
     const save = async () => {
+        if (!form.id && !form.employee_id) return setFormError("Pick the employee.");
         if (!form.fullname.trim()) return setFormError("Enter the full name.");
         if (!form.username.trim()) return setFormError("Enter a username.");
         if (!form.id && form.password.length < 4) return setFormError("Enter a password (at least 4 characters).");
         if (form.id && form.password && form.password.length < 4) return setFormError("The new password needs at least 4 characters.");
+        if (form.password && form.password !== form.password2) return setFormError("The passwords don't match.");
         setSaving(true);
         setFormError("");
         try {
@@ -457,14 +506,31 @@ export default function Team() {
                     <div className="tm-form">
                         <fieldset className="tm-fs">
                             <legend>Information</legend>
+                            <div className="field">
+                                <span className="field-label">Employee</span>
+                                <SearchSelect
+                                    value={form.employee_id}
+                                    onChange={pickEmployee}
+                                    options={employeeOptions}
+                                    placeholder={employeeOptions.length ? "Select employee" : "No employee available"}
+                                    searchPlaceholder="Search employee…"
+                                    aria-label="Employee"
+                                />
+                                {!employeeOptions.length && (
+                                    <span className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                                        Every employee of this branch already has a login. Add new ones in Admin → Employee.
+                                    </span>
+                                )}
+                            </div>
                             <label className="field">
                                 <span className="field-label">Full name</span>
                                 <input
                                     className="input"
                                     value={form.fullname || ""}
                                     autoComplete="off"
-                                    placeholder="e.g. Juan Dela Cruz"
-                                    maxLength={150}
+                                    placeholder="Filled in from the employee"
+                                    maxLength={50}
+                                    readOnly={!!form.employee_id}
                                     onChange={(e) => set({ fullname: e.target.value })}
                                 />
                             </label>
@@ -477,17 +543,30 @@ export default function Team() {
                                     onChange={(e) => set({ username: e.target.value })}
                                 />
                             </label>
-                            <label className="field">
+                            <div className="field">
                                 <span className="field-label">Password</span>
-                                <input
-                                    className="input"
-                                    type="password"
-                                    autoComplete="new-password"
+                                <PwBox
+                                    label="Password"
                                     value={form.password}
                                     placeholder={form.id ? "Leave empty to keep the current password" : ""}
-                                    onChange={(e) => set({ password: e.target.value })}
+                                    onChange={(v) => set({ password: v })}
                                 />
-                            </label>
+                            </div>
+                            <div className="field">
+                                <span className="field-label">Retype password</span>
+                                <PwBox
+                                    label="Retype password"
+                                    value={form.password2}
+                                    placeholder={form.id && !form.password ? "Only when changing the password" : ""}
+                                    bad={!!form.password2 && form.password2 !== form.password}
+                                    onChange={(v) => set({ password2: v })}
+                                />
+                                {form.password2 && (
+                                    <span style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: form.password2 === form.password ? "#16a34a" : "#dc2626" }}>
+                                        {form.password2 === form.password ? "✓ Passwords match" : "Passwords don't match yet"}
+                                    </span>
+                                )}
+                            </div>
                             <div className="tm-switches">
                                 {[["is_active", "Active"], ["is_web", "Web Access"], ["is_scan_suite", "Scan Suite"]].map(([k, l]) => (
                                     <label key={k} className="tm-switch">

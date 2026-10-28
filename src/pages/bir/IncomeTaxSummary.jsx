@@ -168,13 +168,20 @@ function calc(st, months, brackets, corporate) {
 /* =========================================================
    BIR & Tax → Income Tax Summary
    ========================================================= */
-export default function IncomeTaxSummary() {
+/**
+ * BIR & Tax → Income Tax Summary.
+ * <IncomeTaxSummary embedded userIds="12,15" from="2026-01" to="2026-10" />
+ *   = the same statement for one client (Reports → Income Summary popup):
+ *     no From / To / Branch, scoped to those logins. Ends at Income Tax Payable (excess), like the page.
+ */
+export default function IncomeTaxSummary({ embedded = false, userIds = "", from: fixedFrom = "", to: fixedTo = "" }) {
     const { user } = useAuth();
     const notify = useToast();
     const { from: pFrom, to: pTo } = usePeriod();
+    const scope = embedded ? { user_ids: userIds } : {};
 
-    const [from, setFrom] = useState(pFrom.slice(0, 7));
-    const [to, setTo] = useState(pTo.slice(0, 7));
+    const [from, setFrom] = useState(embedded ? fixedFrom : pFrom.slice(0, 7));
+    const [to, setTo] = useState(embedded ? fixedTo : pTo.slice(0, 7));
     const [branch, setBranch] = useState("all");
 
     const [info, setInfo] = useState(null);     // company, branches, brackets, corporate
@@ -193,16 +200,17 @@ export default function IncomeTaxSummary() {
     const [printing, setPrinting] = useState(false);
 
     useEffect(() => {
+        if (embedded) return;
         setFrom(pFrom.slice(0, 7));
         setTo(pTo.slice(0, 7));
-    }, [pFrom, pTo]);
+    }, [pFrom, pTo, embedded]);
 
     const load = useCallback(async () => {
         if (!from || !to) return setError("Choose both months.");
         setLoading(true);
         setError("");
         try {
-            const r = await apiFetch(`/reports/income-tax-summary?${new URLSearchParams({ from, to, branch })}`);
+            const r = await apiFetch(`/reports/income-tax-summary?${new URLSearchParams({ from, to, branch, ...scope })}`);
             setInfo({ company: r.company, branches: r.branches, brackets: r.brackets, corporate: r.corporate });
             setMonths(r.months);
             setSt(fromApi(r));
@@ -212,10 +220,11 @@ export default function IncomeTaxSummary() {
         } finally {
             setLoading(false);
         }
-    }, [from, to, branch]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [from, to, branch, embedded, userIds]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { load(); }, [user?.id, user?.caid]);
+    useEffect(() => { load(); }, [user?.id, user?.caid, embedded ? userIds : ""]);
 
     const c = useMemo(
         () => (st && info ? calc(st, months, info.brackets, info.corporate) : null),
@@ -249,7 +258,7 @@ export default function IncomeTaxSummary() {
         if (!refs) return;
         setDocs({ title, rows: null });
         try {
-            const rows = await apiFetch(`/reports/income-tax-summary/docs?${new URLSearchParams({ type, refs, branch: used.branch })}`);
+            const rows = await apiFetch(`/reports/income-tax-summary/docs?${new URLSearchParams({ type, refs, branch: used.branch, ...scope })}`);
             setDocs({ title, rows });
         } catch (e) {
             setDocs({ title, rows: [], error: e.message || "Couldn't load the documents." });
@@ -260,7 +269,7 @@ export default function IncomeTaxSummary() {
         setNonVat({ row, list: null, checked: {} });
         try {
             const list = await apiFetch(`/reports/income-tax-summary/nonvat?${new URLSearchParams({
-                account_code: row.code, from: used.from, to: used.to, branch: used.branch,
+                account_code: row.code, from: used.from, to: used.to, branch: used.branch, ...scope,
             })}`);
             setNonVat({ row, list, checked: {} });
         } catch (e) {
@@ -284,7 +293,7 @@ export default function IncomeTaxSummary() {
         try {
             const r = await apiFetch("/reports/income-tax-summary/adjustments", {
                 method: "POST",
-                body: JSON.stringify({ from: used.from, to: used.to, mode, data: { months, st } }),
+                body: JSON.stringify({ from: used.from, to: used.to, mode, data: { months, st }, ...scope }),
             });
             notify(`Adjustment saved for ${rangeText(used.from, used.to)} (Version ${r.version}).`);
         } catch (e) {
@@ -298,7 +307,7 @@ export default function IncomeTaxSummary() {
         if (!st) return notify("Load the report first.", "error");
         setBusy(true);
         try {
-            const list = await apiFetch(`/reports/income-tax-summary/adjustments?${new URLSearchParams({ from: used.from, to: used.to })}`);
+            const list = await apiFetch(`/reports/income-tax-summary/adjustments?${new URLSearchParams({ from: used.from, to: used.to, ...scope })}`);
             const mine = list.find((x) => x.mine);
             if (mine) setSaveAsk(mine);
             else await save("new_version");
@@ -324,7 +333,7 @@ export default function IncomeTaxSummary() {
     const loadSaved = async () => {
         setBusy(true);
         try {
-            const list = await apiFetch(`/reports/income-tax-summary/adjustments?${new URLSearchParams({ from, to })}`);
+            const list = await apiFetch(`/reports/income-tax-summary/adjustments?${new URLSearchParams({ from, to, ...scope })}`);
             if (!list.length) notify("Nothing saved for this period yet.", "error");
             else if (list.length === 1) {
                 if (!info) await load();
@@ -387,7 +396,10 @@ export default function IncomeTaxSummary() {
         try {
             const { token } = await apiFetch("/print/income-tax-summary", {
                 method: "POST",
-                body: JSON.stringify({ from: used.from, to: used.to, branch: used.branch, range: rangeText(used.from, used.to), rows: printRows() }),
+                body: JSON.stringify({
+                    from: used.from, to: used.to, branch: used.branch, range: rangeText(used.from, used.to), rows: printRows(),
+                    ...(embedded ? { company: info?.company || null } : {}),   // popup: the header is the client's, not mine
+                }),
             });
             const blob = await apiBlob(`/print/income-tax-summary/${token}`);
             const name = `IncomeStatement-${user?.username || user?.id || ""}.xlsx`;
@@ -506,7 +518,7 @@ export default function IncomeTaxSummary() {
     ];
 
     return (
-        <section className="card jr-card">
+        <section className={embedded ? "jr-card its-embedded" : "card jr-card"}>
             <header className="jr-head">
                 <h2>{info?.company?.name || " "}</h2>
                 {info?.company?.tin && <div className="mono">TIN : {info.company.tin}</div>}
@@ -515,18 +527,18 @@ export default function IncomeTaxSummary() {
             </header>
 
             <div className="jr-filters no-print">
-                <label className="field"><span className="field-label">From</span>
-                    <input type="month" className="input" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-                <label className="field"><span className="field-label">To</span>
-                    <input type="month" className="input" value={to} onChange={(e) => setTo(e.target.value)} /></label>
-                {info?.branches?.length > 1 && (
+                {!embedded && <label className="field"><span className="field-label">From</span>
+                    <input type="month" className="input" value={from} onChange={(e) => setFrom(e.target.value)} /></label>}
+                {!embedded && <label className="field"><span className="field-label">To</span>
+                    <input type="month" className="input" value={to} onChange={(e) => setTo(e.target.value)} /></label>}
+                {!embedded && info?.branches?.length > 1 && (
                     <div className="field jr-branch">
                         <span className="field-label">Branch</span>
                         <SearchSelect value={branch} onChange={setBranch} options={branchOpts} aria-label="Branch" />
                     </div>
                 )}
                 <div className="jr-btns">
-                    <button className="btn btn-primary" onClick={load} disabled={loading}>{loading ? "Searching…" : "Search"}</button>
+                    {!embedded && <button className="btn btn-primary" onClick={load} disabled={loading}>{loading ? "Searching…" : "Search"}</button>}
                     <button className="btn" onClick={printXlsx} disabled={!st || loading || printing}>{printing ? "Printing…" : "Print"}</button>
                     <button className="btn" onClick={askSave} disabled={!st || loading || busy}>Save Adj.</button>
                     <button className="btn btn-primary-soft" onClick={loadSaved} disabled={loading || busy}>Adjusted</button>
