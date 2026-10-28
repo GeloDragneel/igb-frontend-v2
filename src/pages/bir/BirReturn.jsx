@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { useToast } from "../../components/Toast";
 import { useAuth, apiFetch } from "../../context/AuthContext";
 import BirFormModal, { BirFilingModal } from "./BirFormModal";
 import PayBillModal from "../../components/payments/PayBillModal";
 import BirPayModal from "./BirPayModal";
-import { FORMS, blank, fromFile, fromProfile } from "./birForms";
+import { FORMS, blank, complianceCode, fromFile, fromProfile } from "./birForms";
 import "./BirReturn.css";
 
 const STATUS = { not_filed: "Not filed", unpaid: "Filed · Unpaid", partial: "Filed · Partly paid", paid: "Filed · Paid" };
@@ -20,6 +21,15 @@ const META = {
     "2550M": { code: "2550-M", name: "Monthly VAT Declaration", freq: "Monthly", tone: "blue" },
     "2550Qv2024": { code: "2550-Q", name: "Quarterly VAT Return", freq: "Quarterly", tone: "violet" },
     "2551Qv2018": { code: "2551-Q", name: "Quarterly Percentage Tax Return", freq: "Quarterly", tone: "violet" },
+    // new (FEMS design)
+    "1604C": { code: "1604-C", name: "Annual Information Return – Compensation", freq: "Annual", tone: "gray" },
+    "1604E": { code: "1604-E", name: "Annual Information Return – Expanded Withholding", freq: "Annual", tone: "gray" },
+    "1701Q": { code: "1701-Q", name: "Quarterly Income Tax – Individuals", freq: "Quarterly", tone: "violet" },
+    "1701": { code: "1701", name: "Annual Income Tax – Individuals", freq: "Annual", tone: "gray" },
+    "1702Q": { code: "1702-Q", name: "Quarterly Income Tax – Corporations", freq: "Quarterly", tone: "violet" },
+    "1702RT": { code: "1702-RT", name: "Annual Income Tax – Corporations (Regular Rate)", freq: "Annual", tone: "gray" },
+    "1702EX": { code: "1702-EX", name: "Annual Income Tax – Exempt Corporations", freq: "Annual", tone: "gray" },
+    "2200M": { code: "2200-M", name: "Excise Tax Return – Mineral Products", freq: "Monthly", tone: "blue" },
 };
 
 const PER_OPTIONS = [10, 25, 50, 0];          // 0 = All
@@ -51,6 +61,7 @@ function FileIcon() {
 export default function BirReturn() {
     const { user } = useAuth();
     const notify = useToast();
+    const navigate = useNavigate();
 
     const [formId, setFormId] = useState(FORMS[0].id);
     const [info, setInfo] = useState(null);
@@ -67,12 +78,24 @@ export default function BirReturn() {
     const [payLoading, setPayLoading] = useState("");
     const [page, setPage] = useState(1);
 
-    const form = FORMS.find((x) => x.id === formId);
-    const meta = META[formId];
-    const list = lists[formId] || { files: [], loading: true };
+    // only the returns ticked in Client → Classification & Compliance (null = the server has no compliance list → all)
+    const myForms = useMemo(() => {
+        if (!info) return [];
+        if (!Array.isArray(info.compliance)) return FORMS;
+        const want = new Set(info.compliance.map((c) => String(c).toUpperCase().replace(/[^0-9A-Z]/g, "")));
+        return FORMS.filter((fm) => want.has(complianceCode(fm)));
+    }, [info]);
 
+    const form = myForms.find((x) => x.id === formId) || myForms[0] || null;
+    const meta = form ? META[form.id] : null;
+    const list = (form && lists[form.id]) || { files: [], loading: true };
+
+    const [infoError, setInfoError] = useState("");
     useEffect(() => {
-        apiFetch("/bir/profile").then(setInfo).catch(() => setInfo(null));
+        setInfo(null);
+        setInfoError("");
+        setLists({});
+        apiFetch("/bir/profile").then(setInfo).catch((e) => { setInfo(null); setInfoError(e.message || "Couldn't load the client."); });
         apiFetch("/bir/atc-2551q").then((r) => setLookups({ atc2551q: r })).catch(() => { });
     }, [user?.id, user?.caid]);
 
@@ -86,10 +109,15 @@ export default function BirReturn() {
         }
     }, []);
 
-    // load every form once, so each item on the left can show its count
+    // load each of this client's returns once, so each item on the left can show its count
     useEffect(() => {
-        FORMS.forEach(loadOne);
-    }, [loadOne, user?.id, user?.caid]);
+        myForms.forEach(loadOne);
+    }, [loadOne, myForms]);
+
+    // the picked return isn't one of this client's → the first one
+    useEffect(() => {
+        if (myForms.length && !myForms.some((x) => x.id === formId)) setFormId(myForms[0].id);
+    }, [myForms, formId]);
 
     const files = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -108,12 +136,12 @@ export default function BirReturn() {
     const shownForms = useMemo(() => {
         const norm = (s) => String(s).toLowerCase().replace(/[\s-]/g, "");
         const q = norm(formQuery);
-        if (!q) return FORMS;
-        return FORMS.filter((fm) => {
+        if (!q) return myForms;
+        return myForms.filter((fm) => {
             const m = META[fm.id];
             return [m.code, fm.id, m.name, m.freq].some((x) => norm(x).includes(q));
         });
-    }, [formQuery]);
+    }, [formQuery, myForms]);
 
     const pickForm = (id) => {
         setFormId(id);
@@ -124,6 +152,7 @@ export default function BirReturn() {
 
     /* ---------- actions ---------- */
     const newReturn = () => {
+        if (!form) return;
         let v = blank(form);
         v = { ...v, ...(form.defaults?.(new Date(), lookups) || {}) };
         v = { ...v, ...fromProfile(form, info?.profile) };
@@ -135,7 +164,8 @@ export default function BirReturn() {
         setOpening(name);
         try {
             const r = await apiFetch(`/bir/files/${encodeURIComponent(name)}`);
-            setOpen({ form, initial: fromFile(form, r.data), autofill: false });
+            const v = fromFile(form, r.data);
+            setOpen({ form, initial: { ...v, ...(form.compute?.(v) || {}) }, autofill: false });
         } catch (e) {
             notify(e.message || "Couldn't open the file.", "error");
         } finally {
@@ -234,7 +264,20 @@ export default function BirReturn() {
                 </div>
             )}
 
-            <div className="br-layout">
+            {info && myForms.length === 0 && (
+                <div className="card br-empty">
+                    <div className="br-empty-icon"><FileIcon /></div>
+                    <p className="br-empty-title">No compliance set yet</p>
+                    <p className="br-empty-sub">
+                        Go to <b>Settings</b> → <b>Classification &amp; Compliance</b>, tick the returns this business files and save.
+                        They will show here.
+                    </p>
+                    <button className="btn btn-primary" onClick={() => navigate("/settings")}>Go to Settings</button>
+                </div>
+            )}
+            {infoError && <div className="alert-error" role="alert">{infoError}</div>}
+
+            {form && meta && <div className="br-layout">
                 {/* ---------- left: forms ---------- */}
                 <nav className="card br-side" aria-label="BIR returns">
                     <div className="br-side-head">Returns</div>
@@ -298,7 +341,11 @@ export default function BirReturn() {
                     <div className="br-panel-head">
                         <div>
                             <h3 className="br-panel-title">{meta.code} · {meta.name}</h3>
-                            <p className="br-panel-sub">Saved returns open in the eBIRForms app too.</p>
+                            <p className="br-panel-sub">
+                                {form.custom
+                                    ? "FEMS form that follows the BIR form · saved here, the eBIRForms app doesn't open it."
+                                    : "Saved returns open in the eBIRForms app too."}
+                            </p>
                             {list.files?.length > 0 && (
                                 <div className="br-tally">
                                     {Object.keys(STATUS).filter((k) => tally[k]).map((k) => (
@@ -382,10 +429,10 @@ export default function BirReturn() {
                                                 : <small>Saved {x.created}</small>}
                                         </div>
                                         <div className="br-file-actions">
-                                            {!x.filing && (
+                                            {!x.filing && !form.info && (
                                                 <button className="btn btn-sm btn-info" onClick={() => setFilingFor(x)}>File &amp; submit</button>
                                             )}
-                                            {x.filing && x.status !== "paid" && (
+                                            {x.filing && x.status !== "paid" && !form.info && (
                                                 <button className="btn btn-sm btn-info" onClick={() => pay(x)} disabled={payLoading === x.filename}>
                                                     {payLoading === x.filename ? "Opening…" : "Pay"}
                                                 </button>
@@ -438,7 +485,7 @@ export default function BirReturn() {
                         </>
                     )}
                 </div>
-            </div>
+            </div>}
 
             {open && (
                 <BirFormModal

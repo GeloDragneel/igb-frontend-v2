@@ -763,9 +763,540 @@ const F2551Q = {
 };
 
 /* =========================================================
+   NEW FORMS (FEMS design that follows the BIR form)
+   1701Q · 1701 · 1702Q · 1702RT · 1702EX · 1604C · 1604E · 2200M
+   Saved in the same save folder as the other returns, but these are FEMS files:
+   the eBIRForms app does not open them (it has its own version of these forms).
+   ========================================================= */
+const FOOT_X = "\nFEMS";
+
+// graduated income tax for individuals: TRAIN 2018–2022, 2023 onwards
+export function gradTax(income, year) {
+    const t = Number(year) >= 2023
+        ? [[8000000, 2202500, 0.35], [2000000, 402500, 0.30], [800000, 102500, 0.25], [400000, 22500, 0.20], [250000, 0, 0.15]]
+        : [[8000000, 2410000, 0.35], [2000000, 490000, 0.32], [800000, 130000, 0.30], [400000, 30000, 0.25], [250000, 0, 0.20]];
+    for (const [min, base, rate] of t) if (income > min) return base + (income - min) * rate;
+    return 0;
+}
+const sumOf = (v, keys) => keys.reduce((a, k) => a + p(v[k]), 0);
+const tinK = (X) => [`${X}txtTIN1`, `${X}txtTIN2`, `${X}txtTIN3`, `${X}txtBranchCode`];
+
+const addM = (ymStr, n) => { const [y, m] = ymStr.split("-").map(Number); const d = new Date(y, m - 1 + n, 1); return ym(d); };
+
+// background: TIN · RDO · name · address · ZIP · contact · email · line of business · sheets · amended
+const bgFields = (X) => [
+    S("Part I – Background information"),
+    O("amend", `${X}optAmend:Y`, "Yes", "Amended return?"), O("amend", `${X}optAmend:N`, "No"),
+    T(`${X}txtSheets`, "No. of sheets attached"),
+    T(`${X}txtTIN1`, "TIN"), T(`${X}txtTIN2`), T(`${X}txtTIN3`), T(`${X}txtBranchCode`, "Branch code"), T(`${X}txtRDOCode`, "RDO code"),
+    T(`${X}txtTaxpayerName`, "Taxpayer name", { enc: true, wide: true }),
+    T(`${X}txtAddress`, "Registered address", { enc: true, wide: true }),
+    T(`${X}txtZipCode`, "ZIP code"), T(`${X}txtTelNum`, "Contact number"),
+    T(`${X}txtEmail`, "Email address", { wide: true }),
+    T(`${X}txtLineBus`, "Line of business", { enc: true, wide: true }),
+];
+const bgProf = (X) => pm(tinK(X), `${X}txtRDOCode`, `${X}txtTaxpayerName`, `${X}txtAddress`, `${X}txtZipCode`, `${X}txtTelNum`, `${X}txtEmail`, `${X}txtLineBus`);
+const bgDefaults = (X) => ({ [`${X}optAmend:N`]: "true", [`${X}txtSheets`]: "0" });
+// Part II totals + penalties + Part III payment (same item names on every new income tax form)
+const partII = (X) => [
+    S("Part II – Total tax payable"),
+    R(`${X}taxDue`, "Tax due"), R(`${X}credits`, "Less: tax credits / payments"), R(`${X}payable`, "Tax payable / (overpayment)"),
+    N(`${X}surcharge`, "Surcharge"), N(`${X}interest`, "Interest"), N(`${X}compromise`, "Compromise"),
+    R(`${X}penalties`, "Total penalties"), R(`${X}total`, "Total amount payable / (overpayment)"),
+];
+const payPart = (X) => [
+    S("Part III – Details of payment"),
+    T("txtTaxAgentNo", "Tax agent accreditation no."), T("txtDateIssue", "Date of issue"), T("txtDateExpiry", "Date of expiry"),
+    ...pay(X, "P1", "Cash / bank debit memo"), ...pay(X, "P2", "Check"), ...pay(X, "P3", "Tax debit memo"),
+    T(`${X}txtParticularP4`, "Others (specify)"), T(`${X}txtAgencyP4`, "Agency"), T(`${X}txtNumberP4`, "Number"), T(`${X}txtDateP4`, "Date"), T(`${X}txtAmountP4`, "Amount"),
+];
+const overPay = (X) => [C(`${X}chkRefund`, "To be refunded"), C(`${X}chkTcc`, "To be issued a tax credit certificate"), C(`${X}chkCarry`, "To be carried over as tax credit")];
+const totalsOf = (X, v, due, credits) => {
+    const pen = sumOf(v, [`${X}surcharge`, `${X}interest`, `${X}compromise`]);
+    return {
+        [`${X}taxDue`]: f(due), [`${X}credits`]: f(credits), [`${X}payable`]: f(due - credits),
+        [`${X}penalties`]: f(pen), [`${X}total`]: f(due - credits + pen),
+    };
+};
+// individual ATC from taxpayer type + tax rate
+const atcIndiv = (type, eight) => (type === "PR" ? (eight ? "II017" : "II014") : type === "ES" || type === "TR" ? "II011" : eight ? "II015" : "II012");
+// corporate fiscal quarter: year ended mm/yyyy + quarter → { from, to (this quarter), start (first month of the year) }
+const corpQuarter = (y, m, q) => {
+    const end = `${y}-${pad(m)}`;
+    const start = addM(end, -11);
+    const from = addM(start, (q - 1) * 3);
+    return { start, from, to: addM(from, 2), end };
+};
+
+/* ---------- 1701Q – Quarterly income tax (individuals) ---------- */
+const IQ = "frm1701q:";
+const IQ_QTR = [1, 2, 3].map((i) => `${IQ}optQuarter:${i}`);
+const F1701Q = {
+    id: "1701Q", file: "1701Q", title: "1701Q – Quarterly Income Tax Return (Individuals, Estates & Trusts)", footer: FOOT_X, custom: true,
+    fields: [
+        T(`${IQ}txtYear`, "1 For the year"),
+        O("qtr", IQ_QTR[0], "1st", "2 Quarter"), O("qtr", IQ_QTR[1], "2nd"), O("qtr", IQ_QTR[2], "3rd"),
+        ...bgFields(IQ),
+        O("type", `${IQ}optType:SP`, "Single proprietor", "Taxpayer type"), O("type", `${IQ}optType:PR`, "Professional"),
+        O("type", `${IQ}optType:ES`, "Estate"), O("type", `${IQ}optType:TR`, "Trust"),
+        T(`${IQ}txtATC`, "ATC"), T(`${IQ}txtBirthDate`, "Date of birth"), T(`${IQ}txtCitizenship`, "Citizenship"), T(`${IQ}txtForeignTin`, "Foreign tax no."),
+        O("rate", `${IQ}optRate:G`, "Graduated rates", "Tax rate"), O("rate", `${IQ}optRate:E`, "8% income tax rate"),
+        O("ded", `${IQ}optDeduct:I`, "Itemized deductions", "Method of deduction"), O("ded", `${IQ}optDeduct:O`, "Optional standard deduction (40%)"),
+        S("Schedule I – graduated rates"),
+        N(`${IQ}s1Sales`), N(`${IQ}s1Cost`), R(`${IQ}s1Gross`), N(`${IQ}s1Itemized`), R(`${IQ}s1Osd`), R(`${IQ}s1Net`),
+        N(`${IQ}s1Prev`), N(`${IQ}s1NonOp`), N(`${IQ}s1Partner`), R(`${IQ}s1Taxable`), R(`${IQ}s1Due`),
+        S("Schedule II – 8% rate"),
+        N(`${IQ}s2Sales`), N(`${IQ}s2NonOp`), R(`${IQ}s2Total`), N(`${IQ}s2Prev`), R(`${IQ}s2Cum`), N(`${IQ}s2Less`), R(`${IQ}s2Taxable`), R(`${IQ}s2Due`),
+        S("Schedule III – tax credits / payments"),
+        N(`${IQ}s3Prior`), N(`${IQ}s3PrevPay`), N(`${IQ}s3PrevCwt`), N(`${IQ}s3Cwt`), N(`${IQ}s3Filed`), N(`${IQ}s3Foreign`), N(`${IQ}s3Other`), T(`${IQ}s3OtherSpecify`), R(`${IQ}s3Total`),
+        ...partII(IQ), ...payPart(IQ),
+    ],
+    prof: bgProf(IQ),
+    defaults: (now) => {
+        const q = Math.min(3, Math.max(1, curQ() - 1 || 1));
+        return {
+            ...bgDefaults(IQ), [`${IQ}txtYear`]: String(now.getFullYear()), ...qPatch(IQ_QTR, q),
+            [`${IQ}optType:SP`]: "true", [`${IQ}optRate:G`]: "true", [`${IQ}optDeduct:I`]: "true",
+            [`${IQ}txtATC`]: "II012", [`${IQ}s2Less`]: "250,000.00", [`${IQ}txtCitizenship`]: "FILIPINO",
+        };
+    },
+    onChange: (patch, v) => {
+        if (Object.keys(patch).some((k) => k.startsWith(`${IQ}optType:`) || k.startsWith(`${IQ}optRate:`))) {
+            const type = ["SP", "PR", "ES", "TR"].find((t) => T_(v[`${IQ}optType:${t}`])) || "SP";
+            return { [`${IQ}txtATC`]: atcIndiv(type, T_(v[`${IQ}optRate:E`])) };
+        }
+        return {};
+    },
+    compute: (v) => {
+        const g = (k) => p(v[`${IQ}${k}`]);
+        const osdOn = T_(v[`${IQ}optDeduct:O`]);
+        const gross = g("s1Sales") - g("s1Cost");
+        const osd = osdOn ? g("s1Sales") * 0.4 : 0;                       // individuals: 40% of gross sales / receipts
+        const net = osdOn ? g("s1Sales") - osd : gross - g("s1Itemized");
+        const taxable = net + g("s1Prev") + g("s1NonOp") + g("s1Partner");
+        const dueG = gradTax(Math.max(0, taxable), v[`${IQ}txtYear`]);
+        const s2Total = g("s2Sales") + g("s2NonOp"), s2Cum = s2Total + g("s2Prev"), s2Taxable = Math.max(0, s2Cum - g("s2Less")), due8 = s2Taxable * 0.08;
+        const credits = sumOf(v, ["s3Prior", "s3PrevPay", "s3PrevCwt", "s3Cwt", "s3Filed", "s3Foreign", "s3Other"].map((k) => `${IQ}${k}`));
+        const k = (x) => `${IQ}${x}`;
+        return {
+            [k("s1Gross")]: f(gross), [k("s1Osd")]: f(osd), [k("s1Net")]: f(net), [k("s1Taxable")]: f(taxable), [k("s1Due")]: f(dueG),
+            [k("s2Total")]: f(s2Total), [k("s2Cum")]: f(s2Cum), [k("s2Taxable")]: f(s2Taxable), [k("s2Due")]: f(due8),
+            [k("s3Total")]: f(credits),
+            ...totalsOf(IQ, v, T_(v[k("optRate:E")]) ? due8 : dueG, credits),
+        };
+    },
+    validate: (v) => {
+        if (!/^\d{4}$/.test(v[`${IQ}txtYear`] || "")) return "Enter the year (item 1).";
+        if (!qOf(v, IQ_QTR)) return "Choose the quarter (item 2).";
+        if (!T_(v[`${IQ}optRate:G`]) && !T_(v[`${IQ}optRate:E`])) return "Choose the tax rate.";
+        return tinErr(v, tinK(IQ));
+    },
+    filename: (v) => `${tinOf(v, tinK(IQ))}-1701Q-${v[`${IQ}txtYear`]}Q${qOf(v, IQ_QTR)}.xml`,
+    autofill: async (v, af) => {
+        const y = Number(v[`${IQ}txtYear`]), q = qOf(v, IQ_QTR);
+        if (!y || !q) return null;
+        const { from, to } = qMonths(y, q);
+        const [cur, prev] = await Promise.all([
+            af("income", { from, to }),
+            q > 1 ? af("income", { from: `${y}-01`, to: `${y}-${pad((q - 1) * 3)}` }) : Promise.resolve(null),
+        ]);
+        const osdOn = T_(v[`${IQ}optDeduct:O`]);
+        const prevNet = prev ? (osdOn ? prev.sales * 0.6 : prev.sales - prev.cost - prev.expenses) : 0;
+        return {
+            [`${IQ}s1Sales`]: f(cur.sales), [`${IQ}s1Cost`]: f(cur.cost), [`${IQ}s1Itemized`]: f(cur.expenses), [`${IQ}s1Prev`]: f(prevNet),
+            [`${IQ}s2Sales`]: f(cur.sales), [`${IQ}s2Prev`]: f(prev ? prev.sales : 0),
+            [`${IQ}s3Cwt`]: f(cur.cwt), [`${IQ}s3PrevCwt`]: f(prev ? prev.cwt : 0),
+        };
+    },
+};
+
+/* ---------- 1701 – Annual income tax (individuals) ---------- */
+const IA = "frm1701:";
+const F1701 = {
+    id: "1701", file: "1701", title: "1701 – Annual Income Tax Return (Individuals, Estates & Trusts)", footer: FOOT_X, custom: true,
+    fields: [
+        T(`${IA}txtYear`, "1 For the year"),
+        O("short", `${IA}optShort:Y`, "Yes", "Short period return?"), O("short", `${IA}optShort:N`, "No"),
+        ...bgFields(IA),
+        O("type", `${IA}optType:SP`, "Single proprietor", "Taxpayer type"), O("type", `${IA}optType:PR`, "Professional"),
+        O("type", `${IA}optType:ES`, "Estate"), O("type", `${IA}optType:TR`, "Trust"), O("type", `${IA}optType:CE`, "Compensation earner"),
+        T(`${IA}txtATC`, "ATC"), T(`${IA}txtBirthDate`, "Date of birth"), T(`${IA}txtCitizenship`, "Citizenship"), T(`${IA}txtForeignTin`, "Foreign tax no."),
+        O("rate", `${IA}optRate:G`, "Graduated rates", "Tax rate"), O("rate", `${IA}optRate:E`, "8% income tax rate"),
+        O("ded", `${IA}optDeduct:I`, "Itemized deductions", "Method of deduction"), O("ded", `${IA}optDeduct:O`, "Optional standard deduction (40%)"),
+        S("Compensation income"),
+        N(`${IA}compGross`), N(`${IA}compNonTax`), R(`${IA}compTaxable`), N(`${IA}compWithheld`),
+        S("Graduated rates"),
+        N(`${IA}aSales`), N(`${IA}aCost`), R(`${IA}aGross`), N(`${IA}aNonOp`), R(`${IA}aTotalGross`), N(`${IA}aItemized`), R(`${IA}aOsd`),
+        R(`${IA}aNet`), N(`${IA}aPartner`), R(`${IA}aTaxable`), R(`${IA}aDue`),
+        S("8% rate"),
+        N(`${IA}bSales`), N(`${IA}bNonOp`), R(`${IA}bTotal`), N(`${IA}bLess`), R(`${IA}bTaxable`), R(`${IA}bDue`), R(`${IA}bCompDue`), R(`${IA}bTotalDue`),
+        S("Tax credits / payments"),
+        N(`${IA}cPrior`), N(`${IA}cQuarterly`), N(`${IA}cCwtQ13`), N(`${IA}cCwtQ4`), R(`${IA}cComp`), N(`${IA}cFiled`), N(`${IA}cForeign`), N(`${IA}cOther`), T(`${IA}cOtherSpecify`), R(`${IA}cTotal`),
+        ...partII(IA), ...overPay(IA), ...payPart(IA),
+    ],
+    prof: bgProf(IA),
+    defaults: (now) => ({
+        ...bgDefaults(IA), [`${IA}txtYear`]: String(now.getFullYear() - (now.getMonth() < 4 ? 1 : 0)), [`${IA}optShort:N`]: "true",
+        [`${IA}optType:SP`]: "true", [`${IA}optRate:G`]: "true", [`${IA}optDeduct:I`]: "true", [`${IA}txtATC`]: "II012",
+        [`${IA}bLess`]: "250,000.00", [`${IA}txtCitizenship`]: "FILIPINO",
+    }),
+    onChange: (patch, v) => {
+        if (Object.keys(patch).some((k) => k.startsWith(`${IA}optType:`) || k.startsWith(`${IA}optRate:`))) {
+            const type = ["SP", "PR", "ES", "TR", "CE"].find((t) => T_(v[`${IA}optType:${t}`])) || "SP";
+            return { [`${IA}txtATC`]: type === "CE" ? "II011" : atcIndiv(type, T_(v[`${IA}optRate:E`])) };
+        }
+        return {};
+    },
+    compute: (v) => {
+        const g = (k) => p(v[`${IA}${k}`]);
+        const yr = v[`${IA}txtYear`];
+        const comp = Math.max(0, g("compGross") - g("compNonTax"));
+        const osdOn = T_(v[`${IA}optDeduct:O`]);
+        const aGross = g("aSales") - g("aCost"), aTotalGross = aGross + g("aNonOp");
+        const aOsd = osdOn ? (g("aSales") + g("aNonOp")) * 0.4 : 0;
+        const aNet = osdOn ? g("aSales") + g("aNonOp") - aOsd : aTotalGross - g("aItemized");
+        const aTaxable = aNet + g("aPartner") + comp;
+        const aDue = gradTax(Math.max(0, aTaxable), yr);
+        const bTotal = g("bSales") + g("bNonOp"), bTaxable = Math.max(0, bTotal - g("bLess")), bDue = bTaxable * 0.08;
+        const bCompDue = gradTax(comp, yr), bTotalDue = bDue + bCompDue;
+        const cComp = g("compWithheld");
+        const credits = sumOf(v, ["cPrior", "cQuarterly", "cCwtQ13", "cCwtQ4", "cFiled", "cForeign", "cOther"].map((k) => `${IA}${k}`)) + cComp;
+        const k = (x) => `${IA}${x}`;
+        return {
+            [k("compTaxable")]: f(comp), [k("aGross")]: f(aGross), [k("aTotalGross")]: f(aTotalGross), [k("aOsd")]: f(aOsd), [k("aNet")]: f(aNet),
+            [k("aTaxable")]: f(aTaxable), [k("aDue")]: f(aDue), [k("bTotal")]: f(bTotal), [k("bTaxable")]: f(bTaxable), [k("bDue")]: f(bDue),
+            [k("bCompDue")]: f(bCompDue), [k("bTotalDue")]: f(bTotalDue), [k("cComp")]: f(cComp), [k("cTotal")]: f(credits),
+            ...totalsOf(IA, v, T_(v[k("optRate:E")]) ? bTotalDue : aDue, credits),
+        };
+    },
+    validate: (v) => {
+        if (!/^\d{4}$/.test(v[`${IA}txtYear`] || "")) return "Enter the year (item 1).";
+        if (!T_(v[`${IA}optRate:G`]) && !T_(v[`${IA}optRate:E`])) return "Choose the tax rate.";
+        return tinErr(v, tinK(IA));
+    },
+    filename: (v) => `${tinOf(v, tinK(IA))}-1701-FY12${v[`${IA}txtYear`]}.xml`,
+    autofill: async (v, af) => {
+        const y = Number(v[`${IA}txtYear`]);
+        if (!y) return null;
+        const [q13, q4] = await Promise.all([af("income", { from: `${y}-01`, to: `${y}-09` }), af("income", { from: `${y}-10`, to: `${y}-12` })]);
+        const sales = q13.sales + q4.sales;
+        return {
+            [`${IA}aSales`]: f(sales), [`${IA}aCost`]: f(q13.cost + q4.cost), [`${IA}aItemized`]: f(q13.expenses + q4.expenses),
+            [`${IA}bSales`]: f(sales), [`${IA}cCwtQ13`]: f(q13.cwt), [`${IA}cCwtQ4`]: f(q4.cwt),
+        };
+    },
+};
+
+/* ---------- 1702Q – Quarterly income tax (corporations) ---------- */
+const CQ = "frm1702q:";
+const CQ_YE = [[`${CQ}txtYearEndMonth`, "m"], [`${CQ}txtYearEndYear`, "y"]];
+const CQ_QTR = [1, 2, 3].map((i) => `${CQ}optQuarter:${i}`);
+const corpRate = (X, v) => (T_(v[`${X}optRate:S`]) ? 0.2 : T_(v[`${X}optRate:P`]) ? p(v[`${X}txtSpecialRate`]) / 100 : 0.25);
+const F1702Q = {
+    id: "1702Q", file: "1702Q", title: "1702Q – Quarterly Income Tax Return (Corporations & Partnerships)", footer: FOOT_X, custom: true,
+    fields: [
+        O("forthe", `${CQ}optFor:C`, "Calendar", "1 For the"), O("forthe", `${CQ}optFor:F`, "Fiscal"),
+        MY("2 Year ended", CQ_YE),
+        O("qtr", CQ_QTR[0], "1st", "3 Quarter"), O("qtr", CQ_QTR[1], "2nd"), O("qtr", CQ_QTR[2], "3rd"),
+        ...bgFields(CQ),
+        T(`${CQ}txtATC`, "ATC"),
+        O("rate", `${CQ}optRate:R`, "Regular rate (25%)", "Income tax rate"), O("rate", `${CQ}optRate:S`, "20% (net taxable income ≤ ₱5M and total assets ≤ ₱100M)"),
+        O("rate", `${CQ}optRate:P`, "Special / preferential rate"), T(`${CQ}txtSpecialRate`, "Special rate (%)"),
+        O("ded", `${CQ}optDeduct:I`, "Itemized deductions", "Method of deduction"), O("ded", `${CQ}optDeduct:O`, "Optional standard deduction (40% of gross income)"),
+        C(`${CQ}chkMcit`, "Subject to MCIT (4th year of operations onwards)"), T(`${CQ}txtMcitRate`, "MCIT rate (%)"),
+        S("Schedule – computation of tax"),
+        N(`${CQ}sSales`), N(`${CQ}sCost`), R(`${CQ}sGrossOp`), N(`${CQ}sOther`), R(`${CQ}sTotalGross`), N(`${CQ}sItemized`), R(`${CQ}sOsd`),
+        R(`${CQ}sTaxableQ`), N(`${CQ}sPrev`), R(`${CQ}sTaxableTD`), R(`${CQ}sRatePct`), R(`${CQ}sRegular`),
+        N(`${CQ}sPrevGross`), R(`${CQ}sMcitBase`), R(`${CQ}sMcit`), R(`${CQ}sDue`),
+        S("Tax credits / payments"),
+        N(`${CQ}cPrior`), N(`${CQ}cPrevPay`), N(`${CQ}cPrevMcit`), N(`${CQ}cPrevCwt`), N(`${CQ}cCwt`), N(`${CQ}cFiled`), N(`${CQ}cForeign`), N(`${CQ}cOther`), T(`${CQ}cOtherSpecify`), R(`${CQ}cTotal`),
+        ...partII(CQ), ...payPart(CQ),
+    ],
+    prof: bgProf(CQ),
+    defaults: (now) => ({
+        ...bgDefaults(CQ), [`${CQ}optFor:C`]: "true", ...isoToParts(CQ_YE, `${now.getFullYear()}-12`), ...qPatch(CQ_QTR, Math.min(3, Math.max(1, curQ() - 1 || 1))),
+        [`${CQ}optRate:R`]: "true", [`${CQ}optDeduct:I`]: "true", [`${CQ}txtMcitRate`]: "2", [`${CQ}txtATC`]: "IC010",
+    }),
+    onChange: (patch, v) => (`${CQ}optFor:C` in patch && T_(patch[`${CQ}optFor:C`])
+        ? isoToParts(CQ_YE, `${Number(v[CQ_YE[1][0]]) || new Date().getFullYear()}-12`) : {}),
+    compute: (v) => {
+        const g = (k) => p(v[`${CQ}${k}`]);
+        const grossOp = g("sSales") - g("sCost"), totalGross = grossOp + g("sOther");
+        const osd = T_(v[`${CQ}optDeduct:O`]) ? totalGross * 0.4 : 0;     // corporations: 40% of gross income
+        const taxableQ = totalGross - (T_(v[`${CQ}optDeduct:O`]) ? osd : g("sItemized"));
+        const taxableTD = taxableQ + g("sPrev");
+        const rate = corpRate(CQ, v), regular = Math.max(0, taxableTD) * rate;
+        const mcitBase = totalGross + g("sPrevGross");
+        const mcit = T_(v[`${CQ}chkMcit`]) ? Math.max(0, mcitBase) * p(v[`${CQ}txtMcitRate`]) / 100 : 0;
+        const due = Math.max(regular, mcit);
+        const credits = sumOf(v, ["cPrior", "cPrevPay", "cPrevMcit", "cPrevCwt", "cCwt", "cFiled", "cForeign", "cOther"].map((k) => `${CQ}${k}`));
+        const k = (x) => `${CQ}${x}`;
+        return {
+            [k("sGrossOp")]: f(grossOp), [k("sTotalGross")]: f(totalGross), [k("sOsd")]: f(osd), [k("sTaxableQ")]: f(taxableQ),
+            [k("sTaxableTD")]: f(taxableTD), [k("sRatePct")]: `${(rate * 100).toFixed(2)}%`, [k("sRegular")]: f(regular),
+            [k("sMcitBase")]: f(mcitBase), [k("sMcit")]: f(mcit), [k("sDue")]: f(due), [k("cTotal")]: f(credits),
+            ...totalsOf(CQ, v, due, credits),
+        };
+    },
+    validate: (v) => {
+        if (!partsToIso(CQ_YE, v, "month")) return "Enter the year ended (item 2).";
+        if (!qOf(v, CQ_QTR)) return "Choose the quarter (item 3).";
+        return tinErr(v, tinK(CQ));
+    },
+    filename: (v) => `${tinOf(v, tinK(CQ))}-1702Q-${pad(v[CQ_YE[0][0]])}${v[CQ_YE[1][0]]}Q${qOf(v, CQ_QTR)}.xml`,
+    autofill: async (v, af) => {
+        const y = Number(v[CQ_YE[1][0]]), m = Number(v[CQ_YE[0][0]]), q = qOf(v, CQ_QTR);
+        if (!y || !m || !q) return null;
+        const { start, from, to } = corpQuarter(y, m, q);
+        const [cur, prev] = await Promise.all([
+            af("income", { from, to }),
+            q > 1 ? af("income", { from: start, to: addM(from, -1) }) : Promise.resolve(null),
+        ]);
+        const osdOn = T_(v[`${CQ}optDeduct:O`]);
+        const pGross = prev ? prev.sales - prev.cost : 0;
+        return {
+            [`${CQ}sSales`]: f(cur.sales), [`${CQ}sCost`]: f(cur.cost), [`${CQ}sItemized`]: f(cur.expenses),
+            [`${CQ}sPrev`]: f(prev ? (osdOn ? pGross * 0.6 : pGross - prev.expenses) : 0), [`${CQ}sPrevGross`]: f(pGross),
+            [`${CQ}cCwt`]: f(cur.cwt), [`${CQ}cPrevCwt`]: f(prev ? prev.cwt : 0),
+        };
+    },
+};
+
+/* ---------- 1702RT – Annual income tax (corporations, regular rate) ---------- */
+const CR = "frm1702rt:";
+const CR_YE = [[`${CR}txtYearEndMonth`, "m"], [`${CR}txtYearEndYear`, "y"]];
+const F1702RT = {
+    id: "1702RT", file: "1702RT", title: "1702-RT – Annual Income Tax Return (Corporations, Regular Rate)", footer: FOOT_X, custom: true,
+    fields: [
+        O("forthe", `${CR}optFor:C`, "Calendar", "1 For the"), O("forthe", `${CR}optFor:F`, "Fiscal"),
+        MY("2 Year ended", CR_YE),
+        O("short", `${CR}optShort:Y`, "Yes", "Short period return?"), O("short", `${CR}optShort:N`, "No"),
+        ...bgFields(CR),
+        T(`${CR}txtATC`, "ATC"),
+        O("rate", `${CR}optRate:R`, "Regular rate (25%)", "Income tax rate"), O("rate", `${CR}optRate:S`, "20% (net taxable income ≤ ₱5M and total assets ≤ ₱100M)"),
+        O("rate", `${CR}optRate:P`, "Special / preferential rate"), T(`${CR}txtSpecialRate`, "Special rate (%)"),
+        O("ded", `${CR}optDeduct:I`, "Itemized deductions", "Method of deduction"), O("ded", `${CR}optDeduct:O`, "Optional standard deduction (40% of gross income)"),
+        C(`${CR}chkMcit`, "Subject to MCIT (4th year of operations onwards)"), T(`${CR}txtMcitRate`, "MCIT rate (%)"),
+        S("Schedule – computation of tax"),
+        N(`${CR}sSales`), N(`${CR}sReturns`), R(`${CR}sNetSales`), N(`${CR}sCost`), R(`${CR}sGrossOp`), N(`${CR}sOther`), R(`${CR}sTotalGross`),
+        N(`${CR}sItemized`), R(`${CR}sOsd`), R(`${CR}sTaxable`), R(`${CR}sRatePct`), R(`${CR}sRegular`), R(`${CR}sMcit`), R(`${CR}sDue`),
+        S("Tax credits / payments"),
+        N(`${CR}cPrior`), N(`${CR}cQuarterly`), N(`${CR}cMcitPrev`), N(`${CR}cCwtQ13`), N(`${CR}cCwtQ4`), N(`${CR}cFiled`), N(`${CR}cForeign`), N(`${CR}cSpecial`), N(`${CR}cOther`), T(`${CR}cOtherSpecify`), R(`${CR}cTotal`),
+        ...partII(CR), ...overPay(CR), ...payPart(CR),
+    ],
+    prof: bgProf(CR),
+    defaults: (now) => ({
+        ...bgDefaults(CR), [`${CR}optFor:C`]: "true", ...isoToParts(CR_YE, `${now.getFullYear() - (now.getMonth() < 4 ? 1 : 0)}-12`),
+        [`${CR}optShort:N`]: "true", [`${CR}optRate:R`]: "true", [`${CR}optDeduct:I`]: "true", [`${CR}txtMcitRate`]: "2", [`${CR}txtATC`]: "IC055",
+    }),
+    onChange: (patch, v) => (`${CR}optFor:C` in patch && T_(patch[`${CR}optFor:C`])
+        ? isoToParts(CR_YE, `${Number(v[CR_YE[1][0]]) || new Date().getFullYear()}-12`) : {}),
+    compute: (v) => {
+        const g = (k) => p(v[`${CR}${k}`]);
+        const netSales = g("sSales") - g("sReturns"), grossOp = netSales - g("sCost"), totalGross = grossOp + g("sOther");
+        const osdOn = T_(v[`${CR}optDeduct:O`]);
+        const osd = osdOn ? totalGross * 0.4 : 0;
+        const taxable = totalGross - (osdOn ? osd : g("sItemized"));
+        const rate = corpRate(CR, v), regular = Math.max(0, taxable) * rate;
+        const mcit = T_(v[`${CR}chkMcit`]) ? Math.max(0, totalGross) * p(v[`${CR}txtMcitRate`]) / 100 : 0;
+        const due = Math.max(regular, mcit);
+        const credits = sumOf(v, ["cPrior", "cQuarterly", "cMcitPrev", "cCwtQ13", "cCwtQ4", "cFiled", "cForeign", "cSpecial", "cOther"].map((k) => `${CR}${k}`));
+        const k = (x) => `${CR}${x}`;
+        return {
+            [k("sNetSales")]: f(netSales), [k("sGrossOp")]: f(grossOp), [k("sTotalGross")]: f(totalGross), [k("sOsd")]: f(osd),
+            [k("sTaxable")]: f(taxable), [k("sRatePct")]: `${(rate * 100).toFixed(2)}%`, [k("sRegular")]: f(regular), [k("sMcit")]: f(mcit),
+            [k("sDue")]: f(due), [k("cTotal")]: f(credits), ...totalsOf(CR, v, due, credits),
+        };
+    },
+    validate: (v) => (partsToIso(CR_YE, v, "month") ? tinErr(v, tinK(CR)) : "Enter the year ended (item 2)."),
+    filename: (v) => `${tinOf(v, tinK(CR))}-1702RT-FY${pad(v[CR_YE[0][0]])}${v[CR_YE[1][0]]}.xml`,
+    autofill: async (v, af) => {
+        const y = Number(v[CR_YE[1][0]]), m = Number(v[CR_YE[0][0]]);
+        if (!y || !m) return null;
+        const end = `${y}-${pad(m)}`, start = addM(end, -11);
+        const [q13, q4] = await Promise.all([af("income", { from: start, to: addM(start, 8) }), af("income", { from: addM(start, 9), to: end })]);
+        return {
+            [`${CR}sSales`]: f(q13.sales + q4.sales), [`${CR}sCost`]: f(q13.cost + q4.cost), [`${CR}sItemized`]: f(q13.expenses + q4.expenses),
+            [`${CR}cCwtQ13`]: f(q13.cwt), [`${CR}cCwtQ4`]: f(q4.cwt),
+        };
+    },
+};
+
+/* ---------- 1702EX – Annual income tax (exempt corporations) ---------- */
+const CX = "frm1702ex:";
+const CX_YE = [[`${CX}txtYearEndMonth`, "m"], [`${CX}txtYearEndYear`, "y"]];
+const F1702EX = {
+    id: "1702EX", file: "1702EX", title: "1702-EX – Annual Income Tax Return (Exempt Corporations)", footer: FOOT_X, custom: true, info: true,
+    fields: [
+        O("forthe", `${CX}optFor:C`, "Calendar", "1 For the"), O("forthe", `${CX}optFor:F`, "Fiscal"),
+        MY("2 Year ended", CX_YE),
+        O("short", `${CX}optShort:Y`, "Yes", "Short period return?"), O("short", `${CX}optShort:N`, "No"),
+        ...bgFields(CX),
+        T(`${CX}txtATC`, "ATC"),
+        T(`${CX}txtLegalBasis`, "Legal basis of tax exemption", { enc: true, wide: true }),
+        T(`${CX}txtAgency`, "Investment promotion agency / government agency", { enc: true }), T(`${CX}txtRegNo`, "Registration / accreditation no."),
+        T(`${CX}txtEffFrom`, "Effectivity date from"), T(`${CX}txtEffTo`, "Effectivity date to"),
+        S("Schedule – exempt income"),
+        N(`${CX}sSales`), N(`${CX}sCost`), R(`${CX}sGross`), N(`${CX}sOther`), R(`${CX}sTotalGross`), N(`${CX}sDeductions`), R(`${CX}sNet`),
+        ...partII(CX), ...payPart(CX),
+    ],
+    prof: bgProf(CX),
+    defaults: (now) => ({
+        ...bgDefaults(CX), [`${CX}optFor:C`]: "true", ...isoToParts(CX_YE, `${now.getFullYear() - (now.getMonth() < 4 ? 1 : 0)}-12`),
+        [`${CX}optShort:N`]: "true", [`${CX}txtATC`]: "IC021",
+    }),
+    compute: (v) => {
+        const g = (k) => p(v[`${CX}${k}`]);
+        const gross = g("sSales") - g("sCost"), totalGross = gross + g("sOther"), net = totalGross - g("sDeductions");
+        return {
+            [`${CX}sGross`]: f(gross), [`${CX}sTotalGross`]: f(totalGross), [`${CX}sNet`]: f(net),
+            ...totalsOf(CX, v, 0, 0),                     // exempt: no income tax due, only penalties when filed late
+        };
+    },
+    validate: (v) => {
+        if (!partsToIso(CX_YE, v, "month")) return "Enter the year ended (item 2).";
+        if (!(v[`${CX}txtLegalBasis`] || "").trim()) return "Enter the legal basis of the tax exemption.";
+        return tinErr(v, tinK(CX));
+    },
+    filename: (v) => `${tinOf(v, tinK(CX))}-1702EX-FY${pad(v[CX_YE[0][0]])}${v[CX_YE[1][0]]}.xml`,
+    autofill: async (v, af) => {
+        const y = Number(v[CX_YE[1][0]]), m = Number(v[CX_YE[0][0]]);
+        if (!y || !m) return null;
+        const end = `${y}-${pad(m)}`;
+        const r = await af("income", { from: addM(end, -11), to: end });
+        return { [`${CX}sSales`]: f(r.sales), [`${CX}sCost`]: f(r.cost), [`${CX}sDeductions`]: f(r.expenses) };
+    },
+};
+
+/* ---------- 1604C / 1604E – Annual information returns (12 monthly remittances) ---------- */
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const infoFields = (X, cols) => [
+    T(`${X}txtYear`, "1 For the year"),
+    ...bgFields(X),
+    O("cat", `${X}optCategory:P`, "Private", "Category of withholding agent"), O("cat", `${X}optCategory:G`, "Government"),
+    O("top", `${X}optTop:Y`, "Yes", "Top withholding agent?"), O("top", `${X}optTop:N`, "No"),
+    S("Part II – Summary of remittances per month"),
+    ...range(1, 12).flatMap((m) => [
+        T(`${X}r${m}Date`, `${MONTHS[m - 1]} – date of remittance`), T(`${X}r${m}Bank`, "Drawee bank / bank code / agency"), T(`${X}r${m}Ror`, "TRA / eROR / eAR no."),
+        ...cols.map((c) => (c === "Total" ? R(`${X}r${m}${c}`) : N(`${X}r${m}${c}`))),
+    ]),
+    ...cols.map((c) => R(`${X}tot${c}`)),
+];
+const infoCompute = (X, cols) => (v) => {
+    const out = {};
+    const add = cols.filter((c) => c !== "Total");
+    range(1, 12).forEach((m) => { out[`${X}r${m}Total`] = f(sumOf(v, add.map((c) => `${X}r${m}${c}`))); });
+    cols.forEach((c) => {
+        out[`${X}tot${c}`] = f(range(1, 12).reduce((a, m) => a + (c === "Total" ? p(out[`${X}r${m}Total`]) : p(v[`${X}r${m}${c}`])), 0));
+    });
+    return out;
+};
+const infoDefaults = (X) => (now) => ({
+    ...bgDefaults(X), [`${X}txtYear`]: String(now.getFullYear() - (now.getMonth() < 2 ? 1 : 0)), [`${X}optCategory:P`]: "true", [`${X}optTop:N`]: "true",
+});
+const infoValidate = (X) => (v) => {
+    if (!/^\d{4}$/.test(v[`${X}txtYear`] || "")) return "Enter the year (item 1).";
+    if (!T_(v[`${X}optCategory:P`]) && !T_(v[`${X}optCategory:G`])) return "Choose the category of withholding agent.";
+    return tinErr(v, tinK(X));
+};
+
+const PC = "frm1604c:";
+const PC_COLS = ["Tax", "Adj", "Pen", "Total"];
+const F1604C = {
+    id: "1604C", file: "1604C", title: "1604-C – Annual Information Return of Income Taxes Withheld on Compensation", footer: FOOT_X, custom: true, info: true,
+    fields: [
+        ...infoFields(PC, PC_COLS),
+        S("Year-end adjustment"),
+        O("ref", `${PC}optRefund:Y`, "Yes", "Refund released to employees (over-withholding)?"), O("ref", `${PC}optRefund:N`, "No"),
+        T(`${PC}txtRefundDate`, "Date of refund"), N(`${PC}txtOverRemit`, "Total amount of over-remittance"), T(`${PC}txtFirstCredit`, "Month of first crediting of over-remittance"),
+    ],
+    prof: bgProf(PC),
+    defaults: (now) => ({ ...infoDefaults(PC)(now), [`${PC}optRefund:N`]: "true" }),
+    compute: infoCompute(PC, PC_COLS),
+    validate: infoValidate(PC),
+    filename: (v) => `${tinOf(v, tinK(PC))}-1604C-FY12${v[`${PC}txtYear`]}.xml`,
+    // from the saved 1601-C returns of that year: taxes withheld for remittance (27) + adjustment (26) + penalties (35)
+    autofill: async (v, af) => {
+        const y = Number(v[`${PC}txtYear`]);
+        if (!y) return null;
+        const r = await af("saved_months", { form: "1601Cv2018", year: String(y), keys: "frm1601c:txtTax25,frm1601c:txtTax26,frm1601c:txtTax35" });
+        const out = {};
+        range(1, 12).forEach((m) => {
+            const row = r.values?.[pad(m)];
+            if (!row) return;
+            out[`${PC}r${m}Tax`] = f(p(row["frm1601c:txtTax25"]));
+            out[`${PC}r${m}Adj`] = f(p(row["frm1601c:txtTax26"]));
+            out[`${PC}r${m}Pen`] = f(p(row["frm1601c:txtTax35"]));
+        });
+        return out;
+    },
+};
+
+const PE = "frm1604e:";
+const PE_COLS = ["Tax", "Pen", "Total"];
+const F1604E = {
+    id: "1604E", file: "1604E", title: "1604-E – Annual Information Return of Creditable Income Taxes Withheld (Expanded)", footer: FOOT_X, custom: true, info: true,
+    fields: infoFields(PE, PE_COLS),
+    prof: bgProf(PE),
+    defaults: infoDefaults(PE),
+    compute: infoCompute(PE, PE_COLS),
+    validate: infoValidate(PE),
+    filename: (v) => `${tinOf(v, tinK(PE))}-1604E-FY12${v[`${PE}txtYear`]}.xml`,
+    // taxes withheld per month from the books (2307 on purchases / expenses)
+    autofill: async (v, af) => {
+        const y = Number(v[`${PE}txtYear`]);
+        if (!y) return null;
+        const r = await af("ewt_months", { from: `${y}-01`, to: `${y}-12` });
+        return Object.fromEntries(range(1, 12).map((m) => [`${PE}r${m}Tax`, f(r.values?.[`${y}-${pad(m)}`] || 0)]));
+    },
+};
+
+/* ---------- 2200M – Excise tax return for mineral products (monthly) ---------- */
+const XM = "frm2200m:";
+const XM_MY = [[`${XM}txtMonth`, "m"], [`${XM}txtYear`, "y"]];
+const F2200M = {
+    id: "2200M", file: "2200M", title: "2200-M – Excise Tax Return for Mineral Products", footer: FOOT_X, custom: true,
+    fields: [
+        MY("1 For the month", XM_MY),
+        ...bgFields(XM),
+        T(`${XM}txtATC`, "ATC"),
+        O("kind", `${XM}optKind:P`, "Producer / processor", "Taxpayer is"), O("kind", `${XM}optKind:I`, "Importer"), O("kind", `${XM}optKind:O`, "Others"),
+        S("Part II – Computation of tax"),
+        ...range(1, 5).flatMap((i) => [
+            T(`${XM}r${i}Desc`, `Mineral product ${i}`, { enc: true }), T(`${XM}r${i}Unit`, "Unit"), N(`${XM}r${i}Qty`, "Quantity / volume", { blank: "" }),
+            N(`${XM}r${i}Value`, "Actual market value / gross output"), T(`${XM}r${i}Rate`, "Tax rate (%)"), R(`${XM}r${i}Due`, "Excise tax due"),
+        ]),
+        R(`${XM}totValue`), R(`${XM}totDue`),
+        N(`${XM}cFiled`, "Less: tax paid in return previously filed"), N(`${XM}cOther`, "Other tax credits / payments"), T(`${XM}cOtherSpecify`), R(`${XM}cTotal`),
+        ...partII(XM), ...payPart(XM),
+    ],
+    prof: bgProf(XM),
+    defaults: (now) => ({
+        ...bgDefaults(XM), ...isoToParts(XM_MY, ym(new Date(now.getFullYear(), now.getMonth() - 1, 1))),
+        [`${XM}optKind:P`]: "true", [`${XM}r1Rate`]: "4", [`${XM}txtATC`]: "XM080",
+    }),
+    compute: (v) => {
+        const out = {};
+        let value = 0, due = 0;
+        range(1, 5).forEach((i) => {
+            const d = p(v[`${XM}r${i}Value`]) * p(v[`${XM}r${i}Rate`]) / 100;
+            out[`${XM}r${i}Due`] = f(d);
+            value += p(v[`${XM}r${i}Value`]); due += d;
+        });
+        const credits = sumOf(v, [`${XM}cFiled`, `${XM}cOther`]);
+        return { ...out, [`${XM}totValue`]: f(value), [`${XM}totDue`]: f(due), [`${XM}cTotal`]: f(credits), ...totalsOf(XM, v, due, credits) };
+    },
+    validate: (v) => (partsToIso(XM_MY, v, "month") ? tinErr(v, tinK(XM)) : "Enter the month (item 1)."),
+    filename: (v) => `${tinOf(v, tinK(XM))}-2200M-${pad(v[XM_MY[0][0]])}${v[XM_MY[1][0]]}.xml`,
+};
+
+/* =========================================================
    registry + shared helpers
    ========================================================= */
-export const FORMS = [F0605, F0619E, F1601C, F1601EQ, F2550M, F2550Q, F2551Q];
+export const FORMS = [F0605, F0619E, F1601C, F1601EQ, F1604C, F1604E, F1701Q, F1701, F1702Q, F1702RT, F1702EX, F2200M, F2550M, F2550Q, F2551Q];
+
+/** compliance code of a form (what Client → Classification & Compliance uses): 2550Qv2024 → 2550Q */
+export const complianceCode = (form) => String(form.id).replace(/v\d{4}$/i, "").toUpperCase();
 export const formById = (id) => FORMS.find((x) => x.id === id);
 
 const keysOf = (fl) => (fl.parts ? fl.parts.map(([k]) => k) : fl.k ? [fl.k] : []);

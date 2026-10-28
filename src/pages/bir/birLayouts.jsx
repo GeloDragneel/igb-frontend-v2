@@ -1175,6 +1175,670 @@ function L2551Q_2() {
 /* =========================================================
    registry
    ========================================================= */
+/* =========================================================
+   NEW FORMS (FEMS design that follows the BIR form)
+   1701Q · 1701 · 1702Q · 1702RT · 1702EX · 1604C · 1604E · 2200M
+   ========================================================= */
+const MONTHS_UP = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+const DECL_ITR = "I/WE DECLARE UNDER THE PENALTIES OF PERJURY THAT THIS RETURN, AND ALL ITS ATTACHMENTS, HAVE BEEN MADE IN GOOD FAITH, VERIFIED BY ME/US, AND TO THE BEST OF MY/OUR KNOWLEDGE AND BELIEF, ARE TRUE AND CORRECT, PURSUANT TO THE PROVISIONS OF THE NATIONAL INTERNAL REVENUE CODE, AS AMENDED, AND THE REGULATIONS ISSUED UNDER AUTHORITY THEREOF. FURTHER, I/WE GIVE MY/OUR CONSENT TO THE PROCESSING OF MY/OUR INFORMATION AS CONTEMPLATED UNDER THE *DATA PRIVACY ACT OF 2012 (R.A. NO. 10173) FOR LEGITIMATE AND LAWFUL PURPOSES. (IF AUTHORIZED REPRESENTATIVE, ATTACH AUTHORIZATION LETTER)";
+const DECL_INFO = "I/WE DECLARE UNDER THE PENALTIES OF PERJURY THAT THIS ANNUAL INFORMATION RETURN, AND ALL ITS ATTACHMENTS, HAVE BEEN MADE IN GOOD FAITH, VERIFIED BY ME/US, AND TO THE BEST OF MY/OUR KNOWLEDGE AND BELIEF, ARE TRUE AND CORRECT, PURSUANT TO THE PROVISIONS OF THE NATIONAL INTERNAL REVENUE CODE, AS AMENDED, AND THE REGULATIONS ISSUED UNDER AUTHORITY THEREOF. FURTHER, I/WE GIVE MY/OUR CONSENT TO THE PROCESSING OF MY/OUR INFORMATION AS CONTEMPLATED UNDER THE *DATA PRIVACY ACT OF 2012 (R.A. NO. 10173) FOR LEGITIMATE AND LAWFUL PURPOSES. (IF AUTHORIZED REPRESENTATIVE, ATTACH AUTHORIZATION LETTER)";
+
+// BIR form header band: form no. on the left, title in the middle
+function FormHead({ no, title, sub, month }) {
+    return (
+        <T>
+            <tr>
+                <td className="bf-w20 bf-c">
+                    <div className="bf-sm">BIR FORM NO.</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.1, letterSpacing: ".02em" }}>{no}</div>
+                    {month && <div className="bf-sm">{month}</div>}
+                </td>
+                <td className="bf-c bf-wrap-text">
+                    <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: ".03em" }}>{title}</div>
+                    {sub && <div className="bf-sm bf-wrap-text" style={{ marginTop: 4 }}>{sub}</div>}
+                </td>
+                <td className="bf-w15 bf-c bf-sm bf-wrap-text">FEMS COPY<br />(NOT AN eBIRForms FILE)</td>
+            </tr>
+        </T>
+    );
+}
+
+// TIN · RDO · name · address · ZIP · contact · email (· line of business)
+function Bg({ X, n, agent = false, lob = true }) {
+    const no = (i) => String(n + i);
+    return (
+        <>
+            <T>
+                <H span={4}>PART I - BACKGROUND INFORMATION</H>
+                <tr>
+                    <td className="bf-w20"><No n={no(0)} />TAXPAYER IDENTIFICATION NUMBER (TIN)</td>
+                    <td><Tin keys={[`${X}txtTIN1`, `${X}txtTIN2`, `${X}txtTIN3`, `${X}txtBranchCode`]} /></td>
+                    <td className="bf-w10 bf-r"><No n={no(1)} />RDO CODE</td>
+                    <td className="bf-w10"><Txt k={`${X}txtRDOCode`} /></td>
+                </tr>
+            </T>
+            <T>
+                <tr>
+                    <td colSpan={3} className="bf-wrap-text">
+                        <No n={no(2)} />{agent ? "WITHHOLDING AGENT'S NAME" : "TAXPAYER'S NAME"} (LAST NAME, FIRST NAME, MIDDLE NAME FOR INDIVIDUALS) / (REGISTERED NAME FOR NON-INDIVIDUALS)
+                    </td>
+                </tr>
+                <tr><td colSpan={3}><Txt k={`${X}txtTaxpayerName`} /></td></tr>
+                <tr><td colSpan={3} className="bf-wrap-text"><No n={no(3)} />REGISTERED ADDRESS (INDICATE COMPLETE ADDRESS. IF BRANCH, INDICATE THE BRANCH ADDRESS)</td></tr>
+                <tr><td colSpan={3}><Txt k={`${X}txtAddress`} /></td></tr>
+                <tr>
+                    <td className="bf-w70"><Free ro /></td>
+                    <td className="bf-w15 bf-r"><No n={`${no(3)}A`} />ZIP CODE</td>
+                    <td className="bf-w15"><Txt k={`${X}txtZipCode`} /></td>
+                </tr>
+            </T>
+            <T>
+                <tr>
+                    <td className="bf-w15"><No n={no(4)} />CONTACT NUMBER</td><td className="bf-w25"><Txt k={`${X}txtTelNum`} /></td>
+                    <td className="bf-w15"><No n={no(5)} />EMAIL ADDRESS</td><td><Txt k={`${X}txtEmail`} /></td>
+                </tr>
+                {lob && <tr><td><No n={no(6)} />LINE OF BUSINESS</td><td colSpan={3}><Txt k={`${X}txtLineBus`} /></td></tr>}
+            </T>
+        </>
+    );
+}
+
+// Part II: tax due → credits → payable → penalties → total
+function PartII({ X, n, title = "PART II - TOTAL TAX PAYABLE", dueLabel, creditsLabel }) {
+    const no = (i) => String(n + i);
+    return (
+        <>
+            <T>
+                <H span={3}>{title}</H>
+                <Line no={no(0)} label={dueLabel || "TAX DUE"} k={`${X}taxDue`} ro wrap />
+                <Line no={no(1)} label={creditsLabel || "LESS: TOTAL TAX CREDITS/PAYMENTS"} k={`${X}credits`} ro wrap />
+                <Line no={no(2)} label={`TAX PAYABLE/(OVERPAYMENT) (ITEM ${no(0)} LESS ITEM ${no(1)})`} k={`${X}payable`} ro />
+                <tr><td colSpan={3}><No n={no(3)} />ADD: PENALTIES</td></tr>
+            </T>
+            <Penalties nos={[`${no(3)}A`, `${no(3)}B`, `${no(3)}C`, `${no(3)}D`]} keys={[`${X}surcharge`, `${X}interest`, `${X}compromise`, `${X}penalties`]} />
+            <T><Line no={no(4)} label={`TOTAL AMOUNT PAYABLE/(OVERPAYMENT) (SUM OF ITEMS ${no(2)} AND ${no(3)}D)`} k={`${X}total`} ro /></T>
+        </>
+    );
+}
+
+function OverPay({ X }) {
+    return (
+        <T cls="bf-mt">
+            <tr>
+                <td className="bf-wrap-text">IF OVERPAYMENT, MARK ONE (1) BOX ONLY</td>
+                <td className="bf-c"><Chk k={`${X}chkRefund`} label="TO BE REFUNDED" /></td>
+                <td className="bf-c"><Chk k={`${X}chkTcc`} label="TO BE ISSUED A TAX CREDIT CERTIFICATE" /></td>
+                <td className="bf-c"><Chk k={`${X}chkCarry`} label="TO BE CARRIED OVER AS A TAX CREDIT FOR NEXT YEAR/QUARTER" /></td>
+            </tr>
+        </T>
+    );
+}
+
+function PayPart({ X, n }) {
+    const no = (i) => String(n + i);
+    return (
+        <>
+            <Declaration text={DECL_ITR} agent="txtTaxAgentNo" issue="txtDateIssue" expiry="txtDateExpiry" />
+            <Payment
+                rows={[[no(0), "CASH/BANK DEBIT MEMO", payKeys(X, "P1")], [no(1), "CHECK", payKeys(X, "P2")], [no(2), "TAX DEBIT MEMO", payKeys(X, "P3")]]}
+                other={[no(3), { p: `${X}txtParticularP4`, ...payKeys(X, "P4") }]}
+            />
+            <Note />
+        </>
+    );
+}
+
+// label | item | amount, with a prefix (one schedule line)
+const lineOf = (X) => (no, label, k, ro, other, wrap = true) =>
+    <Line key={no} no={no} label={label} k={`${X}${k}`} ro={ro} other={other ? `${X}${other}` : undefined} wrap={wrap} />;
+
+/* ---------- 1701Q ---------- */
+const IQ = "frm1701q:";
+function L1701Q_1() {
+    return (
+        <>
+            <FormHead no="1701Q" month="JANUARY 2018 (ENCS)" title="QUARTERLY INCOME TAX RETURN"
+                sub="FOR INDIVIDUALS, ESTATES AND TRUSTS" />
+            <T>
+                <tr>
+                    <td><No n="1" />FOR THE YEAR (YYYY)</td><td><No n="2" />QUARTER</td><td><No n="3" />AMENDED RETURN?</td><td><No n="4" />NO. OF SHEETS ATTACHED</td>
+                </tr>
+                <tr>
+                    <td><Txt k={`${IQ}txtYear`} c /></td>
+                    <td><Opts group={[1, 2, 3].map((i) => `${IQ}optQuarter:${i}`)} labels={["1ST", "2ND", "3RD"]} /></td>
+                    <td><Opts group={[`${IQ}optAmend:Y`, `${IQ}optAmend:N`]} labels={YN} /></td>
+                    <td><Txt k={`${IQ}txtSheets`} c /></td>
+                </tr>
+            </T>
+            <Bg X={IQ} n={5} />
+            <T>
+                <tr>
+                    <td><No n="12" />TAXPAYER TYPE</td>
+                    <td colSpan={3}><Opts group={["SP", "PR", "ES", "TR"].map((t) => `${IQ}optType:${t}`)} labels={["SINGLE PROPRIETOR", "PROFESSIONAL", "ESTATE", "TRUST"]} /></td>
+                </tr>
+                <tr>
+                    <td><No n="13" />ATC</td><td><Txt k={`${IQ}txtATC`} c /></td>
+                    <td><No n="14" />DATE OF BIRTH (MM/DD/YYYY)</td><td><Txt k={`${IQ}txtBirthDate`} c /></td>
+                </tr>
+                <tr>
+                    <td><No n="15" />CITIZENSHIP</td><td><Txt k={`${IQ}txtCitizenship`} /></td>
+                    <td><No n="16" />FOREIGN TAX NUMBER (IF APPLICABLE)</td><td><Txt k={`${IQ}txtForeignTin`} /></td>
+                </tr>
+                <tr>
+                    <td className="bf-wrap-text"><No n="17" />TAX RATE</td>
+                    <td colSpan={3}><Opts group={[`${IQ}optRate:G`, `${IQ}optRate:E`]} labels={["GRADUATED INCOME TAX RATES", "8% INCOME TAX RATE (IN LIEU OF GRADUATED RATES AND PERCENTAGE TAX)"]} /></td>
+                </tr>
+                <tr>
+                    <td className="bf-wrap-text"><No n="17A" />METHOD OF DEDUCTION (GRADUATED RATES ONLY)</td>
+                    <td colSpan={3}><Opts group={[`${IQ}optDeduct:I`, `${IQ}optDeduct:O`]} labels={["ITEMIZED DEDUCTIONS", "OPTIONAL STANDARD DEDUCTION (OSD) – 40% OF GROSS SALES/RECEIPTS"]} /></td>
+                </tr>
+            </T>
+            <PartII X={IQ} n={18} dueLabel="TAX DUE (FROM SCHEDULE I ITEM 47 OR SCHEDULE II ITEM 55)" creditsLabel="LESS: TAX CREDITS/PAYMENTS (FROM SCHEDULE III ITEM 63)" />
+            <PayPart X={IQ} n={23} />
+        </>
+    );
+}
+function L1701Q_2() {
+    const l = lineOf(IQ);
+    return (
+        <>
+            <T>
+                <tr><td className="bf-w35">TIN</td><td>TAXPAYER'S NAME</td></tr>
+                <tr><td><Tin keys={[`${IQ}txtTIN1`, `${IQ}txtTIN2`, `${IQ}txtTIN3`, `${IQ}txtBranchCode`]} /></td><td><Txt k={`${IQ}txtTaxpayerName`} ro /></td></tr>
+            </T>
+            <T>
+                <H span={3}>SCHEDULE I - FOR GRADUATED INCOME TAX RATES</H>
+                {l("37", "SALES/REVENUES/RECEIPTS/FEES (NET OF SALES RETURNS, ALLOWANCES AND DISCOUNTS)", "s1Sales")}
+                {l("38", "LESS: COST OF SALES/SERVICES (IF AVAILING OF ITEMIZED DEDUCTIONS)", "s1Cost")}
+                {l("39", "GROSS INCOME/(LOSS) FROM OPERATIONS (ITEM 37 LESS ITEM 38)", "s1Gross", true)}
+                {l("40", "TOTAL ALLOWABLE ITEMIZED DEDUCTIONS", "s1Itemized")}
+                {l("41", "OPTIONAL STANDARD DEDUCTION (OSD) (40% OF ITEM 37)", "s1Osd", true)}
+                {l("42", "NET INCOME/(LOSS) THIS QUARTER (ITEM 39 LESS ITEM 40, OR ITEM 37 LESS ITEM 41 IF OSD)", "s1Net", true)}
+                {l("43", "ADD: TAXABLE INCOME/(LOSS) PREVIOUS QUARTER/S", "s1Prev")}
+                {l("44", "NON-OPERATING INCOME (SPECIFY)", "s1NonOp")}
+                {l("45", "AMOUNT RECEIVED/SHARE IN INCOME BY A PARTNER FROM GENERAL PROFESSIONAL PARTNERSHIP (GPP)", "s1Partner")}
+                {l("46", "TOTAL TAXABLE INCOME/(LOSS) TO DATE (SUM OF ITEMS 42 TO 45)", "s1Taxable", true)}
+                {l("47", "TAX DUE (ITEM 46 X APPLICABLE TAX RATE BASED ON TAX TABLE)", "s1Due", true)}
+            </T>
+            <T>
+                <H span={3}>SCHEDULE II - FOR 8% INCOME TAX RATE</H>
+                {l("48", "SALES/REVENUES/RECEIPTS/FEES (NET OF SALES RETURNS, ALLOWANCES AND DISCOUNTS)", "s2Sales")}
+                {l("49", "ADD: NON-OPERATING INCOME (SPECIFY)", "s2NonOp")}
+                {l("50", "TOTAL INCOME FOR THE QUARTER (SUM OF ITEMS 48 AND 49)", "s2Total", true)}
+                {l("51", "ADD: TOTAL TAXABLE INCOME/(LOSS) PREVIOUS QUARTER/S", "s2Prev")}
+                {l("52", "CUMULATIVE TAXABLE INCOME/(LOSS) AS OF THIS QUARTER (SUM OF ITEMS 50 AND 51)", "s2Cum", true)}
+                {l("53", "LESS: ALLOWABLE REDUCTION FROM GROSS SALES/RECEIPTS AND OTHER NON-OPERATING INCOME OF PURELY SELF-EMPLOYED INDIVIDUALS AND/OR PROFESSIONALS IN THE AMOUNT OF ₱250,000", "s2Less")}
+                {l("54", "TAXABLE INCOME/(LOSS) TO DATE (ITEM 52 LESS ITEM 53)", "s2Taxable", true)}
+                {l("55", "TAX DUE (ITEM 54 X 8% TAX RATE)", "s2Due", true)}
+            </T>
+            <T>
+                <H span={3}>SCHEDULE III - TAX CREDITS/PAYMENTS</H>
+                {l("56", "PRIOR YEAR'S EXCESS CREDITS", "s3Prior")}
+                {l("57", "TAX PAYMENT/S FOR THE PREVIOUS QUARTER/S", "s3PrevPay")}
+                {l("58", "CREDITABLE TAX WITHHELD FOR THE PREVIOUS QUARTER/S", "s3PrevCwt")}
+                {l("59", "CREDITABLE TAX WITHHELD PER BIR FORM NO. 2307 FOR THIS QUARTER", "s3Cwt")}
+                {l("60", "TAX PAID IN RETURN PREVIOUSLY FILED, IF THIS IS AN AMENDED RETURN", "s3Filed")}
+                {l("61", "FOREIGN TAX CREDITS, IF APPLICABLE", "s3Foreign")}
+                {l("62", "OTHER TAX CREDITS/PAYMENTS (SPECIFY)", "s3Other", false, "s3OtherSpecify")}
+                {l("63", "TOTAL TAX CREDITS/PAYMENTS (SUM OF ITEMS 56 TO 62)", "s3Total", true)}
+            </T>
+        </>
+    );
+}
+
+/* ---------- 1701 ---------- */
+const IA = "frm1701:";
+function L1701_1() {
+    return (
+        <>
+            <FormHead no="1701" month="JANUARY 2018 (ENCS)" title="ANNUAL INCOME TAX RETURN"
+                sub="INDIVIDUALS (INCLUDING MIXED INCOME EARNER), ESTATES AND TRUSTS" />
+            <T>
+                <tr><td><No n="1" />FOR THE YEAR (YYYY)</td><td><No n="2" />AMENDED RETURN?</td><td><No n="3" />SHORT PERIOD RETURN?</td><td><No n="4" />NO. OF SHEETS ATTACHED</td></tr>
+                <tr>
+                    <td><Txt k={`${IA}txtYear`} c /></td>
+                    <td><Opts group={[`${IA}optAmend:Y`, `${IA}optAmend:N`]} labels={YN} /></td>
+                    <td><Opts group={[`${IA}optShort:Y`, `${IA}optShort:N`]} labels={YN} /></td>
+                    <td><Txt k={`${IA}txtSheets`} c /></td>
+                </tr>
+            </T>
+            <Bg X={IA} n={5} />
+            <T>
+                <tr>
+                    <td><No n="12" />TAXPAYER TYPE</td>
+                    <td colSpan={3}><Opts group={["SP", "PR", "ES", "TR", "CE"].map((t) => `${IA}optType:${t}`)} labels={["SINGLE PROPRIETOR", "PROFESSIONAL", "ESTATE", "TRUST", "COMPENSATION EARNER"]} /></td>
+                </tr>
+                <tr>
+                    <td><No n="13" />ATC</td><td><Txt k={`${IA}txtATC`} c /></td>
+                    <td><No n="14" />DATE OF BIRTH (MM/DD/YYYY)</td><td><Txt k={`${IA}txtBirthDate`} c /></td>
+                </tr>
+                <tr>
+                    <td><No n="15" />CITIZENSHIP</td><td><Txt k={`${IA}txtCitizenship`} /></td>
+                    <td><No n="16" />FOREIGN TAX NUMBER (IF APPLICABLE)</td><td><Txt k={`${IA}txtForeignTin`} /></td>
+                </tr>
+                <tr>
+                    <td><No n="17" />TAX RATE (BUSINESS/PROFESSION)</td>
+                    <td colSpan={3}><Opts group={[`${IA}optRate:G`, `${IA}optRate:E`]} labels={["GRADUATED INCOME TAX RATES", "8% INCOME TAX RATE (IN LIEU OF GRADUATED RATES AND PERCENTAGE TAX)"]} /></td>
+                </tr>
+                <tr>
+                    <td className="bf-wrap-text"><No n="17A" />METHOD OF DEDUCTION (GRADUATED RATES ONLY)</td>
+                    <td colSpan={3}><Opts group={[`${IA}optDeduct:I`, `${IA}optDeduct:O`]} labels={["ITEMIZED DEDUCTIONS", "OPTIONAL STANDARD DEDUCTION (OSD) – 40% OF GROSS SALES/RECEIPTS"]} /></td>
+                </tr>
+            </T>
+            <PartII X={IA} n={18} dueLabel="TAX DUE (FROM PART IV-A ITEM 12 OR PART IV-B ITEM 8)" creditsLabel="LESS: TOTAL TAX CREDITS/PAYMENTS (FROM PART IV-C ITEM 10)" />
+            <OverPay X={IA} />
+            <PayPart X={IA} n={23} />
+        </>
+    );
+}
+function L1701_2() {
+    const l = lineOf(IA);
+    return (
+        <>
+            <T>
+                <tr><td className="bf-w35">TIN</td><td>TAXPAYER'S NAME</td></tr>
+                <tr><td><Tin keys={[`${IA}txtTIN1`, `${IA}txtTIN2`, `${IA}txtTIN3`, `${IA}txtBranchCode`]} /></td><td><Txt k={`${IA}txtTaxpayerName`} ro /></td></tr>
+            </T>
+            <T>
+                <H span={3}>PART III - COMPENSATION INCOME (FROM BIR FORM NO. 2316)</H>
+                {l("1", "GROSS COMPENSATION INCOME", "compGross")}
+                {l("2", "LESS: NON-TAXABLE/EXEMPT COMPENSATION (13TH MONTH & OTHER BENEFITS, DE MINIMIS, SSS/PHIC/HDMF, MWE PAY)", "compNonTax")}
+                {l("3", "TAXABLE COMPENSATION INCOME (ITEM 1 LESS ITEM 2)", "compTaxable", true)}
+                {l("4", "TAX WITHHELD ON COMPENSATION (TO PART IV-C ITEM 5)", "compWithheld")}
+            </T>
+            <T>
+                <H span={3}>PART IV-A - GRADUATED INCOME TAX RATES</H>
+                {l("1", "SALES/REVENUES/RECEIPTS/FEES (NET OF SALES RETURNS, ALLOWANCES AND DISCOUNTS)", "aSales")}
+                {l("2", "LESS: COST OF SALES/SERVICES (IF AVAILING OF ITEMIZED DEDUCTIONS)", "aCost")}
+                {l("3", "GROSS INCOME/(LOSS) FROM OPERATIONS (ITEM 1 LESS ITEM 2)", "aGross", true)}
+                {l("4", "ADD: OTHER TAXABLE INCOME/(LOSS) – NON-OPERATING", "aNonOp")}
+                {l("5", "TOTAL GROSS INCOME (SUM OF ITEMS 3 AND 4)", "aTotalGross", true)}
+                {l("6", "LESS: ALLOWABLE ITEMIZED DEDUCTIONS", "aItemized")}
+                {l("7", "OPTIONAL STANDARD DEDUCTION (40% OF GROSS SALES/RECEIPTS AND OTHER NON-OPERATING INCOME)", "aOsd", true)}
+                {l("8", "NET INCOME/(LOSS) FROM BUSINESS/PROFESSION", "aNet", true)}
+                {l("9", "ADD: SHARE IN THE NET INCOME OF A GENERAL PROFESSIONAL PARTNERSHIP", "aPartner")}
+                {l("10", "ADD: TAXABLE COMPENSATION INCOME (FROM PART III ITEM 3)", "compTaxable", true)}
+                {l("11", "TOTAL TAXABLE INCOME/(LOSS) (SUM OF ITEMS 8 TO 10)", "aTaxable", true)}
+                {l("12", "TAX DUE – GRADUATED RATES (BASED ON THE TAX TABLE)", "aDue", true)}
+            </T>
+            <T>
+                <H span={3}>PART IV-B - 8% INCOME TAX RATE</H>
+                {l("1", "SALES/REVENUES/RECEIPTS/FEES (NET OF SALES RETURNS, ALLOWANCES AND DISCOUNTS)", "bSales")}
+                {l("2", "ADD: NON-OPERATING INCOME", "bNonOp")}
+                {l("3", "TOTAL INCOME (SUM OF ITEMS 1 AND 2)", "bTotal", true)}
+                {l("4", "LESS: ALLOWABLE REDUCTION OF ₱250,000 (PURELY SELF-EMPLOYED / PROFESSIONALS ONLY; NOT FOR MIXED INCOME EARNERS)", "bLess")}
+                {l("5", "TAXABLE INCOME (ITEM 3 LESS ITEM 4)", "bTaxable", true)}
+                {l("6", "TAX DUE – 8% OF ITEM 5", "bDue", true)}
+                {l("7", "ADD: TAX DUE ON TAXABLE COMPENSATION (GRADUATED RATES)", "bCompDue", true)}
+                {l("8", "TOTAL TAX DUE (SUM OF ITEMS 6 AND 7)", "bTotalDue", true)}
+            </T>
+            <T>
+                <H span={3}>PART IV-C - TAX CREDITS/PAYMENTS</H>
+                {l("1", "PRIOR YEAR'S EXCESS CREDITS", "cPrior")}
+                {l("2", "TAX PAYMENTS FOR THE FIRST THREE (3) QUARTERS (BIR FORM NO. 1701Q)", "cQuarterly")}
+                {l("3", "CREDITABLE TAX WITHHELD FOR THE FIRST THREE (3) QUARTERS (BIR FORM NO. 2307)", "cCwtQ13")}
+                {l("4", "CREDITABLE TAX WITHHELD PER BIR FORM NO. 2307 FOR THE 4TH QUARTER", "cCwtQ4")}
+                {l("5", "TAX WITHHELD ON COMPENSATION (BIR FORM NO. 2316)", "cComp", true)}
+                {l("6", "TAX PAID IN RETURN PREVIOUSLY FILED, IF THIS IS AN AMENDED RETURN", "cFiled")}
+                {l("7", "FOREIGN TAX CREDITS, IF APPLICABLE", "cForeign")}
+                {l("8", "OTHER TAX CREDITS/PAYMENTS (SPECIFY)", "cOther", false, "cOtherSpecify")}
+                {l("10", "TOTAL TAX CREDITS/PAYMENTS (SUM OF ITEMS 1 TO 8)", "cTotal", true)}
+            </T>
+        </>
+    );
+}
+
+/* ---------- 1702Q / 1702RT / 1702EX (corporations) ---------- */
+function CorpTop({ X, n0 = 1, quarter = false, short = false }) {
+    return (
+        <T>
+            <tr>
+                <td className="bf-w30"><Cell><No n="1" />FOR THE<Opts group={[`${X}optFor:C`, `${X}optFor:F`]} labels={["CALENDAR", "FISCAL"]} /></Cell></td>
+                <td className="bf-w20"><No n="2" />YEAR ENDED (MM/YYYY)</td>
+                <td className="bf-w20"><MonthF parts={[[`${X}txtYearEndMonth`, "m"], [`${X}txtYearEndYear`, "y"]]} /></td>
+                <td>
+                    {quarter
+                        ? <Cell><No n="3" />QUARTER<Opts group={[1, 2, 3].map((i) => `${X}optQuarter:${i}`)} labels={["1ST", "2ND", "3RD"]} /></Cell>
+                        : <Cell><No n="3" />NO. OF SHEETS<Txt k={`${X}txtSheets`} c /></Cell>}
+                </td>
+            </tr>
+            <tr>
+                <td><Cell><No n="4" />AMENDED RETURN?<Opts group={[`${X}optAmend:Y`, `${X}optAmend:N`]} labels={YN} /></Cell></td>
+                {short
+                    ? <td colSpan={2}><Cell><No n="5" />SHORT PERIOD RETURN?<Opts group={[`${X}optShort:Y`, `${X}optShort:N`]} labels={YN} /></Cell></td>
+                    : <td colSpan={2}><Cell><No n="5" />NO. OF SHEETS ATTACHED<Txt k={`${X}txtSheets`} c /></Cell></td>}
+                <td><Cell><No n="6" />ATC<Txt k={`${X}txtATC`} c /></Cell></td>
+            </tr>
+        </T>
+    );
+}
+function CorpRate({ X, n }) {
+    return (
+        <T>
+            <tr>
+                <td className="bf-w25"><No n={String(n)} />INCOME TAX RATE</td>
+                <td>
+                    <Opts stack group={[`${X}optRate:R`, `${X}optRate:S`, `${X}optRate:P`]}
+                        labels={["REGULAR RATE (25%)", "20% – NET TAXABLE INCOME NOT OVER ₱5,000,000 AND TOTAL ASSETS NOT OVER ₱100,000,000 (EXCLUDING LAND)", "SPECIAL/PREFERENTIAL RATE (SPECIFY %)"]} />
+                    <div className="bf-gap" style={{ maxWidth: 160 }}><Txt k={`${X}txtSpecialRate`} r /></div>
+                </td>
+            </tr>
+            <tr>
+                <td className="bf-wrap-text"><No n={`${n}A`} />METHOD OF DEDUCTION</td>
+                <td><Opts group={[`${X}optDeduct:I`, `${X}optDeduct:O`]} labels={["ITEMIZED DEDUCTIONS", "OPTIONAL STANDARD DEDUCTION (OSD) – 40% OF GROSS INCOME"]} /></td>
+            </tr>
+            <tr>
+                <td className="bf-wrap-text"><No n={`${n}B`} />MINIMUM CORPORATE INCOME TAX (MCIT)</td>
+                <td>
+                    <Cell>
+                        <Chk k={`${X}chkMcit`} label="SUBJECT TO MCIT (BEGINNING THE 4TH TAXABLE YEAR OF OPERATIONS)" />
+                        <span className="bf-lbl">RATE (%)</span>
+                        <span style={{ maxWidth: 90 }}><Txt k={`${X}txtMcitRate`} r /></span>
+                    </Cell>
+                </td>
+            </tr>
+        </T>
+    );
+}
+
+const CQ = "frm1702q:";
+function L1702Q_1() {
+    return (
+        <>
+            <FormHead no="1702Q" month="JANUARY 2018 (ENCS)" title="QUARTERLY INCOME TAX RETURN"
+                sub="FOR CORPORATIONS, PARTNERSHIPS AND OTHER NON-INDIVIDUAL TAXPAYERS" />
+            <CorpTop X={CQ} quarter />
+            <Bg X={CQ} n={7} />
+            <CorpRate X={CQ} n={14} />
+            <PartII X={CQ} n={15} dueLabel="INCOME TAX DUE (FROM SCHEDULE ITEM 17)" creditsLabel="LESS: TOTAL TAX CREDITS/PAYMENTS (FROM SCHEDULE ITEM 27)" />
+            <PayPart X={CQ} n={20} />
+        </>
+    );
+}
+function L1702Q_2() {
+    const l = lineOf(CQ);
+    return (
+        <>
+            <T>
+                <tr><td className="bf-w35">TIN</td><td>REGISTERED NAME</td></tr>
+                <tr><td><Tin keys={[`${CQ}txtTIN1`, `${CQ}txtTIN2`, `${CQ}txtTIN3`, `${CQ}txtBranchCode`]} /></td><td><Txt k={`${CQ}txtTaxpayerName`} ro /></td></tr>
+            </T>
+            <T>
+                <H span={3}>SCHEDULE - COMPUTATION OF INCOME TAX</H>
+                {l("1", "SALES/RECEIPTS/REVENUES/FEES (NET OF SALES RETURNS, ALLOWANCES AND DISCOUNTS)", "sSales")}
+                {l("2", "LESS: COST OF SALES/SERVICES", "sCost")}
+                {l("3", "GROSS INCOME FROM OPERATION (ITEM 1 LESS ITEM 2)", "sGrossOp", true)}
+                {l("4", "ADD: OTHER TAXABLE INCOME NOT SUBJECTED TO FINAL TAX", "sOther")}
+                {l("5", "TOTAL GROSS INCOME (SUM OF ITEMS 3 AND 4)", "sTotalGross", true)}
+                {l("6", "LESS: DEDUCTIONS (ITEMIZED)", "sItemized")}
+                {l("7", "OPTIONAL STANDARD DEDUCTION (40% OF ITEM 5)", "sOsd", true)}
+                {l("8", "TAXABLE INCOME THIS QUARTER", "sTaxableQ", true)}
+                {l("9", "ADD: TAXABLE INCOME PREVIOUS QUARTER/S", "sPrev")}
+                {l("10", "TOTAL TAXABLE INCOME TO DATE (SUM OF ITEMS 8 AND 9)", "sTaxableTD", true)}
+                {l("11", "APPLICABLE INCOME TAX RATE", "sRatePct", true)}
+                {l("12", "INCOME TAX DUE OTHER THAN MCIT (ITEM 10 X ITEM 11)", "sRegular", true)}
+                {l("13", "ADD: GROSS INCOME PREVIOUS QUARTER/S (FOR MCIT)", "sPrevGross")}
+                {l("14", "TOTAL GROSS INCOME TO DATE (SUM OF ITEMS 5 AND 13)", "sMcitBase", true)}
+                {l("15", "MINIMUM CORPORATE INCOME TAX (ITEM 14 X MCIT RATE)", "sMcit", true)}
+                {l("17", "INCOME TAX DUE (HIGHER OF ITEM 12 OR ITEM 15)", "sDue", true)}
+            </T>
+            <T>
+                <H span={3}>TAX CREDITS/PAYMENTS</H>
+                {l("18", "PRIOR YEAR'S EXCESS CREDITS OTHER THAN MCIT", "cPrior")}
+                {l("19", "TAX PAYMENT/S FOR THE PREVIOUS QUARTER/S OF THE SAME TAXABLE YEAR OTHER THAN MCIT", "cPrevPay")}
+                {l("20", "MCIT PAYMENT/S FOR THE PREVIOUS QUARTER/S OF THE SAME TAXABLE YEAR", "cPrevMcit")}
+                {l("21", "CREDITABLE TAX WITHHELD FROM THE PREVIOUS QUARTER/S", "cPrevCwt")}
+                {l("22", "CREDITABLE TAX WITHHELD PER BIR FORM NO. 2307 FOR THIS QUARTER", "cCwt")}
+                {l("23", "TAX PAID IN RETURN PREVIOUSLY FILED, IF THIS IS AN AMENDED RETURN", "cFiled")}
+                {l("24", "FOREIGN TAX CREDITS, IF APPLICABLE", "cForeign")}
+                {l("25", "OTHER TAX CREDITS/PAYMENTS (SPECIFY)", "cOther", false, "cOtherSpecify")}
+                {l("27", "TOTAL TAX CREDITS/PAYMENTS (SUM OF ITEMS 18 TO 25)", "cTotal", true)}
+            </T>
+        </>
+    );
+}
+
+const CR = "frm1702rt:";
+function L1702RT_1() {
+    return (
+        <>
+            <FormHead no="1702-RT" month="JANUARY 2018 (ENCS)" title="ANNUAL INCOME TAX RETURN"
+                sub="CORPORATION, PARTNERSHIP AND OTHER NON-INDIVIDUAL TAXPAYER SUBJECT ONLY TO REGULAR INCOME TAX RATE" />
+            <CorpTop X={CR} short />
+            <Bg X={CR} n={7} />
+            <CorpRate X={CR} n={14} />
+            <PartII X={CR} n={15} dueLabel="TOTAL INCOME TAX DUE (FROM PART IV ITEM 14)" creditsLabel="LESS: TOTAL TAX CREDITS/PAYMENTS (FROM PART IV ITEM 25)" />
+            <OverPay X={CR} />
+            <PayPart X={CR} n={20} />
+        </>
+    );
+}
+function L1702RT_2() {
+    const l = lineOf(CR);
+    return (
+        <>
+            <T>
+                <tr><td className="bf-w35">TIN</td><td>REGISTERED NAME</td></tr>
+                <tr><td><Tin keys={[`${CR}txtTIN1`, `${CR}txtTIN2`, `${CR}txtTIN3`, `${CR}txtBranchCode`]} /></td><td><Txt k={`${CR}txtTaxpayerName`} ro /></td></tr>
+            </T>
+            <T>
+                <H span={3}>PART IV - COMPUTATION OF TAX</H>
+                {l("1", "SALES/RECEIPTS/REVENUES/FEES", "sSales")}
+                {l("2", "LESS: SALES RETURNS, ALLOWANCES AND DISCOUNTS", "sReturns")}
+                {l("3", "NET SALES/RECEIPTS/REVENUES/FEES (ITEM 1 LESS ITEM 2)", "sNetSales", true)}
+                {l("4", "LESS: COST OF SALES/SERVICES", "sCost")}
+                {l("5", "GROSS INCOME FROM OPERATION (ITEM 3 LESS ITEM 4)", "sGrossOp", true)}
+                {l("6", "ADD: OTHER TAXABLE INCOME NOT SUBJECTED TO FINAL TAX", "sOther")}
+                {l("7", "TOTAL TAXABLE INCOME (SUM OF ITEMS 5 AND 6)", "sTotalGross", true)}
+                {l("8", "LESS: ALLOWABLE DEDUCTIONS (ITEMIZED)", "sItemized")}
+                {l("9", "OPTIONAL STANDARD DEDUCTION (40% OF ITEM 7)", "sOsd", true)}
+                {l("10", "NET TAXABLE INCOME/(LOSS) (ITEM 7 LESS ITEM 8 OR ITEM 9)", "sTaxable", true)}
+                {l("11", "APPLICABLE INCOME TAX RATE", "sRatePct", true)}
+                {l("12", "INCOME TAX DUE OTHER THAN MCIT (ITEM 10 X ITEM 11)", "sRegular", true)}
+                {l("13", "MINIMUM CORPORATE INCOME TAX (MCIT) (ITEM 7 X MCIT RATE)", "sMcit", true)}
+                {l("14", "TOTAL INCOME TAX DUE (HIGHER OF ITEM 12 OR ITEM 13)", "sDue", true)}
+            </T>
+            <T>
+                <H span={3}>TAX CREDITS/PAYMENTS</H>
+                {l("15", "PRIOR YEAR'S EXCESS CREDITS OTHER THAN MCIT", "cPrior")}
+                {l("16", "INCOME TAX PAYMENT UNDER MCIT FROM PREVIOUS QUARTER/S", "cMcitPrev")}
+                {l("17", "INCOME TAX PAYMENT UNDER REGULAR RATE FROM PREVIOUS QUARTER/S (BIR FORM NO. 1702Q)", "cQuarterly")}
+                {l("18", "CREDITABLE TAX WITHHELD FROM PREVIOUS QUARTER/S PER BIR FORM NO. 2307", "cCwtQ13")}
+                {l("19", "CREDITABLE TAX WITHHELD PER BIR FORM NO. 2307 FOR THE 4TH QUARTER", "cCwtQ4")}
+                {l("20", "TAX PAID IN RETURN PREVIOUSLY FILED, IF THIS IS AN AMENDED RETURN", "cFiled")}
+                {l("21", "FOREIGN TAX CREDITS, IF APPLICABLE", "cForeign")}
+                {l("22", "SPECIAL TAX CREDITS", "cSpecial")}
+                {l("23", "OTHER TAX CREDITS/PAYMENTS (SPECIFY)", "cOther", false, "cOtherSpecify")}
+                {l("25", "TOTAL TAX CREDITS/PAYMENTS (SUM OF ITEMS 15 TO 23)", "cTotal", true)}
+            </T>
+        </>
+    );
+}
+
+const CX = "frm1702ex:";
+function L1702EX_1() {
+    const l = lineOf(CX);
+    return (
+        <>
+            <FormHead no="1702-EX" month="JANUARY 2018 (ENCS)" title="ANNUAL INCOME TAX RETURN"
+                sub="FOR USE ONLY BY CORPORATION, PARTNERSHIP AND OTHER NON-INDIVIDUAL TAXPAYER EXEMPT UNDER THE TAX CODE, AS AMENDED, AND OTHER SPECIAL LAWS, WITH NO OTHER TAXABLE INCOME" />
+            <CorpTop X={CX} short />
+            <Bg X={CX} n={7} />
+            <T>
+                <tr><td colSpan={2}><No n="14" />LEGAL BASIS OF TAX EXEMPTION (SPECIFY THE LAW / R.A. NO.)</td></tr>
+                <tr><td colSpan={2}><Txt k={`${CX}txtLegalBasis`} /></td></tr>
+                <tr>
+                    <td className="bf-w50"><No n="15" />INVESTMENT PROMOTION AGENCY (IPA) / GOVERNMENT AGENCY</td>
+                    <td><No n="16" />REGISTRATION / ACCREDITATION NO.</td>
+                </tr>
+                <tr><td><Txt k={`${CX}txtAgency`} /></td><td><Txt k={`${CX}txtRegNo`} /></td></tr>
+                <tr><td><No n="17" />EFFECTIVITY DATE OF TAX EXEMPTION – FROM (MM/DD/YYYY)</td><td>TO (MM/DD/YYYY)</td></tr>
+                <tr><td><Txt k={`${CX}txtEffFrom`} c /></td><td><Txt k={`${CX}txtEffTo`} c /></td></tr>
+            </T>
+            <T>
+                <H span={3}>PART IV - SCHEDULE OF EXEMPT INCOME</H>
+                {l("1", "SALES/RECEIPTS/REVENUES/FEES (NET OF SALES RETURNS, ALLOWANCES AND DISCOUNTS)", "sSales")}
+                {l("2", "LESS: COST OF SALES/SERVICES", "sCost")}
+                {l("3", "GROSS INCOME FROM OPERATION (ITEM 1 LESS ITEM 2)", "sGross", true)}
+                {l("4", "ADD: OTHER INCOME", "sOther")}
+                {l("5", "TOTAL GROSS INCOME (SUM OF ITEMS 3 AND 4)", "sTotalGross", true)}
+                {l("6", "LESS: DEDUCTIONS", "sDeductions")}
+                {l("7", "NET INCOME (ITEM 5 LESS ITEM 6) – EXEMPT FROM INCOME TAX", "sNet", true)}
+            </T>
+            <PartII X={CX} n={18} title="PART II - TOTAL AMOUNT PAYABLE (PENALTIES ONLY, IF FILED LATE)" dueLabel="INCOME TAX DUE (EXEMPT)" />
+            <PayPart X={CX} n={23} />
+        </>
+    );
+}
+
+/* ---------- 1604C / 1604E ---------- */
+function InfoTop({ X }) {
+    return (
+        <T>
+            <tr><td><No n="1" />FOR THE YEAR (YYYY)</td><td><No n="2" />AMENDED RETURN?</td><td><No n="3" />NO. OF SHEETS ATTACHED</td></tr>
+            <tr>
+                <td><Txt k={`${X}txtYear`} c /></td>
+                <td><Opts group={[`${X}optAmend:Y`, `${X}optAmend:N`]} labels={YN} /></td>
+                <td><Txt k={`${X}txtSheets`} c /></td>
+            </tr>
+        </T>
+    );
+}
+function InfoAgent({ X, n }) {
+    return (
+        <T>
+            <tr>
+                <td><No n={String(n)} />CATEGORY OF WITHHOLDING AGENT</td>
+                <td><Opts group={[`${X}optCategory:P`, `${X}optCategory:G`]} labels={["PRIVATE", "GOVERNMENT"]} /></td>
+                <td><No n={String(n + 1)} />TOP WITHHOLDING AGENT?</td>
+                <td><Opts group={[`${X}optTop:Y`, `${X}optTop:N`]} labels={YN} /></td>
+            </tr>
+        </T>
+    );
+}
+// 12 months: date · bank · TRA/eROR · amounts …
+function Remits({ X, cols }) {
+    return (
+        <T>
+            <H span={4 + cols.length}>PART II - SUMMARY OF REMITTANCES PER BIR FORM NO. {X === "frm1604c:" ? "1601-C" : "0619-E / 1601-EQ"}</H>
+            <tr className="bf-c bf-sm">
+                <td className="bf-w10">MONTH</td><td>DATE OF REMITTANCE (MM/DD/YYYY)</td><td>DRAWEE BANK / BANK CODE / AGENCY</td><td>TRA / eROR / eAR NUMBER</td>
+                {cols.map(([, label]) => <td key={label}>{label}</td>)}
+            </tr>
+            {MONTHS_UP.map((mn, i) => (
+                <tr key={mn}>
+                    <td className="bf-sm">{mn}</td>
+                    <td><Txt k={`${X}r${i + 1}Date`} c /></td>
+                    <td><Txt k={`${X}r${i + 1}Bank`} /></td>
+                    <td><Txt k={`${X}r${i + 1}Ror`} /></td>
+                    {cols.map(([c]) => <td key={c}><Num k={`${X}r${i + 1}${c}`} ro={c === "Total"} /></td>)}
+                </tr>
+            ))}
+            <tr className="bf-bold">
+                <td colSpan={4} className="bf-c"><b>TOTAL</b></td>
+                {cols.map(([c]) => <td key={c}><Num k={`${X}tot${c}`} ro /></td>)}
+            </tr>
+        </T>
+    );
+}
+
+const PC = "frm1604c:";
+function L1604C() {
+    return (
+        <>
+            <FormHead no="1604-C" month="JANUARY 2018 (ENCS)" title="ANNUAL INFORMATION RETURN OF INCOME TAXES WITHHELD ON COMPENSATION" />
+            <InfoTop X={PC} />
+            <Bg X={PC} n={4} agent lob={false} />
+            <InfoAgent X={PC} n={10} />
+            <T>
+                <tr>
+                    <td className="bf-wrap-text" colSpan={3}><No n="12" />IN CASE OF OVERWITHHOLDING/OVERREMITTANCE AFTER THE YEAR-END ADJUSTMENTS ON COMPENSATION, HAVE YOU RELEASED THE REFUND/S TO YOUR EMPLOYEE/S?</td>
+                    <td><Opts group={[`${PC}optRefund:Y`, `${PC}optRefund:N`]} labels={YN} /></td>
+                </tr>
+                <tr>
+                    <td><No n="12A" />IF YES, DATE OF REFUND (MM/DD/YYYY)</td><td><Txt k={`${PC}txtRefundDate`} c /></td>
+                    <td><No n="13" />TOTAL AMOUNT OF OVERREMITTANCE ON TAX WITHHELD UNDER COMPENSATION</td><td><Num k={`${PC}txtOverRemit`} /></td>
+                </tr>
+                <tr><td colSpan={3}><No n="14" />MONTH OF FIRST CREDITING OF OVERREMITTANCE (MM)</td><td><Txt k={`${PC}txtFirstCredit`} c /></td></tr>
+            </T>
+            <Remits X={PC} cols={[["Tax", "TAXES WITHHELD"], ["Adj", "ADJUSTMENT"], ["Pen", "PENALTIES"], ["Total", "TOTAL AMOUNT REMITTED"]]} />
+            <Declaration text={DECL_INFO} agent="txtTaxAgentNo" issue="txtDateIssue" expiry="txtDateExpiry" />
+            <Note />
+        </>
+    );
+}
+
+const PE = "frm1604e:";
+function L1604E() {
+    return (
+        <>
+            <FormHead no="1604-E" month="JANUARY 2018 (ENCS)" title="ANNUAL INFORMATION RETURN OF CREDITABLE INCOME TAXES WITHHELD (EXPANDED) / INCOME PAYMENTS EXEMPT FROM WITHHOLDING TAX" />
+            <InfoTop X={PE} />
+            <Bg X={PE} n={4} agent lob={false} />
+            <InfoAgent X={PE} n={10} />
+            <Remits X={PE} cols={[["Tax", "TAXES WITHHELD"], ["Pen", "PENALTIES"], ["Total", "TOTAL AMOUNT REMITTED"]]} />
+            <Declaration text={DECL_INFO} agent="txtTaxAgentNo" issue="txtDateIssue" expiry="txtDateExpiry" />
+            <Note />
+        </>
+    );
+}
+
+/* ---------- 2200M ---------- */
+const XM = "frm2200m:";
+function L2200M() {
+    const l = lineOf(XM);
+    return (
+        <>
+            <FormHead no="2200-M" month="DECEMBER 2003 (ENCS)" title="EXCISE TAX RETURN FOR MINERAL PRODUCTS" />
+            <T>
+                <tr><td><No n="1" />FOR THE MONTH (MM/YYYY)</td><td><No n="2" />AMENDED RETURN?</td><td><No n="3" />NO. OF SHEETS ATTACHED</td><td><No n="4" />ATC</td></tr>
+                <tr>
+                    <td><MonthF parts={[[`${XM}txtMonth`, "m"], [`${XM}txtYear`, "y"]]} /></td>
+                    <td><Opts group={[`${XM}optAmend:Y`, `${XM}optAmend:N`]} labels={YN} /></td>
+                    <td><Txt k={`${XM}txtSheets`} c /></td>
+                    <td><Txt k={`${XM}txtATC`} c /></td>
+                </tr>
+            </T>
+            <Bg X={XM} n={5} />
+            <T>
+                <tr>
+                    <td className="bf-w25"><No n="12" />TAXPAYER IS</td>
+                    <td><Opts group={[`${XM}optKind:P`, `${XM}optKind:I`, `${XM}optKind:O`]} labels={["PRODUCER / PROCESSOR", "IMPORTER", "OTHERS"]} /></td>
+                </tr>
+            </T>
+            <T>
+                <H span={6}>PART II - COMPUTATION OF TAX</H>
+                <tr className="bf-c bf-sm">
+                    <td>MINERAL PRODUCT (DESCRIPTION)</td><td className="bf-w10">UNIT</td><td className="bf-w15">QUANTITY / VOLUME</td>
+                    <td className="bf-w15">ACTUAL MARKET VALUE / GROSS OUTPUT</td><td className="bf-w10">TAX RATE (%)</td><td className="bf-w15">EXCISE TAX DUE</td>
+                </tr>
+                {[1, 2, 3, 4, 5].map((i) => (
+                    <tr key={i}>
+                        <td><Cell><No n={`13${"ABCDE"[i - 1]}`} /><Txt k={`${XM}r${i}Desc`} /></Cell></td>
+                        <td><Txt k={`${XM}r${i}Unit`} c /></td>
+                        <td><Num k={`${XM}r${i}Qty`} blank="" /></td>
+                        <td><Num k={`${XM}r${i}Value`} /></td>
+                        <td><Txt k={`${XM}r${i}Rate`} r /></td>
+                        <td><Num k={`${XM}r${i}Due`} ro /></td>
+                    </tr>
+                ))}
+                <tr>
+                    <td colSpan={3} className="bf-c"><No n="14" />TOTAL</td>
+                    <td><Num k={`${XM}totValue`} ro /></td><td /><td><Num k={`${XM}totDue`} ro /></td>
+                </tr>
+            </T>
+            <T>
+                <H span={3}>LESS: TAX CREDITS/PAYMENTS</H>
+                {l("15A", "TAX PAID IN RETURN PREVIOUSLY FILED, IF THIS IS AN AMENDED RETURN", "cFiled")}
+                {l("15B", "OTHER TAX CREDITS/PAYMENTS (SPECIFY)", "cOther", false, "cOtherSpecify")}
+                {l("15C", "TOTAL TAX CREDITS/PAYMENTS (SUM OF ITEMS 15A AND 15B)", "cTotal", true)}
+            </T>
+            <PartII X={XM} n={16} title="TOTAL TAX PAYABLE" dueLabel="TOTAL EXCISE TAX DUE (FROM ITEM 14)" creditsLabel="LESS: TOTAL TAX CREDITS/PAYMENTS (ITEM 15C)" />
+            <PayPart X={XM} n={21} />
+        </>
+    );
+}
+
 export const LAYOUTS = {
     "0605": [L0605],
     "0619E": [L0619E],
@@ -1183,4 +1847,13 @@ export const LAYOUTS = {
     "2550M": [L2550M],
     "2550Qv2024": [L2550Q_1, L2550Q_2],
     "2551Qv2018": [L2551Q_1, L2551Q_2],
+    // new (FEMS design)
+    "1604C": [L1604C],
+    "1604E": [L1604E],
+    "1701Q": [L1701Q_1, L1701Q_2],
+    "1701": [L1701_1, L1701_2],
+    "1702Q": [L1702Q_1, L1702Q_2],
+    "1702RT": [L1702RT_1, L1702RT_2],
+    "1702EX": [L1702EX_1],
+    "2200M": [L2200M],
 };
