@@ -48,6 +48,7 @@ const toForm = (c) => ({
     date_started: day(c?.date_started),
     date_registered: day(c?.date_registered),
     compliance_ids: str(c?.compliance_ids).split(",").map((x) => x.trim()).filter(Boolean),
+    is_top_withholding_agent: Number(c?.is_top_withholding_agent || 0) === 1,
 });
 
 // keep only simple formatting tags from stored HTML (same as Settings)
@@ -240,6 +241,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
             const body = { ...form };
             Object.keys(body).forEach((k) => { if (body[k] === "") body[k] = null; });
             body.compliance_ids = form.compliance_ids.map(Number);
+            body.is_top_withholding_agent = !!form.is_top_withholding_agent;
             delete body.client_num;                       // the server assigns / keeps the client #
             if (isNew) body.accounts = data.accounts.map(({ id, _draft, status_label, nature_label, ...a }) => a);   // saved together with the new client
             if (isNew) body.valid_ids = data.valid_ids.map((v) => ({ institution: v.institution, id_num: v.id_num }));  // required on a new client
@@ -463,6 +465,20 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                                             {form.business_ownership_type_detail_id && ` · ${bot.details.find((d) => String(d.id) === form.business_ownership_type_detail_id)?.label || ""}`}
                                         </p>
                                     )}
+
+                                    <h2 className="st-h st-mt">Withholding</h2>
+                                    <label className={`st-twa ${form.is_top_withholding_agent ? "is-on" : ""}`}>
+                                        <span className="st-twa-text">
+                                            <b>Top Withholding Agent (TWA)</b>
+                                            <small>Classified by the BIR as a top withholding agent – withholds 1% on goods / 2% on services from its suppliers.</small>
+                                        </span>
+                                        <span className="st-switch">
+                                            <input type="checkbox" role="switch" checked={!!form.is_top_withholding_agent}
+                                                onChange={(e) => set({ is_top_withholding_agent: e.target.checked })} aria-label="Top Withholding Agent" />
+                                            <i aria-hidden="true" />
+                                        </span>
+                                        <span className={`st-twa-state ${form.is_top_withholding_agent ? "is-yes" : ""}`}>{form.is_top_withholding_agent ? "Yes" : "No"}</span>
+                                    </label>
                                 </>
                             )}
 
@@ -764,6 +780,8 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
         is_mobile: !!account?.login?.is_mobile,
     }));
     const setLogin = (patch) => setLoginState((l) => ({ ...l, ...patch }));
+    const [pw2, setPw2] = useState("");          // retype password
+    const [showPw, setShowPw] = useState(false);
     const [tab, setTab] = useState("info");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -772,23 +790,35 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
     // new account only: default Charts of Account of the nature of business (m_nature_coa_template)
     const isNewAcct = !acct.id || !!account?._draft;            // a draft of a new client is still new
     const [coa, setCoa] = useState(() => (Array.isArray(account?.coa) ? account.coa : null)); // null = whole default chart
-    const [coaTpl, setCoaTpl] = useState({ loading: false, rows: [], source: "", error: "" });
+    const [coaTpl, setCoaTpl] = useState({ loading: false, rows: [], source: "", error: "", have: [] });
     const [coaNob, setCoaNob] = useState(() => (Array.isArray(account?.coa) ? str(account?.nob_id) : null));
+    const [coaTouched, setCoaTouched] = useState(false);       // edit: only sent when the Charts of account tab was changed
     useEffect(() => {
-        if (!isNewAcct) return undefined;
         let alive = true;
         setCoaTpl((t) => ({ ...t, loading: true, error: "" }));
-        apiFetch(`/client-coa-template${acct.nob_id ? `?nob_id=${encodeURIComponent(acct.nob_id)}` : ""}`)
+        const qs = new URLSearchParams();
+        if (acct.nob_id) qs.set("nob_id", acct.nob_id);
+        if (!isNewAcct && acct.id) qs.set("ca_id", acct.id);     // edit: what this account's chart already has
+        apiFetch(`/client-coa-template${qs.toString() ? `?${qs}` : ""}`)
             .then((r) => {
                 if (!alive) return;
-                setCoaTpl({ loading: false, rows: r.rows || [], source: r.source || "", error: "" });
-                // another nature picked → its whole default chart again
-                if (coaNob !== null && coaNob !== str(acct.nob_id)) setCoa(null);
+                const rows = r.rows || [];
+                const have = (r.have || []).map(String);
+                setCoaTpl({ loading: false, rows, source: r.source || "", error: "", have });
+                if (isNewAcct) {
+                    // another nature picked → its whole default chart again
+                    if (coaNob !== null && coaNob !== str(acct.nob_id)) setCoa(null);
+                } else {
+                    // edit: ticked = the accounts already in its chart (they're updated from the nature's chart on save)
+                    const codes = new Set(rows.map((x) => x.code));
+                    setCoa(have.filter((c) => codes.has(c)));
+                    setCoaTouched(coaNob !== null && coaNob !== str(acct.nob_id));   // nature changed → apply on save
+                }
                 setCoaNob(str(acct.nob_id));
             })
-            .catch((e) => alive && setCoaTpl({ loading: false, rows: [], source: "", error: e.message || "Couldn't load the default chart of accounts." }));
+            .catch((e) => alive && setCoaTpl({ loading: false, rows: [], source: "", error: e.message || "Couldn't load the default chart of accounts.", have: [] }));
         return () => { alive = false; };
-    }, [isNewAcct, acct.nob_id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isNewAcct, acct.nob_id, acct.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     /** login part of the body, or an error message */
     const loginBody = () => {
@@ -798,6 +828,7 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
         if (username.length < 3) return { error: "Username needs at least 3 characters." };
         if (!savedLogin && login.password.length < 6) return { error: "Enter a password (at least 6 characters) for the login." };
         if (savedLogin && login.password && login.password.length < 6) return { error: "Password needs at least 6 characters." };
+        if (login.password && login.password !== pw2) return { error: "The passwords don't match. Retype the same password." };
         const value = { username, is_active: !!login.is_active, is_web: !!login.is_web, is_pos: !!login.is_pos, is_mobile: !!login.is_mobile };
         if (login.password) value.password = login.password;
         return { value };
@@ -809,6 +840,13 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
         if (!acct.branch_code.trim()) { setTab("info"); setError("Enter the branch code."); return; }
         const lg = loginBody();
         if (lg.error) { setTab("login"); setError(lg.error); return; }
+        // Charts of account belong to the login (m_charts_of_account.added_by = m_user_client.id): no login → nothing can be saved
+        const wantsCoa = isNewAcct ? (coa === null || coa.length > 0) && coaTpl.rows.length > 0 : coaTouched && Array.isArray(coa) && coa.length > 0;
+        if (wantsCoa && !lg.value && !savedLogin && (!isNewAcct || coaTouched)) {
+            setTab("login");
+            setError("This account has no login, so its Charts of account can't be saved. Enter a username and password here, then click " + (acct.id ? "Update" : "Add") + ".");
+            return;
+        }
         if (lg.value && others.some((o) => (o.login?.username || "").toLowerCase() === lg.value.username.toLowerCase())) {
             setTab("login"); setError("Another business account of this client already uses that username."); return;
         }
@@ -833,6 +871,7 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
             body.is_active = !!acct.is_active;
             body.login = lg.value;
             if (isNewAcct && coa !== null) body.coa = coa;
+            if (!isNewAcct && coaTouched && Array.isArray(coa)) body.coa = coa;   // insert the new ticks · update the ones it has
             const r = await apiFetch(acct.id ? `/client-accounts/${acct.id}` : `/clients/${encodeURIComponent(clientNum)}/accounts`, {
                 method: acct.id ? "PUT" : "POST", body: JSON.stringify(body),
             });
@@ -853,7 +892,7 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
             }>
             {account?.client_name && <p className="st-note st-note-top">Client: <b>{account.client_name}</b> · <span className="mono">{account.client_num}</span></p>}
             <div className="st-tabs" role="tablist">
-                {[["info", "Information"], ["address", "Address & contact"], ["login", "Login"], ...(isNewAcct ? [["coa", "Charts of account"]] : [])].map(([k, l]) => (
+                {[["info", "Information"], ["address", "Address & contact"], ["login", "Login"], ["coa", "Charts of account"]].map(([k, l]) => (
                     <button key={k} type="button" role="tab" aria-selected={tab === k} className={`st-tab ${tab === k ? "is-active" : ""}`} onClick={() => setTab(k)}>{l}</button>
                 ))}
             </div>
@@ -936,10 +975,20 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
                             <span className="field-label">Username</span>
                             <input className="input mono" value={login.username} autoComplete="off" onChange={(e) => setLogin({ username: e.target.value })} />
                         </label>
-                        <label className="field">
+                        <div className="field">
                             <span className="field-label">{savedLogin ? "New password (leave blank to keep)" : "Password"}</span>
-                            <input className="input" type="password" value={login.password} autoComplete="new-password" onChange={(e) => setLogin({ password: e.target.value })} />
-                        </label>
+                            <PwInput value={login.password} show={showPw} onToggle={() => setShowPw((v) => !v)} onChange={(v) => setLogin({ password: v })} label="Password" />
+                        </div>
+                        <div className="field">
+                            <span className="field-label">Retype password</span>
+                            <PwInput value={pw2} show={showPw} onToggle={() => setShowPw((v) => !v)} onChange={setPw2} label="Retype password"
+                                bad={!!pw2 && pw2 !== login.password} disabled={!login.password} />
+                            {login.password && pw2 && (
+                                <span className={`cml-pw-match ${pw2 === login.password ? "is-ok" : "is-bad"}`}>
+                                    {pw2 === login.password ? "✓ Passwords match" : "Passwords don't match"}
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <div className="cml-login-flags">
                         {[["is_active", "Active"], ["is_web", "Web"], ["is_pos", "POS"], ["is_mobile", "Mobile"]].map(([k, l]) => (
@@ -953,8 +1002,9 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
                 </div>
             )}
 
-            {tab === "coa" && isNewAcct && (
-                <CoaPicker tpl={coaTpl} selected={coa} onChange={setCoa} hasLogin={!!login.username.trim()}
+            {tab === "coa" && (
+                <CoaPicker tpl={coaTpl} selected={coa} onChange={(v) => { setCoa(v); setCoaTouched(true); }} hasLogin={!!login.username.trim()}
+                    isEdit={!isNewAcct} noNature={!acct.nob_id} onPickNature={() => setTab("info")}
                     natureLabel={(L.nature || []).find((n) => String(n.id) === String(acct.nob_id))?.label || ""} />
             )}
 
@@ -963,10 +1013,27 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
     );
 }
 
+/* ---------- password box with show / hide ---------- */
+export function PwInput({ value, onChange, show, onToggle, label, bad = false, disabled = false }) {
+    return (
+        <div className={`cml-pw${bad ? " is-bad" : ""}${disabled ? " is-disabled" : ""}`}>
+            <input className="input" type={show ? "text" : "password"} value={value} autoComplete="new-password" spellCheck={false}
+                disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.value)} />
+            <button type="button" className="cml-pw-eye" onClick={onToggle} tabIndex={-1} aria-label={show ? "Hide password" : "Show password"} title={show ? "Hide" : "Show"}>
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />
+                    {show && <path d="M3 3l18 18" />}
+                </svg>
+            </button>
+        </div>
+    );
+}
+
 /* ---------- new business account: default Charts of Account of its nature of business ---------- */
 const COA_TYPE_TONE = { Asset: "blue", Liability: "orange", Equity: "purple", Revenue: "green", "Cost of Sales": "red", Expense: "red", "Other Income": "green", "Other Expense": "red" };
 
-function CoaPicker({ tpl, selected, onChange, hasLogin, natureLabel }) {
+export function CoaPicker({ tpl, selected, onChange, hasLogin, natureLabel, isEdit = false, noNature = false, onPickNature }) {
+    const have = useMemo(() => new Set(tpl.have || []), [tpl.have]);
     const rows = tpl.rows;
     const [open, setOpen] = useState(() => new Set(["10000", "20000", "30000", "40000", "50000", "60000", "70000", "80000"]));
     const [q, setQ] = useState("");
@@ -994,7 +1061,7 @@ function CoaPicker({ tpl, selected, onChange, hasLogin, natureLabel }) {
             [code, ...below(code)].forEach((c) => next.add(c));
             for (let p = byCode[code]?.parent; p; p = byCode[p]?.parent) next.add(p);   // keep the parents
         }
-        onChange(next.size === all.length ? null : all.filter((c) => next.has(c)));
+        onChange(next.size === all.length && !isEdit ? null : all.filter((c) => next.has(c)));
     };
 
     const term = q.trim().toLowerCase();
@@ -1017,16 +1084,29 @@ function CoaPicker({ tpl, selected, onChange, hasLogin, natureLabel }) {
 
     return (
         <div className="coa-pick">
+            {noNature ? (
+                <div className="coa-pick-warn">
+                    No nature of business picked, so the <b>general</b> chart is shown.{" "}
+                    <button type="button" className="coa-pick-link" onClick={onPickNature}>Pick the nature of business</button> to see its chart.
+                </div>
+            ) : (
+                <div className={`coa-pick-src ${tpl.source === "nature" ? "is-nature" : "is-general"}`}>
+                    {tpl.source === "nature"
+                        ? <>Chart of <b>{natureLabel || "this nature of business"}</b></>
+                        : <>No chart set up for <b>{natureLabel || "this nature"}</b> yet – the <b>general</b> chart is used (Master File → Nature of Business → Charts of account)</>}
+                </div>
+            )}
             <p className="st-note">
-                {tpl.source === "nature" ? <>Standard chart for <b>{natureLabel || "this nature of business"}</b>.</> : <>No chart for this nature yet, so the <b>general</b> standard chart is used.</>}
-                {" "}Ticked accounts are added to this account's Charts of Account when it is saved. You can still edit them later in Setup → Charts of Account.
+                {isEdit
+                    ? <>Ticked accounts are saved to this account's Charts of Account when you click <b>Update</b>: new ones are <b>added</b>, ones it already has (<span className="coa-pick-have">in chart</span>) are <b>updated</b> from this chart. Unticking doesn't delete anything.</>
+                    : <>Ticked accounts are added to this account's Charts of Account when it is saved. You can still edit them later in Setup → Charts of Account.</>}
             </p>
             {!hasLogin && <div className="coa-pick-warn">The chart belongs to the login. Add a username on the <b>Login</b> tab, or no accounts will be created.</div>}
 
             <div className="coa-pick-bar">
                 <input className="input" placeholder="Search code or account…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search accounts" />
                 <span className="coa-pick-count"><b>{sel.size}</b> of {all.length} selected</span>
-                <button type="button" className="btn btn-sm" onClick={() => onChange(null)}>Select all</button>
+                <button type="button" className="btn btn-sm" onClick={() => onChange(isEdit ? all : null)}>Select all</button>
                 <button type="button" className="btn btn-sm" onClick={() => onChange([])}>Clear</button>
             </div>
 
@@ -1044,6 +1124,7 @@ function CoaPicker({ tpl, selected, onChange, hasLogin, natureLabel }) {
                             <input type="checkbox" checked={sel.has(r.code)} onChange={() => toggle(r.code)} />
                             <span className="mono coa-pick-code">{r.code}</span>
                             <span className="coa-pick-name">{r.name}</span>
+                            {isEdit && have.has(r.code) && <span className="coa-pick-have">in chart</span>}
                         </label>
                         <span className={`badge badge-${COA_TYPE_TONE[r.type] || "gray"} coa-pick-type`}>{r.type}</span>
                     </div>

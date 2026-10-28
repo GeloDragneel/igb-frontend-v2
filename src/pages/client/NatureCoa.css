@@ -1,100 +1,164 @@
-/* Master File → Nature of Business → Charts of account popup */
-.cmf-act {
-    width: 1%;
-    white-space: nowrap;
-    text-align: right;
-}
-
-.ncoa {
+/* Business account → "Charts of account" tab (new accounts only) */
+.coa-pick {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
-.ncoa-note {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
+.coa-pick-warn {
     padding: 10px 12px;
     border-radius: 10px;
     font-size: 13px;
-    background: var(--brand-soft);
-    color: var(--brand-ink);
+    background: color-mix(in srgb, var(--orange, #d97706) 12%, transparent);
+    color: var(--orange, #d97706);
+    border: 1px solid color-mix(in srgb, var(--orange, #d97706) 30%, transparent);
 }
 
-.ncoa-note .btn {
-    margin-left: auto;
-}
-
-.ncoa-bar {
+.coa-pick-bar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
 }
 
-.ncoa-bar .input {
-    flex: 1 1 240px;
+.coa-pick-bar .input {
+    flex: 1 1 220px;
     min-width: 0;
 }
 
-.ncoa-list {
-    max-height: 58vh;
-    overflow: auto;
+.coa-pick-count {
+    font-size: 13px;
+    color: var(--muted);
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.coa-pick-list {
     border: 1px solid var(--line);
     border-radius: 12px;
-}
-
-.ncoa-list thead th {
-    position: sticky;
-    top: 0;
+    max-height: 46vh;
+    overflow: auto;
     background: var(--card);
-    z-index: 1;
 }
 
-.ncoa-head td {
-    background: var(--card-2);
-}
-
-.ncoa-code {
-    display: inline-block;
-    min-width: 52px;
-    color: var(--muted);
-}
-
-.ncoa-flag {
-    margin-right: 4px;
-    font-size: 11px;
-}
-
-.ncoa-actions {
-    display: inline-flex;
-    gap: 4px;
-}
-
-.ncoa-flags {
+.coa-pick-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding-right: 10px;
+    border-bottom: 1px solid var(--line);
     font-size: 13.5px;
 }
 
-.ncoa-flags label {
-    display: inline-flex;
+.coa-pick-row:last-child {
+    border-bottom: 0;
+}
+
+.coa-pick-row.is-head {
+    background: var(--card-2);
+    font-weight: 600;
+}
+
+.coa-pick-row.is-off .coa-pick-name,
+.coa-pick-row.is-off .coa-pick-code {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.coa-pick-caret {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.coa-pick-label {
+    flex: 1;
+    min-width: 0;
+    display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     cursor: pointer;
 }
 
-/* ADD to the Client popup CSS – Valid IDs required on a new client */
-.st-badge.is-required {
-    background: rgba(220, 38, 38, .12);
-    color: #dc2626;
+.coa-pick-code {
+    flex: none;
+    width: 52px;
+    color: var(--muted);
 }
 
-.st-empty.is-required {
-    color: #dc2626;
-    border-color: rgba(220, 38, 38, .35);
-    background: rgba(220, 38, 38, .05);
+.coa-pick-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coa-pick-type {
+    flex: none;
+    font-size: 11px;
+}
+
+.coa-pick-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13.5px;
+}
+
+/* where the chart comes from · "in chart" tag (edit) */
+.coa-pick-src {
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    background: var(--card-2);
+    color: var(--ink);
+}
+
+.coa-pick-src.is-nature {
+    border-color: color-mix(in srgb, var(--green, #16a34a) 35%, transparent);
+    background: color-mix(in srgb, var(--green, #16a34a) 8%, transparent);
+}
+
+.coa-pick-src.is-general {
+    border-color: color-mix(in srgb, var(--orange, #d97706) 30%, transparent);
+    background: color-mix(in srgb, var(--orange, #d97706) 8%, transparent);
+}
+
+.coa-pick-link {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--brand);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.coa-pick-have {
+    flex: none;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    text-decoration: none !important;
+}
+
+.coa-pick-row.is-off .coa-pick-have {
+    text-decoration: none;
+    opacity: .8;
 }

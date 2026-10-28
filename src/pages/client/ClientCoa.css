@@ -1,88 +1,320 @@
-/* Master File → Nature of Business → Charts of account popup */
-.cmf-act {
-    width: 1%;
-    white-space: nowrap;
-    text-align: right;
-}
-
-.ncoa {
+/* Business account → "Charts of account" tab (new accounts only) */
+.coa-pick {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
-.ncoa-note {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
+.coa-pick-warn {
     padding: 10px 12px;
     border-radius: 10px;
     font-size: 13px;
-    background: var(--brand-soft);
-    color: var(--brand-ink);
+    background: color-mix(in srgb, var(--orange, #d97706) 12%, transparent);
+    color: var(--orange, #d97706);
+    border: 1px solid color-mix(in srgb, var(--orange, #d97706) 30%, transparent);
 }
 
-.ncoa-note .btn {
-    margin-left: auto;
-}
-
-.ncoa-bar {
+.coa-pick-bar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
 }
 
-.ncoa-bar .input {
-    flex: 1 1 240px;
+.coa-pick-bar .input {
+    flex: 1 1 220px;
     min-width: 0;
 }
 
-.ncoa-list {
-    max-height: 58vh;
-    overflow: auto;
+.coa-pick-count {
+    font-size: 13px;
+    color: var(--muted);
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.coa-pick-list {
     border: 1px solid var(--line);
     border-radius: 12px;
-}
-
-.ncoa-list thead th {
-    position: sticky;
-    top: 0;
+    max-height: 46vh;
+    overflow: auto;
     background: var(--card);
-    z-index: 1;
 }
 
-.ncoa-head td {
-    background: var(--card-2);
-}
-
-.ncoa-code {
-    display: inline-block;
-    min-width: 52px;
-    color: var(--muted);
-}
-
-.ncoa-flag {
-    margin-right: 4px;
-    font-size: 11px;
-}
-
-.ncoa-actions {
-    display: inline-flex;
-    gap: 4px;
-}
-
-.ncoa-flags {
+.coa-pick-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding-right: 10px;
+    border-bottom: 1px solid var(--line);
     font-size: 13.5px;
 }
 
-.ncoa-flags label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+.coa-pick-row:last-child {
+    border-bottom: 0;
+}
+
+.coa-pick-row.is-head {
+    background: var(--card-2);
+    font-weight: 600;
+}
+
+.coa-pick-row.is-off .coa-pick-name,
+.coa-pick-row.is-off .coa-pick-code {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.coa-pick-caret {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
     cursor: pointer;
+    font-size: 12px;
+}
+
+.coa-pick-label {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.coa-pick-code {
+    flex: none;
+    width: 52px;
+    color: var(--muted);
+}
+
+.coa-pick-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coa-pick-type {
+    flex: none;
+    font-size: 11px;
+}
+
+.coa-pick-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13.5px;
+}
+
+/* where the chart comes from · "in chart" tag (edit) */
+.coa-pick-src {
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    background: var(--card-2);
+    color: var(--ink);
+}
+
+.coa-pick-src.is-nature {
+    border-color: color-mix(in srgb, var(--green, #16a34a) 35%, transparent);
+    background: color-mix(in srgb, var(--green, #16a34a) 8%, transparent);
+}
+
+.coa-pick-src.is-general {
+    border-color: color-mix(in srgb, var(--orange, #d97706) 30%, transparent);
+    background: color-mix(in srgb, var(--orange, #d97706) 8%, transparent);
+}
+
+.coa-pick-link {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--brand);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.coa-pick-have {
+    flex: none;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    text-decoration: none !important;
+}
+
+.coa-pick-row.is-off .coa-pick-have {
+    text-decoration: none;
+    opacity: .8;
+}
+
+/* Login tab: password with show / hide + retype */
+.cml-pw {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.cml-pw .input {
+    width: 100%;
+    padding-right: 40px;
+}
+
+.cml-pw.is-bad .input {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, .12);
+}
+
+.cml-pw.is-disabled .input {
+    opacity: .6;
+}
+
+.cml-pw-eye {
+    position: absolute;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.cml-pw-eye:hover {
+    background: var(--card-2);
+    color: var(--ink);
+}
+
+.cml-pw-match {
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.cml-pw-match.is-ok {
+    color: #16a34a;
+}
+
+.cml-pw-match.is-bad {
+    color: #dc2626;
+}
+
+/* Business Ownership → Top Withholding Agent switch */
+.st-twa {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+}
+
+.st-twa:hover {
+    border-color: color-mix(in srgb, var(--brand) 45%, var(--line));
+}
+
+.st-twa.is-on {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+}
+
+.st-twa-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.st-twa-text b {
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.st-twa-text small {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.st-switch {
+    position: relative;
+    flex: none;
+    width: 42px;
+    height: 24px;
+}
+
+.st-switch input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.st-switch i {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: var(--line);
+    transition: background .15s;
+    pointer-events: none;
+}
+
+.st-switch i::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+    transition: transform .15s;
+}
+
+.st-switch input:checked+i {
+    background: var(--brand);
+}
+
+.st-switch input:checked+i::after {
+    transform: translateX(18px);
+}
+
+.st-switch input:focus-visible+i {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent);
+}
+
+.st-twa-state {
+    flex: none;
+    min-width: 30px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--muted);
+}
+
+.st-twa-state.is-yes {
+    color: var(--brand);
 }

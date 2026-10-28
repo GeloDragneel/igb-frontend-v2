@@ -4,6 +4,8 @@ import Modal from "../components/Modal";
 import SearchSelect from "../components/SearchSelect";
 import { useToast } from "../components/Toast";
 import { useAuth, apiFetch } from "../context/AuthContext";
+import { CoaPicker, PwInput } from "./client/ClientPopups";
+import "./client/ClientCoa.css";
 
 const SECTIONS = [
     ["profile", "Profile"],
@@ -47,7 +49,9 @@ const toForm = (c) => ({
     date_started: day(c?.date_started),
     date_registered: day(c?.date_registered),
     compliance_ids: str(c?.compliance_ids).split(",").map((x) => x.trim()).filter(Boolean),
+    is_top_withholding_agent: Number(c?.is_top_withholding_agent || 0) === 1,
 });
+const EMPTY_LOGIN = { username: "", password: "", is_active: true, is_web: true, is_pos: false, is_mobile: false };
 
 // keep only simple formatting tags from stored HTML
 const ALLOWED = new Set(["P", "UL", "OL", "LI", "BR", "B", "STRONG", "I", "EM", "U"]);
@@ -177,6 +181,15 @@ export default function Settings() {
     const [acctError, setAcctError] = useState("");
     const [delAcct, setDelAcct] = useState(null);         // { account, typed, busy, error }
     const [accQ, setAccQ] = useState("");
+    // business account popup: Login + Charts of account tabs
+    const [login, setLoginState] = useState(EMPTY_LOGIN);
+    const setLogin = (patch) => setLoginState((l) => ({ ...l, ...patch }));
+    const [savedLogin, setSavedLogin] = useState(null);      // the account's login when the popup opened
+    const [pw2, setPw2] = useState("");
+    const [showPw, setShowPw] = useState(false);
+    const [coaTpl, setCoaTpl] = useState({ loading: false, rows: [], source: "", error: "", have: [] });
+    const [coa, setCoa] = useState(null);                    // new: null = whole chart · edit: the ticked codes
+    const [coaTouched, setCoaTouched] = useState(false);
     const [accFilter, setAccFilter] = useState("all");   // all | main | branch | inactive
 
     const [newId, setNewId] = useState({ institution: "BIR", id_num: "" });
@@ -260,7 +273,11 @@ export default function Settings() {
             const body = { ...form };
             Object.keys(body).forEach((k) => { if (body[k] === "") body[k] = null; });
             body.compliance_ids = form.compliance_ids.map(Number);
+            body.is_top_withholding_agent = !!form.is_top_withholding_agent;
             const r = await apiFetch("/settings/client", { method: "PUT", body: JSON.stringify(body) });
+            // Top Withholding Agent (m_client.is_top_withholding_agent)
+            const t = await apiFetch("/settings/twa", { method: "PUT", body: JSON.stringify({ is_top_withholding_agent: !!form.is_top_withholding_agent }) });
+            r.client = { ...r.client, is_top_withholding_agent: t.is_top_withholding_agent ? 1 : 0 };
             const f = toForm(r.client);
             setForm(f);
             setSaved(JSON.stringify(f));
@@ -277,6 +294,13 @@ export default function Settings() {
     const openAccount = (a) => {
         setAcctError("");
         setAcctTab("info");
+        setLoginState(EMPTY_LOGIN);
+        setSavedLogin(null);
+        setPw2("");
+        setShowPw(false);
+        setCoa(null);
+        setCoaTouched(false);
+        setCoaTpl({ loading: true, rows: [], source: "", error: "", have: [] });
         setAcct(a
             ? {
                 ...EMPTY_ACCOUNT,
@@ -287,10 +311,70 @@ export default function Settings() {
     };
     const setA = (patch) => setAcct((a) => ({ ...a, ...patch }));
 
+    // the account's login + the chart of its nature of business (reloads when the nature changes)
+    const acctId = acct?.id || 0;
+    const acctNob = acct?.nob_id || "";
+    const acctOpen = !!acct;
+    const prevNob = useRef(null);
+    useEffect(() => {
+        if (!acctOpen) { prevNob.current = null; return undefined; }
+        let alive = true;
+        setCoaTpl((t) => ({ ...t, loading: true, error: "" }));
+        const qs = new URLSearchParams();
+        if (acctNob) qs.set("nob_id", acctNob);
+        if (acctId) qs.set("ca_id", acctId);
+        apiFetch(`/settings/account-extras${qs.toString() ? `?${qs}` : ""}`)
+            .then((r) => {
+                if (!alive) return;
+                const rows = r.rows || [];
+                const have = (r.have || []).map(String);
+                setCoaTpl({ loading: false, rows, source: r.source || "", error: "", have });
+                if (r.login && prevNob.current === null) {
+                    setSavedLogin(r.login);
+                    setLoginState({ ...EMPTY_LOGIN, ...r.login, password: "" });
+                }
+                if (acctId) {
+                    const codes = new Set(rows.map((x) => x.code));
+                    setCoa(have.filter((c) => codes.has(c)));
+                    setCoaTouched(prevNob.current !== null && prevNob.current !== acctNob);   // nature changed → apply on save
+                } else if (prevNob.current !== null && prevNob.current !== acctNob) {
+                    setCoa(null);                                                           // new account: the whole chart again
+                }
+                prevNob.current = acctNob;
+            })
+            .catch((e) => alive && setCoaTpl({ loading: false, rows: [], source: "", error: e.message || "Couldn't load the chart of accounts.", have: [] }));
+        return () => { alive = false; };
+    }, [acctOpen, acctId, acctNob]);
+
+    /** login part of the body, or an error message */
+    const loginBody = () => {
+        const username = login.username.trim();
+        if (!username) return savedLogin ? { error: "Username is required (the login can't be removed, only set inactive)." } : { value: null };
+        if (/\s/.test(username)) return { error: "Username can't have spaces." };
+        if (username.length < 3) return { error: "Username needs at least 3 characters." };
+        if (!savedLogin && login.password.length < 6) return { error: "Enter a password (at least 6 characters) for the login." };
+        if (savedLogin && login.password && login.password.length < 6) return { error: "Password needs at least 6 characters." };
+        if (login.password && login.password !== pw2) return { error: "The passwords don't match. Retype the same password." };
+        const value = { username, is_active: !!login.is_active, is_web: !!login.is_web, is_pos: !!login.is_pos, is_mobile: !!login.is_mobile };
+        if (login.password) value.password = login.password;
+        return { value };
+    };
+
     const saveAccount = async () => {
         if (!acct.trade_name.trim()) { setAcctTab("info"); setAcctError("Enter the trade name."); return; }
         if (!acct.branch_type) { setAcctTab("info"); setAcctError("Choose the branch type."); return; }
         if (!acct.branch_code.trim()) { setAcctTab("info"); setAcctError("Enter the branch code."); return; }
+        const lg = loginBody();
+        if (lg.error) { setAcctTab("login"); setAcctError(lg.error); return; }
+        // Charts of account: new account = the whole chart unless changed · edit = only when the tab was changed
+        const allCodes = coaTpl.rows.map((r) => r.code);
+        const coaCodes = !acct.id ? (coa === null ? allCodes : coa) : (coaTouched && Array.isArray(coa) ? coa : null);
+        const wantsCoa = Array.isArray(coaCodes) && coaCodes.length > 0 && (!!acct.id || coaTouched);
+        if (wantsCoa && !lg.value && !savedLogin) {
+            setAcctTab("login");
+            setAcctError(`This account has no login, so its Charts of account can't be saved. Enter a username and password here, then click ${acct.id ? "Update" : "Register"}.`);
+            return;
+        }
         setAcctSaving(true);
         setAcctError("");
         try {
@@ -304,7 +388,17 @@ export default function Settings() {
                 body: JSON.stringify(body),
             });
             setData((d) => ({ ...d, accounts: r.accounts }));
-            notify(acct.id ? "Business account updated." : "Business account added.");
+            // the saved account → its login + Charts of account (m_user_client · m_charts_of_account)
+            const savedId = acct.id || (r.accounts || []).find((x) => String(x.branch_code).trim() === acct.branch_code.trim())?.id;
+            let extra = "";
+            if (savedId && (lg.value || coaCodes !== null)) {
+                const x = await apiFetch(`/settings/accounts/${savedId}/extras`, {
+                    method: "POST",
+                    body: JSON.stringify({ login: lg.value, ...(lg.value || savedLogin ? { coa: coaCodes } : {}) }),
+                });
+                if (x.coa) extra = ` · ${x.message}`;
+            }
+            notify(`${acct.id ? "Business account updated." : "Business account added."}${extra}`);
             setAcct(null);
         } catch (e) {
             setAcctError(e.message || "Couldn't save the business account.");
@@ -546,6 +640,20 @@ export default function Settings() {
                                     {form.business_ownership_type_detail_id && ` · ${bot.details.find((d) => String(d.id) === form.business_ownership_type_detail_id)?.label || ""}`}
                                 </p>
                             )}
+
+                            <h2 className="st-h st-mt">Withholding</h2>
+                            <label className={`st-twa ${form.is_top_withholding_agent ? "is-on" : ""}`}>
+                                <span className="st-twa-text">
+                                    <b>Top Withholding Agent (TWA)</b>
+                                    <small>Classified by the BIR as a top withholding agent – withholds 1% on goods / 2% on services from its suppliers.</small>
+                                </span>
+                                <span className="st-switch">
+                                    <input type="checkbox" role="switch" checked={!!form.is_top_withholding_agent}
+                                        onChange={(e) => set({ is_top_withholding_agent: e.target.checked })} aria-label="Top Withholding Agent" />
+                                    <i aria-hidden="true" />
+                                </span>
+                                <span className={`st-twa-state ${form.is_top_withholding_agent ? "is-yes" : ""}`}>{form.is_top_withholding_agent ? "Yes" : "No"}</span>
+                            </label>
                         </>
                     )}
 
@@ -881,7 +989,7 @@ export default function Settings() {
                     }
                 >
                     <div className="st-tabs" role="tablist">
-                        {[["info", "Information"], ["address", "Address & contact"]].map(([k, l]) => (
+                        {[["info", "Information"], ["address", "Address & contact"], ["login", "Login"], ["coa", "Charts of account"]].map(([k, l]) => (
                             <button key={k} type="button" role="tab" aria-selected={acctTab === k}
                                 className={`st-tab ${acctTab === k ? "is-active" : ""}`} onClick={() => setAcctTab(k)}>{l}</button>
                         ))}
@@ -958,6 +1066,48 @@ export default function Settings() {
                                 </label>
                             </div>
                         </>
+                    )}
+
+                    {acctTab === "login" && (
+                        <div className="cml-login-form">
+                            <p className="st-note">One login per business account. The username can't be used by any other login.</p>
+                            <div className="st-grid">
+                                <label className="field">
+                                    <span className="field-label">Username</span>
+                                    <input className="input mono" value={login.username} autoComplete="off" onChange={(e) => setLogin({ username: e.target.value })} />
+                                </label>
+                                <div className="field">
+                                    <span className="field-label">{savedLogin ? "New password (leave blank to keep)" : "Password"}</span>
+                                    <PwInput value={login.password} show={showPw} onToggle={() => setShowPw((v) => !v)} onChange={(v) => setLogin({ password: v })} label="Password" />
+                                </div>
+                                <div className="field">
+                                    <span className="field-label">Retype password</span>
+                                    <PwInput value={pw2} show={showPw} onToggle={() => setShowPw((v) => !v)} onChange={setPw2} label="Retype password"
+                                        bad={!!pw2 && pw2 !== login.password} disabled={!login.password} />
+                                    {login.password && pw2 && (
+                                        <span className={`cml-pw-match ${pw2 === login.password ? "is-ok" : "is-bad"}`}>
+                                            {pw2 === login.password ? "✓ Passwords match" : "Passwords don't match"}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="cml-login-flags st-mt">
+                                {[["is_active", "Active"], ["is_web", "Web"], ["is_pos", "POS"], ["is_mobile", "Mobile"]].map(([k, l]) => (
+                                    <label key={k} className="st-switch-row">
+                                        <input type="checkbox" checked={!!login[k]} onChange={(e) => setLogin({ [k]: e.target.checked })} />
+                                        <span>{l}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            {!savedLogin && !login.username && <p className="st-note">Leave the username blank to save the account without a login (then no Charts of account).</p>}
+                        </div>
+                    )}
+
+                    {acctTab === "coa" && (
+                        <CoaPicker tpl={coaTpl} selected={coa} onChange={(v) => { setCoa(v); setCoaTouched(true); }}
+                            hasLogin={!!login.username.trim() || !!savedLogin} isEdit={!!acct.id} noNature={!acct.nob_id}
+                            onPickNature={() => setAcctTab("info")}
+                            natureLabel={(L.nature || []).find((n) => String(n.id) === String(acct.nob_id))?.label || ""} />
                     )}
 
                     {acctError && <div className="alert-error st-mt" role="alert">{acctError}</div>}
