@@ -132,7 +132,13 @@ function calc(st, months, brackets, corporate) {
         excess = taxable;
         amount = taxable * 0.2;
     } else {
-        bracket = brackets.find((b) => taxable >= b.min && (b.max === null || taxable < b.max)) || null;
+        // top bracket = no upper limit: max empty / 0 / not above min counts as "and above"
+        const open = (b) => b.max === null || b.max === "" || !(Number(b.max) > Number(b.min));
+        const list = [...(brackets || [])].map((b) => ({ ...b, min: Number(b.min) || 0, max: open(b) ? null : Number(b.max), base: Number(b.base) || 0, rate: Number(b.rate) || 0 }))
+            .sort((x, y) => x.min - y.min);
+        bracket = list.find((b) => taxable >= b.min && (b.max === null || taxable < b.max))
+            // above every limit → the highest bracket ("8,000,000 and above")
+            || (list.length && taxable >= list[list.length - 1].min ? list[list.length - 1] : null);
         if (bracket) {
             rate = bracket.rate;
             excess = taxable - bracket.min;
