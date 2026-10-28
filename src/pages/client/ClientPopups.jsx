@@ -214,8 +214,15 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
         if (!form.last_name.trim()) return ["profile", "Last name is required."];
         if (!form.status_id) return ["profile", "Client status is required."];
         if (!form.phone_num.trim()) return ["contact", "Cellphone number is required."];
+        if (!form.province_id) return ["address", "Province is required."];
+        if (!form.city_id) return ["address", "City / municipality is required."];
+        if (!form.brgy_id) return ["address", "Barangay is required."];
+        if (!String(form.street || "").trim()) return ["address", "Street name / district is required."];
         if (!form.business_ownership_type_id) return ["ownership", "Business ownership type is required."];
+        if (!form.classification_id) return ["classification", "Classification is required."];
+        if (!form.compliance_ids.length) return ["classification", "Select at least one compliance."];
         if (!(data?.accounts || []).length) return ["accounts", "Add at least one business account."];
+        if (isNew && !(data?.valid_ids || []).length) return ["ids", "Add at least one valid ID."];
         return null;
     };
     const askToSave = () => {
@@ -235,11 +242,12 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
             body.compliance_ids = form.compliance_ids.map(Number);
             delete body.client_num;                       // the server assigns / keeps the client #
             if (isNew) body.accounts = data.accounts.map(({ id, _draft, status_label, nature_label, ...a }) => a);   // saved together with the new client
+            if (isNew) body.valid_ids = data.valid_ids.map((v) => ({ institution: v.institution, id_num: v.id_num }));  // required on a new client
             const r = await apiFetch(isNew ? "/clients" : `/clients/${encodeURIComponent(num)}`, { method: isNew ? "POST" : "PUT", body: JSON.stringify(body) });
             const f = toForm(r.client);
             setForm(f);
             setSaved(JSON.stringify(f));
-            setData((d) => ({ ...d, client: r.client, ...(r.accounts ? { accounts: r.accounts } : {}) }));
+            setData((d) => ({ ...d, client: r.client, ...(r.accounts ? { accounts: r.accounts } : {}), ...(r.valid_ids ? { valid_ids: r.valid_ids } : {}) }));
             if (isNew) setNum(r.client.client_num);
             notify(r.message || "Client saved.");
             onChanged?.();
@@ -254,6 +262,11 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
     const addId = async () => {
         if (!newId.id_num.trim()) { notify("Enter the ID number.", "error"); return; }
         if (isBir(newId.institution) && !TIN_RE.test(newId.id_num)) { notify("Enter the TIN as 000-000-000 (9 digits).", "error"); return; }
+        if (isNew) {   // new client: kept here, saved together with the client
+            setData((d) => ({ ...d, valid_ids: [...d.valid_ids, { id: `draft-${Date.now()}`, _draft: true, institution: newId.institution.toUpperCase(), id_num: newId.id_num.trim() }] }));
+            setNewId((s) => ({ ...s, id_num: "" }));
+            return;
+        }
         setIdBusy(true);
         try {
             const r = await apiFetch(`/clients/${encodeURIComponent(num)}/valid-ids`, { method: "POST", body: JSON.stringify(newId) });
@@ -265,6 +278,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
     const removeId = async () => {
         const v = delId;
         setDelId(null);
+        if (v._draft) { setData((d) => ({ ...d, valid_ids: d.valid_ids.filter((x) => x.id !== v.id) })); return; }
         try {
             const r = await apiFetch(`/client-valid-ids/${v.id}`, { method: "DELETE" });
             setData((d) => ({ ...d, valid_ids: r.valid_ids }));
@@ -274,6 +288,11 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
     const saveEditId = async () => {
         if (!editId.id_num.trim()) { notify("Enter the ID number.", "error"); return; }
         if (isBir(editId.institution) && !TIN_RE.test(editId.id_num)) { notify("Enter the TIN as 000-000-000 (9 digits).", "error"); return; }
+        if (String(editId.id).startsWith("draft-")) {
+            setData((d) => ({ ...d, valid_ids: d.valid_ids.map((x) => (x.id === editId.id ? { ...x, institution: editId.institution.toUpperCase(), id_num: editId.id_num.trim() } : x)) }));
+            setEditId(null);
+            return;
+        }
         setEditBusy(true);
         try {
             const r = await apiFetch(`/client-valid-ids/${editId.id}`, { method: "PUT", body: JSON.stringify({ institution: editId.institution, id_num: editId.id_num }) });
@@ -314,14 +333,14 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                     <div className="st-layout">
                         <nav className="card st-nav" aria-label="Client sections">
                             {SECTIONS.map(([k, l]) => {
-                                const locked = isNew && k === "ids";
+                                const locked = false;   // Valid IDs can be added before the first save (required)
                                 return (
                                     <button key={k} type="button" className={`st-nav-item ${section === k ? "is-active" : ""}`} disabled={locked}
                                         title={locked ? "Save the client first" : undefined}
                                         aria-current={section === k ? "page" : undefined} onClick={() => go(k)}>
                                         <span>{l}</span>
                                         {k === "accounts" && <span className="st-badge">{data.accounts.length}</span>}
-                                        {k === "ids" && !isNew && <span className="st-badge">{data.valid_ids.length}</span>}
+                                        {k === "ids" && <span className={`st-badge${isNew && !data.valid_ids.length ? " is-required" : ""}`}>{data.valid_ids.length}</span>}
                                     </button>
                                 );
                             })}
@@ -398,11 +417,12 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
 
                             {section === "address" && (
                                 <>
-                                    <h2 className="st-h">Client address</h2>
+                                    <h2 className="st-h">Client address <b className="st-req">*</b></h2>
+                                    <p className="st-note st-note-top">Province, city / municipality, barangay and street are required.</p>
                                     <AddressPicker idPrefix="client" provinces={L.provinces}
                                         value={{ province_id: form.province_id, city_id: form.city_id, brgy_id: form.brgy_id }} onChange={(p) => set(p)} />
                                     <label className="field st-mt">
-                                        <span className="field-label">Street name / district</span>
+                                        <span className="field-label">Street name / district <b className="st-req">*</b></span>
                                         <textarea className="input st-textarea" rows={3} value={form.street} onChange={(e) => set({ street: e.target.value })} />
                                     </label>
                                 </>
@@ -448,7 +468,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
 
                             {section === "classification" && (
                                 <>
-                                    <h2 className="st-h">Classification</h2>
+                                    <h2 className="st-h">Classification <b className="st-req">*</b></h2>
                                     <div className="st-classes" role="radiogroup" aria-label="Classification">
                                         {(L.classification || []).map((c) => {
                                             const on = form.classification_id === String(c.id);
@@ -486,7 +506,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                                         {!(L.classification || []).length && <p className="muted">No classifications found.</p>}
                                     </div>
 
-                                    <h2 className="st-h st-mt">Compliance <span className="muted st-h-note">({form.compliance_ids.length} selected)</span></h2>
+                                    <h2 className="st-h st-mt">Compliance <b className="st-req">*</b> <span className={`st-h-note ${form.compliance_ids.length ? "muted" : "st-req"}`}>({form.compliance_ids.length ? `${form.compliance_ids.length} selected` : "pick at least one"})</span></h2>
                                     <div className="st-checks">
                                         {(L.compliance || []).map((c) => {
                                             const on = form.compliance_ids.includes(String(c.id));
@@ -523,9 +543,10 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                                 </>
                             )}
 
-                            {section === "ids" && !isNew && (
+                            {section === "ids" && (
                                 <>
-                                    <h2 className="st-h">Valid IDs</h2>
+                                    <h2 className="st-h">Valid IDs{isNew && <> <b className="st-req">*</b></>}</h2>
+                                    {isNew && <p className="st-note st-note-top">At least one valid ID is required to add the client. They're saved together with the client.</p>}
                                     <p className="st-note st-note-top">
                                         The <b>BIR</b> ID is the client's TIN. BIR Return, E-Sub Report and the Report Generator read it from here.
                                     </p>
@@ -586,7 +607,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                                                 </li>
                                             );
                                         })}
-                                        {!data.valid_ids.length && <li className="st-empty">No IDs yet. Add the BIR TIN first.</li>}
+                                        {!data.valid_ids.length && <li className={`st-empty${isNew ? " is-required" : ""}`}>No IDs yet. Add the BIR TIN first{isNew ? " – required" : ""}.</li>}
                                     </ul>
                                 </>
                             )}

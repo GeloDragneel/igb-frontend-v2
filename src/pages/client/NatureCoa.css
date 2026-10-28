@@ -86,3 +86,15 @@
     gap: 6px;
     cursor: pointer;
 }
+
+/* ADD to the Client popup CSS – Valid IDs required on a new client */
+.st-badge.is-required {
+    background: rgba(220, 38, 38, .12);
+    color: #dc2626;
+}
+
+.st-empty.is-required {
+    color: #dc2626;
+    border-color: rgba(220, 38, 38, .35);
+    background: rgba(220, 38, 38, .05);
+}
