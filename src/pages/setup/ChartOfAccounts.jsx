@@ -211,7 +211,11 @@ export default function ChartOfAccounts() {
 
             // rows: walk the tree (only what the search / filter shows)
             let r = 5;
+            // each account once: a parent loop in the data (an account under itself, A → B → A) made this go forever
+            const done = new Set();
             const walk = (key, level) => (children[key] || []).filter((a) => !visibleSet || visibleSet.has(a.code)).forEach((a) => {
+                if (done.has(a.code) || level > 20) return;
+                done.add(a.code);
                 const used = [a.is_sales && "Sales", a.is_purchases && "Purchases", a.is_expenses && "Expenses", a.is_for_paid && "Payments"].filter(Boolean).join(", ");
                 const row = ws.getRow(r++);
                 row.values = [a.code, a.name, a.type || "", normalBalance(a.type), a.isGroup ? "Header" : "Posting", a.parent || "", used, a.description || ""];
@@ -229,6 +233,14 @@ export default function ChartOfAccounts() {
                 walk(a.code, level + 1);
             });
             walk("__root", 0);
+            // accounts that sit in a parent loop never hang under the top level – list them at the end so none are missing
+            accounts.filter((a) => !done.has(a.code) && (!visibleSet || visibleSet.has(a.code))).sort(byNum).forEach((a) => {
+                done.add(a.code);
+                const row = ws.getRow(r++);
+                row.values = [a.code, a.name, a.type || "", normalBalance(a.type), a.isGroup ? "Header" : "Posting", a.parent || "", "", a.description || ""];
+                row.getCell(1).alignment = { horizontal: "left" };
+                row.font = { color: { argb: "FFB45309" } };
+            });
             ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: Math.max(4, r - 1), column: 8 } };
 
             const buf = await wb.xlsx.writeBuffer();
