@@ -32,7 +32,8 @@ export const PROFILE_SECTIONS = {
     work: {
         title: "Work",
         fields: [
-            ["company_caid", "Company", "lookup", { list: "companies", wide: true }], ["designation_id", "Designation", "lookup", { list: "designations" }],
+            // edit: my client's accounts (MAIN + branches) · new employee: my own company by default
+            ["company_caid", "Company", "lookup", { list: "companies", editList: "my_companies", defaultLk: "my_company", wide: true }], ["designation_id", "Designation", "lookup", { list: "designations" }],
             ["employment_stat_id", "Employment status", "lookup", { list: "employment_statuses" }],
             ["date_contact", "Contract start", "date"], ["date_contact_exp", "Contract end", "date"],
             ["biometric_num", "Biometric no.", "text", { hint: "EnNo on the device" }], ["is_active", "Active", "check"],
@@ -75,12 +76,15 @@ export function usePlaces(kind, parent) {
     return list;
 }
 
-export const toForm = (profile) => Object.fromEntries(ALL_FIELDS.map(([k, , t]) => {
-    const v = profile?.[k];
-    if (t === "check") return [k, v === undefined || v === null ? true : !!v];
-    return [k, v === null || v === undefined ? "" : String(v)];
-}));
-export const toBody = (f) => Object.fromEntries(Object.entries(f).map(([k, v]) => {
+export const toForm = (profile) => ({
+    ...Object.fromEntries(ALL_FIELDS.map(([k, , t]) => {
+        const v = profile?.[k];
+        if (t === "check") return [k, v === undefined || v === null ? true : !!v];
+        return [k, v === null || v === undefined ? "" : String(v)];
+    })),
+    ...(profile ? {} : { __new: true }),   // new employee → defaults (Company = my company) are filled in
+});
+export const toBody = (f) => Object.fromEntries(Object.entries(f).filter(([k]) => k !== "__new").map(([k, v]) => {
     if (v === "") return [k, null];
     if (NUMERIC.includes(k)) return [k, Number(v)];
     return [k, v];
@@ -125,9 +129,17 @@ function FieldEdit({ field, f, setF, lk }) {
         );
     }
     if (t === "lookup") {
+        // editList (if the server sent one) limits the choices, e.g. Company → my client's accounts only
+        const list = o.editList && lk?.[o.editList]?.length ? lk[o.editList] : lk?.[o.list] || [];
+        const opts = list.map((x) => ({ value: String(x.value), label: x.label }));
+        // an employee already in a company outside that list keeps it visible
+        if (f[k] && !opts.some((x) => x.value === String(f[k]))) {
+            const cur = (lk?.[o.list] || []).find((x) => String(x.value) === String(f[k]));
+            opts.push({ value: String(f[k]), label: cur?.label || `#${f[k]}` });
+        }
         return (
             <SearchSelect value={f[k] || ""} onChange={(v) => set(v ? String(v) : "")} aria-label={label} searchPlaceholder="Search…"
-                options={[{ value: "", label: "Select…" }, ...(lk?.[o.list] || []).map((x) => ({ value: String(x.value), label: x.label }))]} />
+                options={[{ value: "", label: "Select…" }, ...opts]} />
         );
     }
     if (t === "place") return <PlaceSelect kind={o.kind} parent={o.parent === "all" ? "all" : f[o.parent]} value={f[k]} onChange={set} label={label} />;
@@ -139,6 +151,15 @@ function FieldEdit({ field, f, setF, lk }) {
 
 /** the fields of a section, as tiles (view) or inputs (edit) */
 export function SectionGrid({ section, f, setF, lk, edit }) {
+    // a new employee: empty fields with a default from the lookups (Company → my own company)
+    useEffect(() => {
+        if (!edit || !lk || !f.__new) return;
+        const fill = {};
+        PROFILE_SECTIONS[section].fields.forEach(([k, , , o = {}]) => {
+            if (o.defaultLk && (f[k] === "" || f[k] === undefined || f[k] === null) && lk[o.defaultLk]) fill[k] = String(lk[o.defaultLk]);
+        });
+        if (Object.keys(fill).length) setF((p) => ({ ...p, ...fill }));
+    }, [edit, lk, section]); // eslint-disable-line react-hooks/exhaustive-deps
     return (
         <div className="hr-info">
             {PROFILE_SECTIONS[section].fields.map((field) => {
