@@ -1,0 +1,230 @@
+/* Generate manual billing – header without EO version + Excel-like grid */
+.bsv-mb-head.mb-head3 {
+    grid-template-columns: minmax(260px, 2fr) minmax(150px, 1fr) minmax(170px, 1fr);
+}
+
+@media (max-width: 900px) {
+    .bsv-mb-head.mb-head3 {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.mb-sheet {
+    margin-top: 12px;
+    max-height: 52vh;
+    overflow: auto;
+    border: 1px solid var(--line, #e2e8f0);
+    border-radius: 8px;
+    background: var(--card, #fff);
+}
+
+.mb-grid {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.mb-grid .w-n {
+    width: 40px;
+}
+
+.mb-grid .w-d {
+    width: 150px;
+}
+
+.mb-grid .w-p {
+    width: 130px;
+}
+
+.mb-grid .w-q {
+    width: 80px;
+}
+
+.mb-grid .w-t {
+    width: 130px;
+}
+
+.mb-grid .w-x {
+    width: 40px;
+}
+
+.mb-grid th,
+.mb-grid td {
+    border: 1px solid var(--line, #e2e8f0);
+    padding: 0;
+    height: 34px;
+}
+
+.mb-grid tr> :first-child {
+    border-left: 0;
+}
+
+.mb-grid tr> :last-child {
+    border-right: 0;
+}
+
+.mb-grid thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--card-2, #f8fafc);
+    color: var(--muted, #64748b);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 0 10px;
+    border-top: 0;
+}
+
+.mb-grid thead th i {
+    color: #dc2626;
+    font-style: normal;
+}
+
+.mb-grid .n {
+    text-align: right;
+}
+
+.mb-grid th.n {
+    text-align: right;
+}
+
+.mb-grid .c {
+    text-align: center;
+}
+
+.mb-rn {
+    background: var(--card-2, #f8fafc);
+    color: var(--muted, #64748b);
+    font-size: 11.5px;
+}
+
+/* cells: type straight in, green outline like Excel */
+.mb-cell {
+    display: block;
+    width: 100%;
+    height: 34px;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink, #0f172a);
+    font: inherit;
+    padding: 0 10px;
+    outline: none;
+}
+
+.mb-cell.n {
+    text-align: right;
+}
+
+.mb-cell:focus {
+    background: var(--card, #fff);
+    box-shadow: inset 0 0 0 2px #21a366;
+    position: relative;
+    z-index: 1;
+}
+
+.mb-cell::placeholder {
+    color: color-mix(in srgb, var(--muted, #64748b) 60%, transparent);
+}
+
+.mb-svc .ss-trigger {
+    width: 100%;
+    height: 34px;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 10px;
+}
+
+.mb-svc .ss-trigger:focus,
+.mb-svc .ss-trigger.open {
+    box-shadow: inset 0 0 0 2px #21a366 !important;
+    background: var(--card, #fff) !important;
+}
+
+.mb-grid tbody tr:not(.mb-addrow):hover td {
+    background: color-mix(in srgb, var(--brand, #2563eb) 4%, transparent);
+}
+
+.mb-grid tbody tr:not(.mb-addrow):hover td.mb-rn {
+    background: var(--card-2, #f8fafc);
+}
+
+.mb-grid tr.is-blank .mb-total {
+    color: var(--muted, #64748b);
+}
+
+.mb-total {
+    padding: 0 10px !important;
+    font-weight: 600;
+}
+
+.mb-del {
+    width: 100%;
+    height: 34px;
+    border: 0;
+    background: transparent;
+    color: var(--muted, #64748b);
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.mb-del:hover {
+    color: #dc2626;
+    background: rgba(220, 38, 38, .06);
+}
+
+.mb-addrow td {
+    color: var(--muted, #64748b);
+}
+
+.mb-addrow button {
+    width: 100%;
+    height: 34px;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    padding: 0 10px;
+    color: var(--brand, #2563eb);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mb-addrow button:hover {
+    background: var(--brand-soft, #eff6ff);
+}
+
+.mb-empty {
+    text-align: center;
+    color: var(--muted, #64748b);
+    padding: 14px !important;
+}
+
+.mb-grid tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--card-2, #f8fafc);
+    font-weight: 700;
+    padding: 0 10px;
+    border-bottom: 0;
+}
+
+.mb-grid tfoot td:first-child,
+.mb-grid tfoot td:last-child {
+    padding: 0;
+}
+
+.mb-grand {
+    font-size: 14px;
+    color: var(--ink, #0f172a);
+}

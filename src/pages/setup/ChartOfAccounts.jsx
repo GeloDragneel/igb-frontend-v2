@@ -18,6 +18,10 @@ const TYPE_TONE = {
     Asset: "blue", Liability: "orange", Equity: "purple", Revenue: "green", "Cost of Sales": "red", Expense: "red",
 };
 
+// type from the account code when the account has none: 1 Asset · 2 Liability · 3 Equity · 4 Revenue ·
+// 5 Cost of Sales · 6 Expense · 7 Other Income (Revenue) · 8 Other Expense (Expense)
+const TYPE_BY_DIGIT = { 1: "Asset", 2: "Liability", 3: "Equity", 4: "Revenue", 5: "Cost of Sales", 6: "Expense", 7: "Revenue", 8: "Expense" };
+
 const EXPANDED_KEY = "bizdesk-coa-expanded";
 const byNum = (x, y) => x.code.localeCompare(y.code, undefined, { numeric: true });
 
@@ -54,6 +58,17 @@ export default function ChartOfAccounts() {
 
     /* ---------- tree structure ---------- */
     const byCode = useMemo(() => Object.fromEntries(accounts.map((a) => [a.code, a])), [accounts]);
+
+    // the account's type: its own · else the nearest parent's · else from the first digit of the code
+    // (accounts with no type all showed "—" and "Credit")
+    const typeOf = useCallback((a) => {
+        const seen = new Set();
+        for (let cur = a; cur && !seen.has(cur.code); cur = cur.parent ? byCode[cur.parent] : null) {
+            seen.add(cur.code);
+            if (cur.type) return cur.type;
+        }
+        return TYPE_BY_DIGIT[String(a?.code || "").trim().charAt(0)] || "";
+    }, [byCode]);
 
     const children = useMemo(() => {
         const map = {};
@@ -108,7 +123,7 @@ export default function ChartOfAccounts() {
         accounts.forEach((a) => {
             const hit =
                 (!q || `${a.code} ${a.name} ${a.description || ""}`.toLowerCase().includes(q)) &&
-                (!type || a.type === type);
+                (!type || typeOf(a) === type);
             if (!hit) return;
             let cur = a;
             const seen = new Set();
@@ -119,7 +134,7 @@ export default function ChartOfAccounts() {
             }
         });
         return set;
-    }, [accounts, byCode, q, type, filtering]);
+    }, [accounts, byCode, q, type, filtering, typeOf]);
 
     const rows = useMemo(() => {
         const out = [];
@@ -218,7 +233,7 @@ export default function ChartOfAccounts() {
                 done.add(a.code);
                 const used = [a.is_sales && "Sales", a.is_purchases && "Purchases", a.is_expenses && "Expenses", a.is_for_paid && "Payments"].filter(Boolean).join(", ");
                 const row = ws.getRow(r++);
-                row.values = [a.code, a.name, a.type || "", normalBalance(a.type), a.isGroup ? "Header" : "Posting", a.parent || "", used, a.description || ""];
+                row.values = [a.code, a.name, typeOf(a), normalBalance(typeOf(a)), a.isGroup ? "Header" : "Posting", a.parent || "", used, a.description || ""];
                 row.getCell(1).alignment = { horizontal: "left" };
                 row.getCell(2).alignment = { indent: Math.min(level * 2, 15) };
                 if (a.isGroup) {
@@ -237,7 +252,7 @@ export default function ChartOfAccounts() {
             accounts.filter((a) => !done.has(a.code) && (!visibleSet || visibleSet.has(a.code))).sort(byNum).forEach((a) => {
                 done.add(a.code);
                 const row = ws.getRow(r++);
-                row.values = [a.code, a.name, a.type || "", normalBalance(a.type), a.isGroup ? "Header" : "Posting", a.parent || "", "", a.description || ""];
+                row.values = [a.code, a.name, typeOf(a), normalBalance(typeOf(a)), a.isGroup ? "Header" : "Posting", a.parent || "", "", a.description || ""];
                 row.getCell(1).alignment = { horizontal: "left" };
                 row.font = { color: { argb: "FFB45309" } };
             });
@@ -368,8 +383,8 @@ export default function ChartOfAccounts() {
                                             {hasKids && <span className="coa-count">{(children[a.code] || []).length}</span>}
                                         </div>
                                     </td>
-                                    <td><span className={`badge badge-${TYPE_TONE[a.type] || "gray"}`}>{a.type || "—"}</span></td>
-                                    <td className={normalBalance(a.type) === "Debit" ? "dr" : "cr"}>{normalBalance(a.type)}</td>
+                                    <td><span className={`badge badge-${TYPE_TONE[typeOf(a)] || "gray"}`} title={a.type ? "" : "No type saved – taken from the code / parent account"}>{typeOf(a) || "—"}</span></td>
+                                    <td className={normalBalance(typeOf(a)) === "Debit" ? "dr" : "cr"}>{normalBalance(typeOf(a))}</td>
                                     <td className="muted">{a.isGroup ? "Header" : "Posting"}</td>
                                     <td className="coa-flags">
                                         {a.is_sales && <span className="badge badge-green">Sales</span>}

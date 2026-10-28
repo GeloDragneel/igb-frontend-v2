@@ -7,6 +7,7 @@ import SearchSelect from "../../components/SearchSelect";
 import { useToast } from "../../components/Toast";
 import { apiFetch } from "../../context/AuthContext";
 import "./BillingDashboard.css";
+import "./ManualBill.css";
 
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pad = (n) => String(n).padStart(2, "0");
@@ -235,10 +236,10 @@ function ResultModal({ result, onClose }) {
 const blankLine = () => ({ key: Math.random().toString(36).slice(2), ser_list_id: "", ser_fee_id: null, prep_target_date: plusDays(5), service_fee: "", qty: "1" });
 
 // old "GENERATE MANUAL BILLING": one account, picked services → SOA (R / EO / PF) + services + sales invoices
-function ManualBillModal({ onClose, onSaved }) {
+export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
     const [lk, setLk] = useState(null);
     const [services, setServices] = useState([]);
-    const [f, setF] = useState({ ca_id: "", trans_type_id: "", service_period: "", lines: [blankLine()] });
+    const [f, setF] = useState({ ca_id: initialCaId ? String(initialCaId) : "", trans_type_id: "", service_period: "", lines: [blankLine()] });
     const [account, setAccount] = useState(null);
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
@@ -261,7 +262,6 @@ function ManualBillModal({ onClose, onSaved }) {
         .map((a) => ({ value: String(a.id), label: (a.client_name || "").trim() || "—", hint: branchTrade(a) }))
         .sort((x, y) => `${x.label} ${x.hint}`.localeCompare(`${y.label} ${y.hint}`))], [lk]);
     const picked = (lk?.accounts || []).find((a) => String(a.id) === String(f.ca_id));
-
     const serviceOpts = useMemo(() => [{ value: "", label: "— Select service —" }, ...services.map((s) => ({
         value: String(s.id), label: `${s.name}${Number(s.fee) ? ` · ${n2(s.fee)}` : ""}`,
     }))], [services]);
@@ -270,6 +270,7 @@ function ManualBillModal({ onClose, onSaved }) {
         const s = services.find((x) => String(x.id) === v);
         setLine(key, { ser_list_id: v, ser_fee_id: s?.fee_id || null, ...(s && Number(s.fee) ? { service_fee: String(Number(s.fee)) } : {}) });
     };
+
     // EO transaction (type 2) → only EO-YYYY periods; any other type → every period except EO
     const isEoPeriod = (p) => /^EO-/i.test(p);
     const periodOpts = [{ value: "", label: "— Select —" }, ...(lk?.service_periods || [])
@@ -279,6 +280,7 @@ function ManualBillModal({ onClose, onSaved }) {
         ...x, trans_type_id: v,
         service_period: x.service_period && isEoPeriod(x.service_period) === (Number(v) === 2) ? x.service_period : "",
     }));
+
     const grand = f.lines.reduce((t, l) => t + num(l.service_fee) * num(l.qty), 0);
 
     const save = async () => {
@@ -300,7 +302,7 @@ function ManualBillModal({ onClose, onSaved }) {
                     lines: f.lines.map((l) => ({ ser_list_id: Number(l.ser_list_id), ser_fee_id: l.ser_fee_id || null, prep_target_date: l.prep_target_date, service_fee: num(l.service_fee), qty: num(l.qty) })),
                 }),
             });
-            onSaved(res);
+            onSaved(res, f.ca_id);
         } catch (e) {
             setError(e.message || "Couldn't save.");
             setSaving(false);
@@ -310,7 +312,7 @@ function ManualBillModal({ onClose, onSaved }) {
     return (
         <Modal title="Generate manual billing" onClose={() => !saving && onClose()} size="lg"
             footer={<>
-                <button className="btn bsv-left" onClick={() => set("lines", [...f.lines, blankLine()])} disabled={saving}>+ Add row</button>
+                <span className="bsv-left muted small">Enter = next row · a new row is added at the end</span>
                 <button className="btn" onClick={onClose} disabled={saving}>Close</button>
                 <button className="btn btn-primary" onClick={save} disabled={saving || !lk}>{saving ? "Processing…" : "Generate"}</button>
             </>}>
@@ -318,7 +320,8 @@ function ManualBillModal({ onClose, onSaved }) {
             {!lk && !error && <p className="bsv-empty">Loading…</p>}
             {lk && (
                 <>
-                    <div className="bsv-mb-head">
+                    {/* EO version is not shown – it's still sent on save (lk.eo_version) */}
+                    <div className="bsv-mb-head mb-head3">
                         <div className="field bsv-mb-account">
                             <span className="field-label">Trade name *</span>
                             <SearchSelect value={f.ca_id} onChange={(v) => set("ca_id", v)} options={accountOpts} searchPlaceholder="Search trade name, branch or client..." aria-label="Trade name" />
@@ -329,7 +332,6 @@ function ManualBillModal({ onClose, onSaved }) {
                                 {lk.trans_types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                             </select>
                         </Field>
-                        <Field label="EO version"><input className="input" value={lk.eo_version} disabled /></Field>
                         <div className="field bsv-mb-account">
                             <span className="field-label">Service period *</span>
                             <SearchSelect value={f.service_period} onChange={(v) => set("service_period", v)} options={periodOpts}
@@ -346,25 +348,58 @@ function ManualBillModal({ onClose, onSaved }) {
                         </p>
                     )}
 
-                    <div className="bsv-mb-lines">
-                        <table className="bsv-table">
+                    {/* Excel-like grid: gridlines, cells you type straight into · Enter = next row (adds one at the end) */}
+                    <div className="mb-sheet">
+                        <table className="mb-grid">
+                            <colgroup><col className="w-n" /><col /><col className="w-d" /><col className="w-p" /><col className="w-q" /><col className="w-t" /><col className="w-x" /></colgroup>
                             <thead>
-                                <tr><th>Service</th><th>Due date</th><th className="n">Unit price</th><th className="n">Qty</th><th className="n">Total</th><th /></tr>
+                                <tr><th className="c">#</th><th>Service <i>*</i></th><th>Due date <i>*</i></th><th className="n">Unit price <i>*</i></th><th className="n">Qty <i>*</i></th><th className="n">Total</th><th /></tr>
                             </thead>
                             <tbody>
-                                {f.lines.length === 0 && <tr><td colSpan={6} className="bsv-empty">No services. Click + Add row.</td></tr>}
-                                {f.lines.map((l) => (
-                                    <tr key={l.key}>
-                                        <td className="bsv-mb-svc"><SearchSelect value={l.ser_list_id} onChange={(v) => pickService(l.key, v)} options={serviceOpts} searchPlaceholder="Search service..." aria-label="Service" /></td>
-                                        <td><input className="input" type="date" value={l.prep_target_date} onChange={(e) => setLine(l.key, { prep_target_date: e.target.value })} aria-label="Due date" /></td>
-                                        <td><input className="input ta-right bsv-mb-num" inputMode="decimal" value={l.service_fee} placeholder="0.00" onChange={(e) => setLine(l.key, { service_fee: cleanNum(e.target.value) })} aria-label="Unit price" /></td>
-                                        <td><input className="input ta-right bsv-mb-qty" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: cleanNum(e.target.value) })} aria-label="Qty" /></td>
-                                        <td className="n strong">{n2(num(l.service_fee) * num(l.qty))}</td>
-                                        <td className="c"><button className="btn btn-sm" onClick={() => set("lines", f.lines.filter((x) => x.key !== l.key))} aria-label="Remove row">✕</button></td>
-                                    </tr>
-                                ))}
+                                {f.lines.length === 0 && <tr><td colSpan={7} className="mb-empty">No services yet – click <b>+ Add row</b>.</td></tr>}
+                                {f.lines.map((l, i) => {
+                                    const total = num(l.service_fee) * num(l.qty);
+                                    const nextOrAdd = (e) => {
+                                        if (e.key !== "Enter") return;
+                                        e.preventDefault();
+                                        const col = e.currentTarget.dataset.col;
+                                        const next = e.currentTarget.closest("tbody").querySelectorAll(`[data-col="${col}"]`)[i + 1];
+                                        if (next) next.focus();
+                                        else { set("lines", [...f.lines, blankLine()]); setTimeout(() => e.target.closest("tbody")?.querySelectorAll(`[data-col="${col}"]`)[i + 1]?.focus(), 30); }
+                                    };
+                                    return (
+                                        <tr key={l.key} className={!l.ser_list_id ? "is-blank" : ""}>
+                                            <td className="c mb-rn">{i + 1}</td>
+                                            <td className="mb-svc">
+                                                <SearchSelect variant="cell" value={l.ser_list_id} onChange={(v) => pickService(l.key, v)} options={serviceOpts}
+                                                    placeholder="Select service…" searchPlaceholder="Search service..." aria-label={`Service row ${i + 1}`} />
+                                            </td>
+                                            <td><input className="mb-cell" type="date" data-col="date" value={l.prep_target_date} onKeyDown={nextOrAdd}
+                                                onChange={(e) => setLine(l.key, { prep_target_date: e.target.value })} aria-label={`Due date row ${i + 1}`} /></td>
+                                            <td><input className="mb-cell n" inputMode="decimal" data-col="price" value={l.service_fee} placeholder="0.00" onKeyDown={nextOrAdd}
+                                                onFocus={(e) => e.target.select()} onChange={(e) => setLine(l.key, { service_fee: cleanNum(e.target.value) })} aria-label={`Unit price row ${i + 1}`} /></td>
+                                            <td><input className="mb-cell n" inputMode="decimal" data-col="qty" value={l.qty} onKeyDown={nextOrAdd}
+                                                onFocus={(e) => e.target.select()} onChange={(e) => setLine(l.key, { qty: cleanNum(e.target.value) })} aria-label={`Qty row ${i + 1}`} /></td>
+                                            <td className="n mb-total">{total ? n2(total) : "-"}</td>
+                                            <td className="c"><button type="button" className="mb-del" onClick={() => set("lines", f.lines.filter((x) => x.key !== l.key))} aria-label={`Remove row ${i + 1}`} title="Remove row">✕</button></td>
+                                        </tr>
+                                    );
+                                })}
+                                <tr className="mb-addrow">
+                                    <td className="c">+</td>
+                                    <td colSpan={6}><button type="button" onClick={() => set("lines", [...f.lines, blankLine()])}>Add row</button></td>
+                                </tr>
                             </tbody>
-                            <tfoot><tr><td colSpan={4} className="n">Total ₱</td><td className="n">{n2(grand)}</td><td /></tr></tfoot>
+                            <tfoot>
+                                <tr>
+                                    <td />
+                                    <td>{f.lines.length} service{f.lines.length === 1 ? "" : "s"}</td>
+                                    <td /><td />
+                                    <td className="n">Total ₱</td>
+                                    <td className="n mb-grand">{n2(grand)}</td>
+                                    <td />
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </>

@@ -8,6 +8,8 @@ import Badge from "../../components/Badge";
 import { useToast } from "../../components/Toast";
 import { apiFetch, apiBlob } from "../../context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
+import { ClientPopup } from "../client/ClientPopups";
+import { ManualBillModal } from "./GenerateBilling";
 import "./BillingDashboard.css";
 
 const PAID = 1, VOID = 5, CANCELLED = 9;
@@ -96,8 +98,27 @@ export default function BillingDashboard() {
   const [logsFor, setLogsFor] = useState(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [printJob, setPrintJob] = useState(null);     // { type, serviceId?, label }
+  const [newClient, setNewClient] = useState(null);   // { L, hasRdo } → Add client popup (same as Clients → Masterlist)
+  const [manual, setManual] = useState(false);        // Manual Billing popup (same as Generate Billing)
+
+  // the account list again from the server (a new client / account was just added)
+  const reloadAccounts = useCallback(() => {
+    accountsCache = apiFetch("/billing/account-list").catch((e) => { accountsCache = null; throw e; });
+    return accountsCache.then((d) => { setAccounts(d || []); return d || []; }).catch(() => []);
+  }, []);
+
+  // "+ Add new client" in the Account / Client dropdown → the Add client popup
+  const openNewClient = async () => {
+    try {
+      const meta = await apiFetch("/clients/lookups");
+      setNewClient({ L: meta?.lookups || {}, hasRdo: !!meta?.has_rdo });
+    } catch (e) {
+      notifyRef.current(e.message || "Couldn't open Add client.", "error");
+    }
+  };
 
   // opened from a notification (or any link): /billing/dashboard?ca_id=12&groups=eo&status=open
+  //   ca_id → Business view on that account · client_num → Client view · trans_number → that SOA · groups / status / q → the filters
   const location = useLocation();
   const navigate = useNavigate();
   const keepTrans = useRef("");                       // SOA to pick once the account's periods are loaded
@@ -161,7 +182,6 @@ export default function BillingDashboard() {
       keepTrans.current = "";
     }).catch((e) => alive && notifyRef.current(e.message, "error"));
     return () => { alive = false; };
-
   }, [caid]);
 
   const params = useMemo(() => {
@@ -326,7 +346,8 @@ export default function BillingDashboard() {
           <>
             <div className="bd-filter bd-filter-wide">
               <span className="field-label">Client (all of their accounts)</span>
-              <SearchSelect value={clientNum} onChange={setClientNum} options={clientOpts} searchPlaceholder="Search client name or number..." aria-label="Client" />
+              <SearchSelect value={clientNum} onChange={setClientNum} options={clientOpts} searchPlaceholder="Search client name or number..." aria-label="Client"
+                onAddNew={openNewClient} addNewLabel="Add new client" />
             </div>
             <div className="bd-filter">
               <span className="field-label">Service period</span>
@@ -337,7 +358,8 @@ export default function BillingDashboard() {
           <>
             <div className="bd-filter bd-filter-wide">
               <span className="field-label">Account (trade name - branch · client)</span>
-              <SearchSelect value={caid} onChange={setCaid} options={accountOpts} searchPlaceholder="Search trade name, branch or client..." aria-label="Account" />
+              <SearchSelect value={caid} onChange={setCaid} options={accountOpts} searchPlaceholder="Search trade name, branch or client..." aria-label="Account"
+                onAddNew={openNewClient} addNewLabel="Add new client" />
             </div>
             <div className="bd-filter">
               <span className="field-label">Service period (SOA)</span>
@@ -367,6 +389,7 @@ export default function BillingDashboard() {
         </label>
         <div className="bd-filter-actions">
           {filtered && <button className="btn" onClick={clearFilters}>Clear</button>}
+          <button className="btn btn-primary" onClick={() => setManual(true)} title="Same as Generate Billing → Generate manual billing">Manual Billing</button>
         </div>
 
         {!isClient && account && (
@@ -486,14 +509,10 @@ export default function BillingDashboard() {
                           {dead ? (
                             <button className="btn btn-sm" onClick={() => setLogsFor(s)} title="Override logs">Logs</button>
                           ) : (
-                            <button className="btn btn-sm btn-primary"
-                              disabled={st === PAID || !(s.balance > 0.009)}
-                              onClick={() => payNow(s)}
+                            <button className="btn btn-sm btn-primary" disabled={st === PAID || !(s.balance > 0.009)} onClick={() => payNow(s)}
                               title={st === PAID ? "Already paid" : "Add payment for this service"}>Pay</button>
                           )}
-                          <button className="btn btn-sm"
-                            // disabled={dead || st === PAID} 
-                            onClick={() => setOptionsFor(s)}
+                          <button className="btn btn-sm" disabled={dead || st === PAID} onClick={() => setOptionsFor(s)}
                             title="VAT, withholding, discount">Option</button>
                           <button className="btn btn-sm" onClick={() => editService(s, dead)}
                             title={dead ? "View (void / cancelled)" : "Edit service"}>Edit</button>
@@ -612,6 +631,25 @@ export default function BillingDashboard() {
       {confirmClose && (
         <ConfirmDialog title="Close SOA?" message="Are you sure you want to close this transaction?" confirmLabel="Close SOA"
           onCancel={() => setConfirmClose(false)} onConfirm={closeSoa} />
+      )}
+
+      {newClient && (
+        <ClientPopup clientNum={null} L={newClient.L} hasRdo={newClient.hasRdo}
+          onClose={() => { setNewClient(null); reloadAccounts(); }}
+          onChanged={() => reloadAccounts()} />
+      )}
+      {manual && (
+        <ManualBillModal
+          initialCaId={!isClient && caid ? caid : ""}
+          onClose={() => setManual(false)}
+          onSaved={(res, caId) => {
+            setManual(false);
+            notifyRef.current(`${res.message}${res.trans_number ? ` · ${res.trans_number}` : ""}`);
+            if (res.no_customer) notifyRef.current("No sales invoice was created — this account isn't linked to a customer in the firm's books.", "error");
+            // show the new SOA: Business view on that account
+            if (caId) { setViewBy("business"); setClientNum(""); setCaid(String(caId)); }
+            load();
+          }} />
       )}
     </div>
   );
