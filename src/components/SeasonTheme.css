@@ -1362,7 +1362,9 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
 }
 
 .sidebar.sx-summer {
-    background: linear-gradient(180deg, #0c4a6e 0%, #075985 40%, #f97316 88%, #fb923c 100%) !important;
+    background:
+        radial-gradient(160px 140px at 85% 50px, rgba(253, 224, 71, .28), transparent 70%),
+        linear-gradient(180deg, #075985 0%, #0369a1 45%, #0284c7 75%, #38bdf8 100%) !important;
 }
 
 .sn-bigsun {
@@ -1478,6 +1480,146 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
 .sidebar.sx-summer .mode-switch .active {
     background: linear-gradient(90deg, #0284c7, #0ea5e9) !important;
     color: #fff !important;
+}
+
+
+/* ---------- SUMMER beach (sea, sand, palm, umbrella, people) ---------- */
+.sidebar.sx-summer .side-nav {
+    padding-bottom: 210px;
+    /* the last menu items scroll above the beach */
+}
+
+.sidebar.sx-summer .hw-bottom.sn-beach {
+    height: 200px;
+}
+
+.sidebar.sx-summer.collapsed .hw-bottom.sn-beach {
+    display: none;
+}
+
+.sn-beach-scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.sn-beach .sn-palm-wrap {
+    left: -4px;
+    right: auto;
+    bottom: 34px;
+}
+
+.sn-bs-waves {
+    animation: sn-bs-roll 5s linear infinite;
+}
+
+.sn-bs-boat {
+    animation: sn-bs-sail 26s ease-in-out infinite;
+}
+
+.sn-bs-swim {
+    animation: sn-bob 2.6s ease-in-out infinite;
+    transform-box: fill-box;
+}
+
+.sn-bs-ball {
+    animation: sn-bs-bounce 1.4s cubic-bezier(.3, 0, .6, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+}
+
+.sn-bs-foam {
+    animation: sn-bs-foam 4s ease-in-out infinite;
+}
+
+.sn-bs-flag {
+    animation: sn-bs-flag 1.2s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: 0 50%;
+}
+
+@keyframes sn-bs-roll {
+    to {
+        transform: translateX(40px);
+    }
+}
+
+@keyframes sn-bs-sail {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    50% {
+        transform: translateX(-60px);
+    }
+}
+
+@keyframes sn-bs-bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-14px) rotate(180deg);
+    }
+}
+
+@keyframes sn-bs-foam {
+
+    0%,
+    100% {
+        opacity: .95;
+        transform: translateY(0);
+    }
+
+    50% {
+        opacity: .55;
+        transform: translateY(2px);
+    }
+}
+
+@keyframes sn-bs-flag {
+
+    0%,
+    100% {
+        transform: scaleX(1);
+    }
+
+    50% {
+        transform: scaleX(.75);
+    }
+}
+
+.sn-bs-waves,
+.sn-bs-boat,
+.sn-bs-swim,
+.sn-bs-ball,
+.sn-bs-foam,
+.sn-bs-flag {
+    will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .sn-bs-waves,
+    .sn-bs-boat,
+    .sn-bs-swim,
+    .sn-bs-ball,
+    .sn-bs-foam,
+    .sn-bs-flag {
+        animation: none !important;
+    }
+}
+
+.sidebar.sx-summer .side-link.open:not(.has-active):not(.single-active) {
+    background: rgba(253, 224, 71, .16) !important;
+    color: #fff !important;
+    box-shadow: inset 0 0 0 1px rgba(253, 224, 71, .35);
 }
 
 /* ---------- INDEPENDENCE DAY (PH) ---------- */
@@ -2181,75 +2323,113 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
     }
 }
 
-/* ---------- OCEAN ---------- */
+/* ---------- OCEAN (Deep Blue) ---------- */
+/* top bar: soft aqua glow + a moving wave instead of the dashed stripe */
 .topbar.sx-ocean {
-    background: radial-gradient(120% 140% at 50% -40%, rgba(6, 182, 212, .12), transparent 60%), var(--card, #fff);
+    background:
+        radial-gradient(60% 160% at 50% -60%, rgba(34, 211, 238, .18), transparent 70%),
+        linear-gradient(180deg, rgba(240, 249, 255, .9), rgba(236, 254, 255, .6)),
+        var(--card, #fff);
 }
 
 .sn-ocean-line {
-    height: 4px;
-    background: repeating-linear-gradient(90deg, #0e7490 0 22px, #22d3ee 22px 34px, #a5f3fc 34px 40px);
+    height: 6px;
+    background:
+        radial-gradient(circle at 12px -6px, transparent 9px, #22d3ee 10px, #0891b2 12px, transparent 13px) 0 0 / 24px 6px repeat-x;
+    opacity: .9;
+    animation: sn-ocean-wave 6s linear infinite;
 }
 
+@keyframes sn-ocean-wave {
+    to {
+        background-position: 48px 0;
+    }
+}
+
+/* sidebar: sunlit surface → deep sea */
 .sidebar.sx-ocean {
-    background: linear-gradient(180deg, #0e7490 0%, #0c4a6e 35%, #082f49 70%, #041b2d 100%) !important;
+    background:
+        radial-gradient(120% 40% at 30% 0%, rgba(103, 232, 249, .28), transparent 70%),
+        linear-gradient(180deg, #0e7490 0%, #0b5c86 22%, #0a3d62 50%, #072a47 75%, #04192e 100%) !important;
 }
 
+/* light rays from the surface + a slow shimmer (caustics) */
 .sn-rays {
     position: absolute;
     inset: 0 0 auto 0;
-    height: 70%;
-    background: repeating-linear-gradient(105deg, rgba(255, 255, 255, .07) 0 18px, transparent 18px 46px);
-    animation: sn-glow 6s ease-in-out infinite;
+    height: 60%;
+    background:
+        repeating-linear-gradient(100deg, rgba(186, 230, 253, .09) 0 14px, transparent 14px 40px),
+        radial-gradient(80% 50% at 50% 0%, rgba(165, 243, 252, .14), transparent 70%);
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
+    animation: sn-glow 7s ease-in-out infinite;
     transform-origin: 50% 0;
 }
 
+/* sea life stays behind the menu: softer, and away from the text */
 .sn-fishes>span {
     position: absolute;
     left: 0;
-    animation: sn-swim 14s linear infinite;
-}
-
-/* the fish picture faces left but swims to the right → turn it around so it swims head-first */
-.sn-fishes>span>svg {
-    transform: scaleX(-1);
+    opacity: .55;
+    filter: drop-shadow(0 2px 4px rgba(2, 6, 23, .35));
+    animation: sn-swim 16s linear infinite;
 }
 
 .sn-fishes .f1 {
-    top: 36%;
+    top: 44%;
 }
 
 .sn-fishes .f2 {
-    top: 52%;
-    animation-duration: 18s;
-    animation-delay: -6s;
+    top: 60%;
+    animation-duration: 21s;
+    animation-delay: -7s;
 }
 
 .sn-fishes .f3 {
-    top: 66%;
-    animation-duration: 11s;
-    animation-delay: -3s;
+    top: 74%;
+    animation-duration: 13s;
+    animation-delay: -4s;
 }
 
 .sn-jelly-wrap {
     position: absolute;
-    right: 18px;
-    top: 18%;
-    animation: sn-float 5s ease-in-out infinite;
+    right: 10px;
+    top: 34%;
+    opacity: .5;
+    animation: sn-float 6s ease-in-out infinite;
+}
+
+/* sea floor: lower and darker, so the last menu items stay readable */
+.sidebar.sx-ocean .hw-bottom.sn-seabed {
+    height: 90px;
+    opacity: .85;
+}
+
+.sidebar.sx-ocean .sn-seabed .sn-hills path {
+    fill: #8a6d3b;
+}
+
+.sidebar.sx-ocean .sn-seabed::before {
+    content: "";
+    position: absolute;
+    inset: -40px 0 0 0;
+    background: linear-gradient(180deg, transparent, rgba(4, 25, 46, .85) 60%);
 }
 
 .sn-weeds {
     position: absolute;
-    left: 10px;
-    bottom: 10px;
+    left: 8px;
+    bottom: 6px;
     display: flex;
     align-items: flex-end;
     gap: 4px;
+    opacity: .8;
 }
 
 .sn-seaweed {
     transform-origin: 50% 100%;
-    animation: sn-sway 4s ease-in-out infinite;
+    animation: sn-sway 4.5s ease-in-out infinite;
 }
 
 .sn-weeds svg:nth-child(2) {
@@ -2262,38 +2442,159 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
 
 .sn-starfish {
     position: absolute;
-    right: 30px;
-    bottom: 6px;
+    right: 26px;
+    bottom: 4px;
     color: #fb923c;
-    font-size: 28px;
+    font-size: 24px;
     transform: rotate(-12deg);
+    opacity: .9;
 }
 
+/* menu colours: aqua / teal instead of the default purple-blue */
 .sidebar.sx-ocean .brand-badge {
-    background: #06b6d4 !important;
+    background: linear-gradient(135deg, #22d3ee, #0891b2) !important;
     color: #fff !important;
 }
 
 .sidebar.sx-ocean .side-heading {
     color: #67e8f9 !important;
+    letter-spacing: .04em;
 }
 
 .sidebar.sx-ocean .side-link.has-active,
 .sidebar.sx-ocean .side-link.single-active {
-    background: linear-gradient(90deg, #0891b2, #0e7490) !important;
+    background: linear-gradient(90deg, #06b6d4, #0e7490) !important;
     color: #fff !important;
-    box-shadow: 0 6px 18px rgba(8, 145, 178, .4);
+    box-shadow: 0 6px 18px rgba(6, 182, 212, .35), inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+
+.sidebar.sx-ocean .side-link.open:not(.has-active):not(.single-active) {
+    background: rgba(34, 211, 238, .14) !important;
+    color: #e0f2fe !important;
+    box-shadow: inset 0 0 0 1px rgba(103, 232, 249, .28);
+}
+
+.sidebar.sx-ocean .side-link.open svg,
+.sidebar.sx-ocean .side-link.single-active svg {
+    color: #fff !important;
+}
+
+.sidebar.sx-ocean .side-link:hover {
+    background: rgba(103, 232, 249, .10) !important;
 }
 
 .sidebar.sx-ocean .side-items a.active {
-    background: rgba(34, 211, 238, .16) !important;
+    background: rgba(34, 211, 238, .18) !important;
     color: #cffafe !important;
+}
+
+.sidebar.sx-ocean .side-items a.active::before {
+    background: #22d3ee !important;
 }
 
 .sidebar.sx-ocean .mode-switch [aria-selected="true"],
 .sidebar.sx-ocean .mode-switch .active {
     background: linear-gradient(90deg, #fb923c, #f97316) !important;
     color: #fff !important;
+}
+
+/* the fish picture faces left but swims to the right → turn it around so it swims head-first */
+.sn-fishes>span>svg {
+    transform: scaleX(-1);
+}
+
+
+/* the kraken: rises from the sea floor on the right, tentacles sway, eyes blink */
+.sidebar.sx-ocean .hw-bottom.sn-seabed {
+    height: 150px;
+}
+
+.sn-kraken-wrap {
+    position: absolute;
+    right: 0;
+    bottom: -6px;
+    opacity: .85;
+    filter: drop-shadow(0 0 14px rgba(168, 85, 247, .35));
+    animation: sn-kraken-rise 7s ease-in-out infinite;
+}
+
+.sn-kraken .sn-kt {
+    transform-box: fill-box;
+    animation: sn-sway 4.5s ease-in-out infinite;
+}
+
+.sn-kraken .sn-kt-l {
+    transform-origin: 100% 100%;
+}
+
+.sn-kraken .sn-kt-r {
+    transform-origin: 0 100%;
+    animation-delay: -2.2s;
+}
+
+.sn-kraken .sn-kt-fl {
+    transform-origin: 100% 0;
+    animation-duration: 3.4s;
+    animation-delay: -1s;
+}
+
+.sn-kraken .sn-kt-fr {
+    transform-origin: 0 0;
+    animation-duration: 3.4s;
+    animation-delay: -2.6s;
+}
+
+.sn-kraken .sn-k-eyes {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: sn-kraken-blink 5s ease-in-out infinite;
+}
+
+.sidebar.sx-ocean .sn-starfish {
+    right: auto;
+    left: 92px;
+}
+
+/* the kraken has the right corner now */
+
+@keyframes sn-kraken-rise {
+
+    0%,
+    100% {
+        transform: translateY(6px);
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
+@keyframes sn-kraken-blink {
+
+    0%,
+    92%,
+    100% {
+        transform: scaleY(1);
+    }
+
+    95% {
+        transform: scaleY(.1);
+    }
+}
+
+.sn-kraken-wrap,
+.sn-kraken .sn-kt,
+.sn-kraken .sn-k-eyes {
+    will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .sn-kraken-wrap,
+    .sn-kraken .sn-kt,
+    .sn-kraken .sn-k-eyes {
+        animation: none !important;
+    }
 }
 
 /* ---------- OUTER SPACE ---------- */
@@ -3524,4 +3825,702 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
     .sn-cloudy-front>svg {
         animation: none !important;
     }
+}
+
+/* ================= extra pictures per theme ================= */
+
+/* ---------- Valentine's: cupid + a flying arrow ---------- */
+.sn-cupid-wrap {
+    position: absolute;
+    left: 8px;
+    top: 34%;
+    opacity: .9;
+    animation: sn-float 4.6s ease-in-out infinite;
+}
+
+.sn-cupid .sn-cupid-wing {
+    transform-box: fill-box;
+    transform-origin: 100% 60%;
+    animation: sn-flap .5s ease-in-out infinite alternate;
+}
+
+.sn-love-arrow {
+    position: absolute;
+    left: 0;
+    top: 46%;
+    opacity: 0;
+    animation: sn-love-arrow 6s ease-in infinite 1.2s;
+}
+
+@keyframes sn-flap {
+    from {
+        transform: rotate(-8deg) scaleY(1);
+    }
+
+    to {
+        transform: rotate(10deg) scaleY(.8);
+    }
+}
+
+@keyframes sn-love-arrow {
+    0% {
+        transform: translate(70px, 0);
+        opacity: 0;
+    }
+
+    6% {
+        opacity: 1;
+    }
+
+    40% {
+        transform: translate(300px, -26px);
+        opacity: 1;
+    }
+
+    41%,
+    100% {
+        transform: translate(300px, -26px);
+        opacity: 0;
+    }
+}
+
+/* ---------- Easter: eggs with faces bounce a little ---------- */
+.sn-egg-basket>svg {
+    animation: sn-bob 2.4s ease-in-out infinite;
+}
+
+.sn-egg-basket>svg:nth-child(2) {
+    animation-delay: -.6s;
+}
+
+.sn-egg-basket>svg:nth-child(3) {
+    animation-delay: -1.2s;
+}
+
+.sn-egg-basket>svg:nth-child(4) {
+    animation-delay: -1.8s;
+}
+
+/* ---------- Halloween: ghosts float up and down and fade in / out ---------- */
+.sn-ghosts>span {
+    position: absolute;
+    animation: sn-ghost 7s ease-in-out infinite;
+}
+
+.sn-ghosts .g1 {
+    right: 14px;
+    top: 30%;
+}
+
+.sn-ghosts .g2 {
+    left: 12px;
+    top: 52%;
+    animation-duration: 9s;
+    animation-delay: -3s;
+}
+
+.sn-ghosts .g3 {
+    right: 40px;
+    top: 68%;
+    animation-duration: 8s;
+    animation-delay: -5s;
+}
+
+.sn-ghost-head {
+    position: absolute;
+    top: 8px;
+    left: 18%;
+    animation: sn-ghost 6s ease-in-out infinite;
+}
+
+.topbar .sn-ghost path:first-child {
+    fill: #e2e8f0;
+}
+
+@keyframes sn-ghost {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+        opacity: .25;
+    }
+
+    30% {
+        opacity: .9;
+    }
+
+    50% {
+        transform: translate(-10px, -16px);
+        opacity: .85;
+    }
+
+    80% {
+        opacity: .35;
+    }
+}
+
+/* ---------- Christmas: Santa next to the tree, waving ---------- */
+.sn-santa-wrap {
+    position: absolute;
+    right: 104px;
+    bottom: 12px;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .35));
+}
+
+.sn-santa .sn-santa-arm {
+    transform-box: fill-box;
+    transform-origin: 0 100%;
+    animation: sn-wave-hand 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes sn-wave-hand {
+    from {
+        transform: rotate(-10deg);
+    }
+
+    to {
+        transform: rotate(16deg);
+    }
+}
+
+/* ---------- Independence Day: the flag in paint splashes ---------- */
+.sidebar.sx-independence {
+    background: linear-gradient(180deg, #0b1430 0%, #0a1128 60%, #070b1c 100%) !important;
+}
+
+.sn-ph-splash-wrap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 62%;
+    opacity: .5;
+}
+
+.sn-ph-splash {
+    width: 100%;
+    height: 100%;
+}
+
+.sn-ph-splash-sun {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: sn-spin 50s linear infinite;
+}
+
+.sidebar.sx-independence .sn-mabuhay small {
+    letter-spacing: .04em;
+}
+
+/* ---------- Rainy: thunder (bolts + a flash of light) ---------- */
+.sn-flash {
+    position: absolute;
+    inset: 0;
+    background: #e0f2fe;
+    opacity: 0;
+    animation: sn-flash 9s linear infinite;
+}
+
+.sn-bolt {
+    position: absolute;
+    opacity: 0;
+    filter: drop-shadow(0 0 10px rgba(253, 224, 71, .9));
+    animation: sn-bolt 9s linear infinite;
+}
+
+.sn-bolt.b1 {
+    left: 34%;
+    top: 54px;
+}
+
+.sn-bolt.b2 {
+    right: 26px;
+    top: 90px;
+    animation-delay: -4.5s;
+}
+
+.sn-bolt-head {
+    top: 10px;
+    left: 30%;
+    animation-delay: -2s;
+}
+
+@keyframes sn-flash {
+
+    0%,
+    89%,
+    92%,
+    95%,
+    100% {
+        opacity: 0;
+    }
+
+    90% {
+        opacity: .22;
+    }
+
+    93.5% {
+        opacity: .14;
+    }
+}
+
+@keyframes sn-bolt {
+
+    0%,
+    88.5%,
+    92%,
+    93%,
+    96%,
+    100% {
+        opacity: 0;
+    }
+
+    89%,
+    91.5% {
+        opacity: 1;
+    }
+
+    93.5%,
+    95% {
+        opacity: .8;
+    }
+}
+
+/* ---------- Cloudy: birds flying across + small gusts of wind ---------- */
+.sn-flock>span {
+    position: absolute;
+    left: 0;
+    animation: sn-fly 16s linear infinite;
+}
+
+.sn-flock .b1 {
+    top: 26%;
+}
+
+.sn-flock .b2 {
+    top: 31%;
+    animation-delay: -1.2s;
+    animation-duration: 17s;
+}
+
+.sn-flock .b3 {
+    top: 22%;
+    animation-delay: -2.4s;
+    animation-duration: 18s;
+}
+
+.sn-flock-head>span {
+    top: 8px;
+    animation-duration: 20s;
+}
+
+.sn-flock-head .b2 {
+    top: 18px;
+}
+
+.sn-flybird .sn-wing-l,
+.sn-flybird .sn-wing-r {
+    transform-box: fill-box;
+    animation: sn-flap-wing .35s ease-in-out infinite alternate;
+}
+
+.sn-flybird .sn-wing-l {
+    transform-origin: 100% 100%;
+}
+
+.sn-flybird .sn-wing-r {
+    transform-origin: 0 100%;
+}
+
+.sn-wind i {
+    position: absolute;
+    left: 0;
+    width: 70px;
+    height: 10px;
+    opacity: 0;
+    border-top: 2px solid rgba(241, 245, 249, .55);
+    border-radius: 50% 50% 0 0;
+    animation: sn-gust 7s ease-in-out infinite;
+}
+
+.sn-wind i::after {
+    content: "";
+    position: absolute;
+    left: 50px;
+    top: -8px;
+    width: 12px;
+    height: 10px;
+    border: 2px solid rgba(241, 245, 249, .55);
+    border-left-color: transparent;
+    border-bottom-color: transparent;
+    border-radius: 50%;
+}
+
+.sn-wind i:nth-child(1) {
+    top: 40%;
+}
+
+.sn-wind i:nth-child(2) {
+    top: 48%;
+    width: 50px;
+    animation-delay: -2s;
+}
+
+.sn-wind i:nth-child(3) {
+    top: 58%;
+    animation-delay: -4s;
+}
+
+.sn-wind i:nth-child(4) {
+    top: 66%;
+    width: 44px;
+    animation-delay: -5.5s;
+}
+
+@keyframes sn-fly {
+    from {
+        transform: translate(-40px, 0);
+    }
+
+    50% {
+        transform: translate(130px, -12px);
+    }
+
+    to {
+        transform: translate(300px, 4px);
+    }
+}
+
+@keyframes sn-flap-wing {
+    from {
+        transform: rotate(0);
+    }
+
+    to {
+        transform: rotate(-38deg) scaleY(.7);
+    }
+}
+
+.sn-flybird .sn-wing-r {
+    animation-name: sn-flap-wing-r;
+}
+
+@keyframes sn-flap-wing-r {
+    from {
+        transform: rotate(0);
+    }
+
+    to {
+        transform: rotate(38deg) scaleY(.7);
+    }
+}
+
+@keyframes sn-gust {
+    0% {
+        transform: translateX(-80px);
+        opacity: 0;
+    }
+
+    20% {
+        opacity: 1;
+    }
+
+    60% {
+        opacity: .8;
+    }
+
+    100% {
+        transform: translateX(300px);
+        opacity: 0;
+    }
+}
+
+/* ---------- Outer space: half of the Earth at the bottom ---------- */
+.sidebar.sx-space .hw-bottom.sn-space {
+    height: 170px;
+}
+
+.sn-earth {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.sn-earth-land {
+    animation: sn-earth-turn 60s linear infinite;
+}
+
+.sn-earth-clouds {
+    animation: sn-earth-turn 40s linear infinite;
+}
+
+@keyframes sn-earth-turn {
+    to {
+        transform: translateX(-360px);
+    }
+}
+
+.sidebar.sx-space .sn-rocket-wrap {
+    z-index: 1;
+}
+
+/* ---------- Neon: disco ball, light beams, dance floor ---------- */
+.sn-disco-wrap {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    margin-left: -32px;
+    filter: drop-shadow(0 0 16px rgba(244, 114, 182, .6));
+    animation: sn-disco-sway 6s ease-in-out infinite;
+    transform-origin: 50% 0;
+}
+
+.sn-discoball .sn-disco-tiles {
+    animation: sn-disco-shine 1.2s steps(2) infinite;
+}
+
+@keyframes sn-disco-sway {
+
+    0%,
+    100% {
+        transform: rotate(-4deg);
+    }
+
+    50% {
+        transform: rotate(4deg);
+    }
+}
+
+@keyframes sn-disco-shine {
+    50% {
+        opacity: .55;
+    }
+}
+
+.sn-beams i {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    width: 46px;
+    height: 420px;
+    margin-left: -23px;
+    transform-origin: 50% 0;
+    opacity: .22;
+    mix-blend-mode: screen;
+    clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%);
+    animation: sn-beam 5s ease-in-out infinite alternate;
+}
+
+.sn-beams i:nth-child(1) {
+    background: linear-gradient(180deg, #f472b6, transparent);
+}
+
+.sn-beams i:nth-child(2) {
+    background: linear-gradient(180deg, #22d3ee, transparent);
+    animation-delay: -1.2s;
+    animation-duration: 6s;
+}
+
+.sn-beams i:nth-child(3) {
+    background: linear-gradient(180deg, #a78bfa, transparent);
+    animation-delay: -2.4s;
+    animation-duration: 4.4s;
+}
+
+.sn-beams i:nth-child(4) {
+    background: linear-gradient(180deg, #facc15, transparent);
+    animation-delay: -3.6s;
+    animation-duration: 5.4s;
+}
+
+@keyframes sn-beam {
+    from {
+        transform: rotate(-38deg);
+    }
+
+    to {
+        transform: rotate(38deg);
+    }
+}
+
+.sn-sparkles i {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 8px 2px rgba(255, 255, 255, .8);
+    opacity: 0;
+    animation: sn-sparkle 2.4s ease-in-out infinite;
+}
+
+.sn-sparkles i:nth-child(1) {
+    left: 18%;
+    top: 22%;
+}
+
+.sn-sparkles i:nth-child(2) {
+    left: 72%;
+    top: 30%;
+    animation-delay: -.4s;
+}
+
+.sn-sparkles i:nth-child(3) {
+    left: 40%;
+    top: 46%;
+    animation-delay: -.8s;
+}
+
+.sn-sparkles i:nth-child(4) {
+    left: 84%;
+    top: 58%;
+    animation-delay: -1.2s;
+}
+
+.sn-sparkles i:nth-child(5) {
+    left: 10%;
+    top: 64%;
+    animation-delay: -1.6s;
+}
+
+.sn-sparkles i:nth-child(6) {
+    left: 56%;
+    top: 72%;
+    animation-delay: -2s;
+}
+
+@keyframes sn-sparkle {
+
+    0%,
+    100% {
+        opacity: 0;
+        transform: scale(.4);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
+.sidebar.sx-neon .hw-bottom.sn-neon {
+    height: 110px;
+    perspective: 260px;
+}
+
+.sn-floor {
+    position: absolute;
+    left: -20%;
+    right: -20%;
+    bottom: 0;
+    height: 100%;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 3px;
+    transform: rotateX(55deg);
+    transform-origin: 50% 100%;
+}
+
+.sn-floor i {
+    border-radius: 2px;
+    background: #f472b6;
+    opacity: .15;
+    animation: sn-tile 3s steps(1) infinite;
+}
+
+.sn-floor i:nth-child(3n) {
+    background: #22d3ee;
+}
+
+.sn-floor i:nth-child(4n) {
+    background: #a78bfa;
+}
+
+.sn-floor i:nth-child(5n) {
+    background: #facc15;
+}
+
+@keyframes sn-tile {
+
+    0%,
+    100% {
+        opacity: .15;
+    }
+
+    25% {
+        opacity: .85;
+    }
+
+    50% {
+        opacity: .3;
+    }
+
+    75% {
+        opacity: .6;
+    }
+}
+
+/* everything above moves with transform / opacity only */
+.sn-cupid-wrap,
+.sn-love-arrow,
+.sn-ghosts>span,
+.sn-ghost-head,
+.sn-santa .sn-santa-arm,
+.sn-ph-splash-sun,
+.sn-flash,
+.sn-bolt,
+.sn-flock>span,
+.sn-wind i,
+.sn-earth-land,
+.sn-earth-clouds,
+.sn-disco-wrap,
+.sn-beams i,
+.sn-sparkles i,
+.sn-floor i {
+    will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .sn-cupid-wrap,
+    .sn-cupid .sn-cupid-wing,
+    .sn-love-arrow,
+    .sn-egg-basket>svg,
+    .sn-ghosts>span,
+    .sn-ghost-head,
+    .sn-santa .sn-santa-arm,
+    .sn-ph-splash-sun,
+    .sn-flash,
+    .sn-bolt,
+    .sn-flock>span,
+    .sn-flybird *,
+    .sn-wind i,
+    .sn-earth-land,
+    .sn-earth-clouds,
+    .sn-disco-wrap,
+    .sn-discoball .sn-disco-tiles,
+    .sn-beams i,
+    .sn-sparkles i,
+    .sn-floor i {
+        animation: none !important;
+    }
+
+    .sn-flash,
+    .sn-love-arrow,
+    .sn-wind i {
+        display: none;
+    }
+}
+
+.sx-still .sn-flash,
+.sx-still .sn-love-arrow,
+.sx-still .sn-wind i {
+    display: none;
+}
+
+.sn-switch .sn-ghost,
+.sn-mi .sn-ghost {
+    animation: none !important;
 }

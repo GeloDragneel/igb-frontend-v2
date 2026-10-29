@@ -175,6 +175,103 @@ const Palm = ({ w = 90 }) => (
         <circle cx="44" cy="36" r="3" fill="#78350f" /><circle cx="48" cy="38" r="3" fill="#78350f" />
     </svg>
 );
+/* ---------- Summer: a beach at the bottom of the sidebar ----------
+   sea with rolling waves + a sailboat · a swimmer on a float ring · sand with foam at the shore
+   a palm tree · a striped umbrella with someone sunbathing on a towel · a kid with a bouncing beach ball
+   a sandcastle · a surfboard · shells. Only transform / opacity move (light on the browser). */
+const BeachScene = () => (
+    <svg className="sn-beach-scene" viewBox="0 0 260 200" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <defs>
+            <linearGradient id="snSea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#38bdf8" />
+                <stop offset="1" stopColor="#0284c7" />
+            </linearGradient>
+            <linearGradient id="snSand" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#fde68a" />
+                <stop offset="1" stopColor="#f5c46b" />
+            </linearGradient>
+        </defs>
+
+        {/* sea */}
+        <rect x="0" y="62" width="260" height="80" fill="url(#snSea)" />
+        <g className="sn-bs-boat">
+            <path d="M196 66h22l-3 5h-16z" fill="#fff" />
+            <path d="M207 44v22" stroke="#334155" strokeWidth="1.2" />
+            <path d="M208 46l10 17h-10z" fill="#fff" />
+            <path d="M206 49l-8 14h8z" fill="#fb923c" />
+        </g>
+        <g className="sn-bs-waves">
+            <path d="M-60 80q10-5 20 0t20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0" stroke="#bae6fd" strokeWidth="1.6" fill="none" opacity=".8" />
+            <path d="M-50 96q10-5 20 0t20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0 20 0" stroke="#e0f2fe" strokeWidth="1.6" fill="none" opacity=".7" />
+        </g>
+        {/* swimmer on a float ring */}
+        <g className="sn-bs-swim">
+            <ellipse cx="62" cy="108" rx="11" ry="4.5" fill="none" stroke="#f472b6" strokeWidth="4" />
+            <circle cx="62" cy="100" r="4.5" fill="#f1c27d" />
+            <path d="M57.5 98.5a4.6 4.6 0 0 1 9 0z" fill="#1f2937" />
+            <path d="M55 104l-5-6M69 104l5-6" stroke="#f1c27d" strokeWidth="2" strokeLinecap="round" />
+        </g>
+
+        {/* sand + foam */}
+        <path d="M0 132c40-10 90-14 140-8s90 2 120-6v82H0z" fill="url(#snSand)" />
+        <path className="sn-bs-foam" d="M0 132c40-10 90-14 140-8s90 2 120-6" stroke="#fff" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".9" />
+        <path d="M20 168h6M70 182h8M120 160h5M200 176h7M236 190h6" stroke="#e7b75f" strokeWidth="1.4" strokeLinecap="round" />
+
+        {/* surfboard stuck in the sand */}
+        <g transform="rotate(-12 228 150)">
+            <ellipse cx="228" cy="150" rx="6" ry="24" fill="#22d3ee" />
+            <path d="M228 128v44" stroke="#0e7490" strokeWidth="1.4" />
+        </g>
+
+        {/* umbrella + towel + sunbather */}
+        <g>
+            <path d="M150 104v70" stroke="#475569" strokeWidth="2" />
+            <path d="M116 122Q150 84 184 122z" fill="#ef4444" />
+            <path d="M150 99L128 122h11zM150 99L161 122h11z" fill="#fff" />
+            <path d="M116 122q8.5-5 17 0q8.5-5 17 0q8.5-5 17 0q8.5-5 17 0" fill="none" stroke="#b91c1c" strokeWidth="1.2" />
+            <circle cx="150" cy="99" r="2" fill="#475569" />
+            <g transform="translate(14 0)">
+                <rect x="118" y="170" width="52" height="11" rx="2" fill="#3b82f6" transform="skewX(-12)" />
+                {/* person lying down */}
+                <circle cx="104" cy="171" r="5" fill="#e0ac69" />
+                <path d="M100 167a5 5 0 0 1 8 1z" fill="#78350f" />
+                <rect x="108" y="168" width="22" height="7" rx="3.5" fill="#e0ac69" />
+                <rect x="112" y="168" width="8" height="7" rx="2" fill="#f43f5e" />
+                <path d="M130 171.5h12" stroke="#e0ac69" strokeWidth="5" strokeLinecap="round" />
+                <path d="M100 168h7" stroke="#111827" strokeWidth="2" strokeLinecap="round" />
+            </g>
+        </g>
+
+        {/* kid + beach ball */}
+        <g>
+            <circle cx="196" cy="147" r="5" fill="#c68642" />
+            <path d="M191.5 145a5 5 0 0 1 9 0z" fill="#111827" />
+            <path d="M190 153h12l-1 12h-10z" fill="#facc15" />
+            <path d="M192 165v10M200 165v10" stroke="#c68642" strokeWidth="3" strokeLinecap="round" />
+            <path d="M190 155l-6-8M202 155l6-8" stroke="#c68642" strokeWidth="2.6" strokeLinecap="round" />
+        </g>
+        <g className="sn-bs-ball">
+            <circle cx="196" cy="126" r="7" fill="#fff" />
+            <path d="M196 119a7 7 0 0 1 6.6 4.6L196 126z" fill="#ef4444" />
+            <path d="M189.4 128.4A7 7 0 0 1 190 122L196 126z" fill="#3b82f6" />
+            <path d="M201 131a7 7 0 0 1-8 1.6L196 126z" fill="#facc15" />
+        </g>
+
+        {/* sandcastle */}
+        <g fill="#eab364">
+            <rect x="62" y="174" width="28" height="14" />
+            <rect x="67" y="165" width="18" height="9" />
+            <path d="M62 174h3.5v-3.5h3.5v3.5h3.5v-3.5h3.5v3.5h3.5v-3.5h3.5v3.5h3.5v-3.5h3.5v3.5" />
+            <rect x="73" y="158" width="6" height="7" />
+        </g>
+        <path d="M76 158v-10" stroke="#475569" strokeWidth="1" />
+        <path className="sn-bs-flag" d="M76 148l8 3-8 3z" fill="#ef4444" />
+
+        {/* shells */}
+        <path d="M86 190a5 5 0 0 1 10 0z" fill="#fda4af" />
+        <path d="M244 166a4 4 0 0 1 8 0z" fill="#fdba74" />
+    </svg>
+);
 const Umbrella = ({ w = 60 }) => (
     <svg width={w} height={w} viewBox="0 0 64 64" aria-hidden="true" className="sn-umbrella">
         <path d="M4 30C6 14 18 4 32 4s26 10 28 26c-4-4-8-4-12 0-4-4-8-4-12 0-4-4-8-4-12 0-4-4-8-4-12 0-4-4-8-4-12 0z" fill="#f59e0b" />
@@ -222,6 +319,49 @@ const Jelly = ({ w = 40 }) => (
     <svg width={w} height={w * 1.5} viewBox="0 0 40 60" aria-hidden="true" className="sn-jelly">
         <path d="M2 20a18 18 0 0 1 36 0c0 3-3 4-6 2-3 3-6 3-8 0-3 3-6 3-8 0-3 3-6 3-8 0-3 2-6 1-6-2z" fill="rgba(244,114,182,.75)" />
         <path d="M10 24c-2 10 2 18-1 30M17 25c2 10-2 20 1 32M24 25c-2 10 2 18-1 30M31 24c2 10-2 18 1 28" stroke="rgba(244,114,182,.6)" strokeWidth="1.6" fill="none" />
+    </svg>
+);
+/* a kraken rising from the sea floor: big head, glowing eyes, tentacles curling up (original drawing) */
+const Kraken = ({ w = 130 }) => (
+    <svg width={w} height={w * 1.1} viewBox="0 0 130 143" aria-hidden="true" className="sn-kraken">
+        <defs>
+            <radialGradient id="snKrakenSkin" cx="45%" cy="35%" r="70%">
+                <stop offset="0" stopColor="#a855f7" />
+                <stop offset=".6" stopColor="#7e22ce" />
+                <stop offset="1" stopColor="#4c1d95" />
+            </radialGradient>
+        </defs>
+        {/* back tentacles */}
+        <g className="sn-kt sn-kt-l" fill="none" stroke="#6d28d9" strokeWidth="9" strokeLinecap="round">
+            <path d="M40 120C14 112 4 86 14 64c6-13 20-14 22-4 1 7-8 9-10 3" />
+        </g>
+        <g className="sn-kt sn-kt-r" fill="none" stroke="#6d28d9" strokeWidth="9" strokeLinecap="round">
+            <path d="M92 118c26-6 36-34 26-58-6-14-21-14-22-3-1 7 8 9 10 3" />
+        </g>
+        {/* suckers on the back tentacles */}
+        <g fill="#f0abfc" opacity=".8">
+            <circle cx="16" cy="80" r="1.8" /><circle cx="22" cy="97" r="1.8" /><circle cx="114" cy="78" r="1.8" /><circle cx="110" cy="96" r="1.8" />
+        </g>
+        {/* head */}
+        <path d="M65 30c-24 0-38 20-36 46 1 16 6 30 10 44h52c4-14 9-28 10-44 2-26-12-46-36-46z" fill="url(#snKrakenSkin)" />
+        <path d="M50 44c4-6 10-8 15-8" stroke="#d8b4fe" strokeWidth="3" strokeLinecap="round" fill="none" opacity=".7" />
+        <circle cx="80" cy="52" r="3" fill="#c084fc" opacity=".7" /><circle cx="48" cy="64" r="2.4" fill="#c084fc" opacity=".7" />
+        {/* eyes */}
+        <g className="sn-k-eyes">
+            <ellipse cx="53" cy="86" rx="9" ry="8" fill="#fde047" />
+            <ellipse cx="77" cy="86" rx="9" ry="8" fill="#fde047" />
+            <rect x="51" y="79" width="4" height="14" rx="2" fill="#111827" />
+            <rect x="75" y="79" width="4" height="14" rx="2" fill="#111827" />
+        </g>
+        <path d="M42 76l18 5M88 76l-18 5" stroke="#3b0764" strokeWidth="3" strokeLinecap="round" />
+        {/* front tentacles */}
+        <g className="sn-kt sn-kt-fl" fill="none" stroke="#7e22ce" strokeWidth="8" strokeLinecap="round">
+            <path d="M50 118c-8 10-22 14-30 8" />
+        </g>
+        <g className="sn-kt sn-kt-fr" fill="none" stroke="#7e22ce" strokeWidth="8" strokeLinecap="round">
+            <path d="M80 118c8 10 22 14 30 8" />
+        </g>
+        <path d="M58 120c0 10-4 16-10 20M72 120c0 10 4 16 10 20" stroke="#7e22ce" strokeWidth="7" strokeLinecap="round" fill="none" />
     </svg>
 );
 const Seaweed = ({ h = 90, c = "#15803d" }) => (
@@ -306,6 +446,214 @@ const AutumnTree = ({ w = 110 }) => (
 );
 
 /* falling (or rising) bits: snow, confetti, hearts, rain, petals, gold, music notes, bubbles, stars, fireflies. Fixed positions so they don't jump on re-render. */
+/* ---------------- extra pictures (all original drawings) ---------------- */
+// Valentine's: a little cupid drawing his bow
+const Cupid = ({ w = 90 }) => (
+    <svg width={w} height={w * 0.9} viewBox="0 0 100 90" aria-hidden="true" className="sn-cupid">
+        {/* wings */}
+        <g className="sn-cupid-wing" fill="#fff" opacity=".95">
+            <path d="M40 34c-14-14-30-14-36-6 8-2 14 2 16 6-8-2-14 2-14 8 8-4 18-2 26 0z" />
+        </g>
+        {/* body */}
+        <circle cx="50" cy="26" r="11" fill="#fcd9b6" />
+        <path d="M40 20c2-8 16-10 21-2-3-2-7-2-9 0-3-2-8-1-12 2z" fill="#f59e0b" />
+        <circle cx="46" cy="27" r="1.4" fill="#1f2937" /><circle cx="54" cy="27" r="1.4" fill="#1f2937" />
+        <path d="M46 31q4 3 8 0" stroke="#be123c" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+        <circle cx="43" cy="30" r="2" fill="#fda4af" opacity=".8" /><circle cx="57" cy="30" r="2" fill="#fda4af" opacity=".8" />
+        <ellipse cx="50" cy="50" rx="12" ry="14" fill="#fcd9b6" />
+        <path d="M38 52q12 10 24 0v6q-12 8-24 0z" fill="#fff" />
+        <path d="M44 62l-4 12M56 62l4 12" stroke="#fcd9b6" strokeWidth="6" strokeLinecap="round" />
+        {/* bow + arrow */}
+        <path d="M70 26q14 20 0 44" stroke="#b45309" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <path d="M70 26L60 48 70 70" stroke="#fde68a" strokeWidth="1" fill="none" />
+        <path d="M60 48h34" stroke="#92400e" strokeWidth="2" />
+        <path d="M94 48l-7-4v8z" fill="#e11d48" />
+        <path d="M60 48l-4-3m4 3l-4 3" stroke="#f43f5e" strokeWidth="2" strokeLinecap="round" />
+        <path d="M60 48l-12-4" stroke="#fcd9b6" strokeWidth="5" strokeLinecap="round" />
+    </svg>
+);
+const LoveArrow = ({ w = 70 }) => (
+    <svg width={w} height={w * 0.3} viewBox="0 0 70 20" aria-hidden="true">
+        <path d="M4 10h56" stroke="#fde68a" strokeWidth="2" />
+        <path d="M60 10l-8-5v10z" fill="#e11d48" />
+        <path d="M4 10l6-6M4 10l6 6M10 10l6-6M10 10l6 6" stroke="#fb7185" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+);
+
+// Easter: eggs with faces
+const EggFace = ({ w = 30, c = "#c4b5fd", s = "#fff", mood = "smile" }) => (
+    <svg width={w} height={w * 1.25} viewBox="0 0 40 50" aria-hidden="true" className="sn-eggface">
+        <path d="M20 2C9 2 2 20 2 32c0 10 8 16 18 16s18-6 18-16C38 20 31 2 20 2z" fill={c} />
+        <path d="M3 30q8-5 17 0t17 0" stroke={s} strokeWidth="2.4" fill="none" opacity=".9" />
+        <circle cx="14" cy="22" r="2.4" fill="#1f2937" /><circle cx="26" cy="22" r="2.4" fill="#1f2937" />
+        <circle cx="14.8" cy="21.2" r=".8" fill="#fff" /><circle cx="26.8" cy="21.2" r=".8" fill="#fff" />
+        <circle cx="10" cy="28" r="2.6" fill="#fb7185" opacity=".55" /><circle cx="30" cy="28" r="2.6" fill="#fb7185" opacity=".55" />
+        {mood === "smile" && <path d="M15 28q5 5 10 0" stroke="#1f2937" strokeWidth="1.8" fill="none" strokeLinecap="round" />}
+        {mood === "open" && <ellipse cx="20" cy="30" rx="3" ry="2.6" fill="#be123c" />}
+        {mood === "wink" && <path d="M15 28q5 4 10 0M23 22h6" stroke="#1f2937" strokeWidth="1.8" fill="none" strokeLinecap="round" />}
+    </svg>
+);
+
+// Halloween: a sheet ghost
+const Ghost = ({ w = 50 }) => (
+    <svg width={w} height={w * 1.2} viewBox="0 0 50 60" aria-hidden="true" className="sn-ghost">
+        <path d="M25 2C12 2 4 12 4 26v30l7-6 7 6 7-6 7 6 7-6 7 6V26C46 12 38 2 25 2z" fill="#f8fafc" opacity=".92" />
+        <ellipse cx="18" cy="24" rx="3.2" ry="4.6" fill="#1e1b4b" /><ellipse cx="32" cy="24" rx="3.2" ry="4.6" fill="#1e1b4b" />
+        <ellipse cx="25" cy="35" rx="4" ry="5" fill="#1e1b4b" />
+        <path d="M4 32c-4 2-6 6-4 9M46 32c4 2 6 6 4 9" stroke="#f8fafc" strokeWidth="4" strokeLinecap="round" fill="none" opacity=".9" />
+    </svg>
+);
+
+// Christmas: Santa with his sack, waving
+const Santa = ({ w = 70 }) => (
+    <svg width={w} height={w * 1.3} viewBox="0 0 70 91" aria-hidden="true" className="sn-santa">
+        {/* sack */}
+        <path d="M2 60c0-12 8-20 16-20 4 0 6 4 6 8 0 6 4 10 4 18 0 10-6 16-14 16S2 74 2 60z" fill="#a16207" />
+        <path d="M14 40q4-4 8 0" stroke="#713f12" strokeWidth="2" fill="none" />
+        {/* body */}
+        <path d="M22 52c0-10 6-18 14-18h4c8 0 14 8 14 18v22H22z" fill="#dc2626" />
+        <rect x="22" y="62" width="32" height="6" fill="#111827" />
+        <rect x="34" y="61" width="8" height="8" rx="1" fill="none" stroke="#facc15" strokeWidth="2" />
+        <path d="M38 34v28" stroke="#fff" strokeWidth="3" />
+        <path d="M22 74h32" stroke="#fff" strokeWidth="4" />
+        {/* legs + boots */}
+        <rect x="26" y="74" width="9" height="10" fill="#b91c1c" /><rect x="41" y="74" width="9" height="10" fill="#b91c1c" />
+        <path d="M24 84h13v6H22zM39 84h13l2 6H39z" fill="#111827" />
+        {/* waving arm */}
+        <g className="sn-santa-arm">
+            <path d="M52 44l10-12" stroke="#dc2626" strokeWidth="7" strokeLinecap="round" />
+            <circle cx="63" cy="30" r="3.6" fill="#fff" />
+        </g>
+        <path d="M24 44l-6 10" stroke="#dc2626" strokeWidth="7" strokeLinecap="round" />
+        {/* head */}
+        <circle cx="38" cy="22" r="10" fill="#fcd9b6" />
+        <path d="M27 24c0 12 6 18 11 18s11-6 11-18c-3 4-7 5-11 5s-8-1-11-5z" fill="#fff" />
+        <path d="M33 27q5-3 10 0" stroke="#fff" strokeWidth="3" strokeLinecap="round" fill="none" />
+        <circle cx="34" cy="20" r="1.4" fill="#1f2937" /><circle cx="42" cy="20" r="1.4" fill="#1f2937" />
+        <circle cx="38" cy="24" r="2" fill="#fb7185" />
+        {/* hat */}
+        <path d="M27 16c2-10 10-14 18-10 4 2 8 8 10 14-4-2-6-6-8-8-2 2-12 4-20 4z" fill="#dc2626" />
+        <rect x="26" y="13" width="24" height="5" rx="2.5" fill="#fff" />
+        <circle cx="56" cy="20" r="3.4" fill="#fff" />
+    </svg>
+);
+
+// Rainy: lightning bolt
+const Bolt = ({ w = 40 }) => (
+    <svg width={w} height={w * 2} viewBox="0 0 40 80" aria-hidden="true" className="sn-bolt-svg">
+        <path d="M24 0L6 44h14L12 80 36 30H22L30 0z" fill="#fde047" stroke="#fef9c3" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+);
+
+// Cloudy: a bird flapping (wings move up and down)
+const FlyBird = ({ w = 26, c = "#334155" }) => (
+    <svg width={w} height={w * 0.6} viewBox="0 0 40 24" aria-hidden="true" className="sn-flybird">
+        <g className="sn-wing-l"><path d="M20 14C14 4 6 4 1 8c6 0 11 2 19 6z" fill={c} /></g>
+        <g className="sn-wing-r"><path d="M20 14c6-10 14-10 19-6-6 0-11 2-19 6z" fill={c} /></g>
+        <ellipse cx="20" cy="15" rx="4" ry="2.6" fill={c} />
+    </svg>
+);
+
+// Outer space: half of the Earth at the bottom (land drifts slowly – the planet turns)
+const EarthHalf = () => (
+    <svg className="sn-earth" viewBox="0 0 260 130" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <defs>
+            <clipPath id="snEarthClip"><circle cx="130" cy="210" r="170" /></clipPath>
+            <radialGradient id="snEarthSea" cx="40%" cy="20%" r="80%">
+                <stop offset="0" stopColor="#60a5fa" />
+                <stop offset=".55" stopColor="#1d4ed8" />
+                <stop offset="1" stopColor="#1e3a8a" />
+            </radialGradient>
+            <radialGradient id="snEarthGlow" cx="50%" cy="100%" r="70%">
+                <stop offset=".72" stopColor="rgba(125,211,252,0)" />
+                <stop offset=".8" stopColor="rgba(125,211,252,.55)" />
+                <stop offset="1" stopColor="rgba(125,211,252,0)" />
+            </radialGradient>
+        </defs>
+        <ellipse cx="130" cy="210" rx="190" ry="190" fill="url(#snEarthGlow)" />
+        <circle cx="130" cy="210" r="170" fill="url(#snEarthSea)" />
+        <g clipPath="url(#snEarthClip)">
+            <g className="sn-earth-land" fill="#22c55e">
+                <path d="M-40 70c20-14 50-10 60 6 8 12-4 24-20 26-14 2-18 14-34 10-16-4-20-28-6-42z" />
+                <path d="M60 52c18-8 40-4 46 8 6 10-6 18-20 16-10-2-14 8-26 6-12-2-14-22 0-30z" fill="#16a34a" />
+                <path d="M150 64c22-10 52-6 62 10 6 10-8 20-24 18-12-2-18 10-32 6-14-4-18-24-6-34z" />
+                <path d="M240 50c14-6 30-2 36 8 4 8-6 14-16 12-8-2-12 6-22 4-10-2-8-18 2-24z" fill="#16a34a" />
+                <path d="M320 70c20-14 50-10 60 6 8 12-4 24-20 26-14 2-18 14-34 10-16-4-20-28-6-42z" />
+                <path d="M420 52c18-8 40-4 46 8 6 10-6 18-20 16-10-2-14 8-26 6-12-2-14-22 0-30z" fill="#16a34a" />
+            </g>
+            <g className="sn-earth-clouds" fill="#fff" opacity=".75">
+                <path d="M20 60c10-4 24-2 30 2-8 2-20 2-30-2zM120 46c14-4 30-2 38 2-10 2-26 2-38-2zM200 88c12-4 26-2 32 2-8 2-22 2-32-2z" />
+                <path d="M380 60c10-4 24-2 30 2-8 2-20 2-30-2zM480 46c14-4 30-2 38 2-10 2-26 2-38-2z" />
+            </g>
+        </g>
+        <circle cx="130" cy="210" r="170" fill="none" stroke="rgba(186,230,253,.6)" strokeWidth="2" />
+    </svg>
+);
+
+// Neon: a disco ball (mirror tiles)
+const DiscoBall = ({ w = 70 }) => (
+    <svg width={w} height={w * 1.4} viewBox="0 0 70 98" aria-hidden="true" className="sn-discoball">
+        <path d="M35 0v26" stroke="#94a3b8" strokeWidth="1.5" />
+        <defs>
+            <clipPath id="snDiscoClip"><circle cx="35" cy="60" r="32" /></clipPath>
+            <radialGradient id="snDiscoShade" cx="35%" cy="30%" r="75%">
+                <stop offset="0" stopColor="#f8fafc" />
+                <stop offset=".6" stopColor="#94a3b8" />
+                <stop offset="1" stopColor="#334155" />
+            </radialGradient>
+        </defs>
+        <circle cx="35" cy="60" r="32" fill="url(#snDiscoShade)" />
+        <g clipPath="url(#snDiscoClip)" className="sn-disco-tiles">
+            {Array.from({ length: 8 }, (_, r) => Array.from({ length: 8 }, (_, c) => (
+                <rect key={`${r}-${c}`} x={3 + c * 8} y={28 + r * 8} width="7" height="7"
+                    fill={["#e2e8f0", "#cbd5e1", "#f472b6", "#a5f3fc", "#e2e8f0", "#c4b5fd"][(r * 3 + c * 5) % 6]} opacity=".55" />
+            )))}
+        </g>
+        <circle cx="25" cy="48" r="4" fill="#fff" opacity=".9" />
+    </svg>
+);
+
+// Independence Day: the Philippine flag in paint splashes (blue on top, red below, white triangle with the sun and 3 stars)
+const SPLAT = (cx, cy, r, n, seed) =>
+    Array.from({ length: n }, (_, i) => {
+        const a = (i / n) * Math.PI * 2 + seed;
+        const d = r * (0.9 + ((i * 37 + seed * 11) % 7) / 10);
+        return { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, s: 2 + ((i * 13 + seed) % 5) };
+    });
+const FlagSplash = () => (
+    <svg className="sn-ph-splash" viewBox="0 0 260 300" preserveAspectRatio="xMinYMin slice" aria-hidden="true">
+        {/* blue splash (top) */}
+        <g fill="#1d4ed8">
+            <path d="M40 30c40-24 120-30 190-8 20 6 26 30 20 50-6 22-4 44-30 54-50 18-120 10-170 0-26-6-34-30-30-52 3-18 4-34 20-44z" />
+            {SPLAT(140, 70, 112, 18, 1).map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={p.s} />)}
+            <path d="M228 40l26-14M240 92l22 6M30 26l-18-14" stroke="#1d4ed8" strokeWidth="4" strokeLinecap="round" />
+        </g>
+        {/* red splash (bottom) */}
+        <g fill="#dc2626">
+            <path d="M34 150c50-12 130-14 196 0 22 4 30 28 22 50-8 20-6 40-32 48-56 16-124 10-176-2-24-6-30-28-24-48 4-18 0-40 14-48z" />
+            {SPLAT(140, 196, 116, 18, 3).map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={p.s} />)}
+            <path d="M236 236l22 12M26 244l-20 10M250 160l10-6" stroke="#dc2626" strokeWidth="4" strokeLinecap="round" />
+        </g>
+        {/* white triangle splash */}
+        <g fill="#fff">
+            <path d="M0 4c40 50 90 96 128 130C90 170 40 220 0 270z" opacity=".96" />
+            {SPLAT(52, 136, 70, 12, 5).map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={p.s * 0.8} />)}
+        </g>
+        {/* sun + stars */}
+        <g className="sn-ph-splash-sun" fill="#facc15">
+            {Array.from({ length: 8 }, (_, i) => (
+                <path key={i} transform={`rotate(${i * 45} 46 136)`} d="M43 106h6l-3 14zM44 104h4l-2-6z" />
+            ))}
+            <circle cx="46" cy="136" r="14" />
+        </g>
+        <g fill="#facc15">
+            <path d="M14 30l3 7 7 .6-5.4 4.6 1.7 7L14 45.5 8 49.2l1.6-7L4.2 37.6l7-.6z" />
+            <path d="M14 222l3 7 7 .6-5.4 4.6 1.7 7L14 237.5 8 241.2l1.6-7-5.4-4.6 7-.6z" />
+            <path d="M98 126l3 7 7 .6-5.4 4.6 1.7 7L98 141.5 92 145.2l1.6-7-5.4-4.6 7-.6z" />
+        </g>
+    </svg>
+);
+
 function Particles({ n = 22, kind = "snow" }) {
     return (
         <span className={`sn-fall is-${kind}`} aria-hidden="true">
@@ -341,8 +689,24 @@ const THEMES = {
     halloween: {
         label: "Halloween", title: "Happy Halloween",
         icon: <Pumpkin w={26} />,
-        header: () => <HalloweenHeader />,
-        sidebar: () => <HalloweenSidebar />,
+        header: () => (
+            <>
+                <HalloweenHeader />
+                <span className="hw-top" aria-hidden="true">
+                    <span className="sn-ghost-head"><Ghost w={26} /></span>
+                </span>
+            </>
+        ),
+        sidebar: () => (
+            <>
+                <HalloweenSidebar />
+                <span className="hw-side sn-ghosts" aria-hidden="true">
+                    <span className="g1"><Ghost w={46} /></span>
+                    <span className="g2"><Ghost w={32} /></span>
+                    <span className="g3"><Ghost w={38} /></span>
+                </span>
+            </>
+        ),
     },
     christmas: {
         label: "Christmas", title: "Merry Christmas",
@@ -360,6 +724,7 @@ const THEMES = {
                 <span className="hw-bottom sn-ground">
                     <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 80c50-20 90-18 140-6s90 6 120-6v52H0z" fill="#e0f2fe" /><path d="M0 96c60-14 120-10 170 0s70 2 90-4v28H0z" fill="#f8fafc" /></svg>
                     <span className="sn-tree-wrap"><Tree w={86} /></span>
+                    <span className="sn-santa-wrap"><Santa w={58} /></span>
                     <span className="sn-gifts"><Gift w={30} /><Gift w={24} c="#16a34a" r="#fef08a" /><Gift w={20} c="#2563eb" r="#fca5a5" /></span>
                 </span>
             </span>
@@ -402,6 +767,8 @@ const THEMES = {
         sidebar: () => (
             <span className="hw-side" aria-hidden="true">
                 <span className="sn-bigheart"><Heart w={64} c="#fb7185" /></span>
+                <span className="sn-cupid-wrap"><Cupid w={84} /></span>
+                <span className="sn-love-arrow"><LoveArrow w={64} /></span>
                 <Particles n={20} kind="heart" />
                 <span className="hw-bottom sn-love">
                     <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 84c50-18 100-16 150-4s80 4 110-6v46H0z" fill="#4c0519" /><path d="M0 100c60-12 120-8 170 2s70 0 90-6v24H0z" fill="#3b0414" /></svg>
@@ -439,7 +806,7 @@ const THEMES = {
         header: () => (
             <span className="hw-top" aria-hidden="true">
                 <span className="sn-eggs-line">
-                    {["#c4b5fd", "#f9a8d4", "#86efac", "#fde68a", "#93c5fd", "#c4b5fd", "#f9a8d4"].map((c, i) => <Egg key={i} w={13} c={c} />)}
+                    {["#c4b5fd", "#f9a8d4", "#86efac", "#fde68a", "#93c5fd", "#c4b5fd", "#f9a8d4"].map((c, i) => <EggFace key={i} w={15} c={c} mood={["smile", "open", "wink"][i % 3]} />)}
                 </span>
                 <Particles n={14} kind="petal" />
             </span>
@@ -451,7 +818,7 @@ const THEMES = {
                 <span className="hw-bottom sn-easter">
                     <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 84c50-18 100-16 150-4s80 4 110-6v46H0z" fill="#166534" /><path d="M0 100c60-12 120-8 170 2s70 0 90-6v24H0z" fill="#14532d" /></svg>
                     <span className="sn-lilies"><Lily w={28} /><Lily w={34} /><Lily w={26} /></span>
-                    <span className="sn-egg-basket"><Egg w={26} c="#f9a8d4" /><Egg w={30} c="#c4b5fd" /><Egg w={24} c="#fde68a" /></span>
+                    <span className="sn-egg-basket"><EggFace w={28} c="#f9a8d4" mood="open" /><EggFace w={34} c="#c4b5fd" /><EggFace w={26} c="#fde68a" mood="wink" /><EggFace w={22} c="#86efac" /></span>
                 </span>
             </span>
         ),
@@ -467,12 +834,11 @@ const THEMES = {
         ),
         sidebar: () => (
             <span className="hw-side" aria-hidden="true">
-                <span className="sn-bigsun"><Sun w={86} /></span>
+                <span className="sn-bigsun"><Sun w={80} /></span>
                 <span className="sn-birds"><i /><i /><i /></span>
                 <span className="hw-bottom sn-beach">
-                    <span className="sn-waves"><i /><i /></span>
-                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 104c60-10 130-12 180-4s60 4 80 0v20H0z" fill="#fcd34d" /></svg>
-                    <span className="sn-palm-wrap"><Palm w={84} /></span>
+                    <BeachScene />
+                    <span className="sn-palm-wrap"><Palm w={92} /></span>
                 </span>
             </span>
         ),
@@ -489,15 +855,10 @@ const THEMES = {
         ),
         sidebar: () => (
             <span className="hw-side" aria-hidden="true">
-                <span className="sn-flag-tri">
-                    <span className="sn-ph-sun"><Sun w={70} rays={8} c="#facc15" core="#facc15" /></span>
-                    <span className="sn-ph-star s1"><Star5 w={16} /></span>
-                    <span className="sn-ph-star s2"><Star5 w={16} /></span>
-                    <span className="sn-ph-star s3"><Star5 w={16} /></span>
-                </span>
+                <span className="sn-ph-splash-wrap"><FlagSplash /></span>
+                <Particles n={14} kind="confetti" />
                 <span className="hw-bottom sn-ph">
-                    <span className="sn-flag-wave"><i className="b" /><i className="r" /></span>
-                    <span className="sn-mabuhay">Mabuhay! <small>June 12</small></span>
+                    <span className="sn-mabuhay">Mabuhay! <small>June 12 · Araw ng Kalayaan</small></span>
                 </span>
             </span>
         ),
@@ -508,12 +869,16 @@ const THEMES = {
         header: () => (
             <span className="hw-top" aria-hidden="true">
                 <span className="sn-head-clouds"><Cloud w={60} c="#cbd5e1" /><Cloud w={44} c="#e2e8f0" /></span>
+                <span className="sn-bolt sn-bolt-head"><Bolt w={14} /></span>
                 <Particles n={30} kind="rain" />
             </span>
         ),
         sidebar: () => (
             <span className="hw-side" aria-hidden="true">
+                <span className="sn-flash" />
                 <span className="sn-side-clouds"><Cloud w={120} c="#475569" /><Cloud w={90} c="#334155" /></span>
+                <span className="sn-bolt b1"><Bolt w={34} /></span>
+                <span className="sn-bolt b2"><Bolt w={22} /></span>
                 <Particles n={40} kind="rain" />
                 <span className="hw-bottom sn-rain">
                     <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 100c60-8 130-10 180-4s60 4 80 0v24H0z" fill="#1e293b" /><ellipse cx="90" cy="108" rx="60" ry="6" fill="#38bdf8" opacity=".35" /></svg>
@@ -530,12 +895,19 @@ const THEMES = {
                 <span className="sn-cloudy-head">
                     <Cloud w={70} c="#e2e8f0" /><Cloud w={48} c="#cbd5e1" /><Cloud w={58} c="#f1f5f9" /><Cloud w={40} c="#e2e8f0" />
                 </span>
+                <span className="sn-flock sn-flock-head"><span className="b1"><FlyBird w={16} c="#64748b" /></span><span className="b2"><FlyBird w={12} c="#94a3b8" /></span></span>
             </span>
         ),
         sidebar: () => (
             <span className="hw-side" aria-hidden="true">
                 <span className="sn-cloudy-side">
                     <Cloud w={130} c="#64748b" /><Cloud w={96} c="#475569" /><Cloud w={110} c="#94a3b8" /><Cloud w={80} c="#64748b" />
+                </span>
+                <span className="sn-wind"><i /><i /><i /><i /></span>
+                <span className="sn-flock">
+                    <span className="b1"><FlyBird w={26} c="#e2e8f0" /></span>
+                    <span className="b2"><FlyBird w={18} c="#cbd5e1" /></span>
+                    <span className="b3"><FlyBird w={22} c="#f1f5f9" /></span>
                 </span>
                 <span className="hw-bottom sn-cloudy">
                     <span className="sn-cloudy-sun"><Sun w={64} c="#fcd34d" core="#fde68a" /></span>
@@ -588,6 +960,7 @@ const THEMES = {
                 <span className="sn-jelly-wrap"><Jelly w={36} /></span>
                 <span className="hw-bottom sn-seabed">
                     <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 100c50-10 110-12 160-4s70 2 100-2v26H0z" fill="#d6b97a" /></svg>
+                    <span className="sn-kraken-wrap"><Kraken w={124} /></span>
                     <span className="sn-weeds"><Seaweed h={96} /><Seaweed h={70} c="#16a34a" /><Seaweed h={84} c="#166534" /></span>
                     <span className="sn-starfish">★</span>
                 </span>
@@ -611,8 +984,8 @@ const THEMES = {
                 <span className="sn-planet-wrap"><Planet w={100} /></span>
                 <span className="sn-moon-wrap"><Moon w={40} /></span>
                 <span className="hw-bottom sn-space">
+                    <EarthHalf />
                     <span className="sn-rocket-wrap"><Rocket w={34} /></span>
-                    <svg className="sn-hills" viewBox="0 0 260 120" preserveAspectRatio="none"><path d="M0 104c40-8 80-10 120-6s100 6 140-2v24H0z" fill="#334155" /><circle cx="60" cy="110" r="5" fill="#1e293b" /><circle cx="190" cy="106" r="7" fill="#1e293b" /></svg>
                 </span>
             </span>
         ),
@@ -669,9 +1042,11 @@ const THEMES = {
         sidebar: () => (
             <span className="hw-side" aria-hidden="true">
                 <Particles n={24} kind="star" />
+                <span className="sn-beams"><i /><i /><i /><i /></span>
+                <span className="sn-disco-wrap"><DiscoBall w={64} /></span>
+                <span className="sn-sparkles"><i /><i /><i /><i /><i /><i /></span>
                 <span className="hw-bottom sn-neon">
-                    <span className="sn-neon-sun" />
-                    <span className="sn-grid"><i /></span>
+                    <span className="sn-floor">{Array.from({ length: 24 }, (_, i) => <i key={i} style={{ animationDelay: `${-((i * 7) % 12) * 0.25}s` }} />)}</span>
                 </span>
             </span>
         ),
