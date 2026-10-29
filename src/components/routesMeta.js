@@ -94,6 +94,7 @@ export const NAV = [
     section: "Staff",
     entries: [
       { to: "/dashboard", label: "Dashboard", icon: "home" },
+      { to: "/calendar", label: "Calendar", icon: "calendar" },
       {
         group: "Monitoring",
         icon: "barChart",

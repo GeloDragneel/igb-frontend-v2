@@ -128,6 +128,7 @@ import { MessengerPage } from "./components/Messenger";
 import Notifications from "./pages/Notifications";
 import HelpSupport from "./pages/HelpSupport";
 import BranchEmployees from "./pages/BranchEmployees";
+import Calendar from "./pages/Calendar";
 // Built pages. Add new ones here as you make them;
 // everything else in the sidebar shows "Coming soon".
 const PAGES = {
@@ -217,6 +218,7 @@ const PAGES = {
   "/team": Team,
   "/employees": BranchEmployees,
   "/settings": Settings,
+  "/calendar": Calendar,
 
   "/books/receivables": Receivables,
   "/books/receivables/aged": AgedReceivables,
