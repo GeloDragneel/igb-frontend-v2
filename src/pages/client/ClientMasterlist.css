@@ -496,3 +496,19 @@
     text-align: center;
     color: var(--muted, #6b7280);
 }
+
+/* dark mode: soft row lines instead of white */
+[data-theme="dark"] .cml-table th,
+[data-theme="dark"] .cml-table td {
+    border-bottom-color: rgba(148, 163, 184, .14);
+}
+
+[data-theme="dark"] .cml-table th {
+    background: var(--card, #111827);
+    border-bottom-color: rgba(148, 163, 184, .24);
+}
+
+[data-theme="dark"] .cml-row:hover td,
+[data-theme="dark"] .cml-row:focus-visible td {
+    background: rgba(96, 165, 250, .08);
+}

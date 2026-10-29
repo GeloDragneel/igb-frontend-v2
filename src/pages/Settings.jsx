@@ -41,7 +41,11 @@ const EMPTY_ACCOUNT = {
 };
 
 const str = (v) => (v === null || v === undefined ? "" : String(v));
-const day = (v) => (v ? String(v).slice(0, 10) : "");
+// "0000-00-00" (old system) or anything that isn't a real date → empty, so it's saved as null
+const day = (v) => {
+    const s = v ? String(v).slice(0, 10) : "";
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) && !s.startsWith("0000") && !Number.isNaN(Date.parse(s)) ? s : "";
+};
 const opts = (list, blank = "—") => [{ value: "", label: blank }, ...(list || []).map((o) => ({ value: String(o.id), label: o.label }))];
 const isMain = (a) => String(a?.branch_type || "").toUpperCase() === "MAIN";
 const isActive = (a) => Number(a?.is_active ?? 1) === 1;
@@ -311,6 +315,7 @@ export default function Settings() {
     const saveClient = async () => {
         setAskSave(false);
         if (!form.last_name.trim()) { go("profile"); notify("Last name is required.", "error"); return; }
+        if (!form.industries_id) { go("engagement"); notify("Industry is required.", "error"); return; }
         setSaving(true);
         try {
             const body = { ...form };
