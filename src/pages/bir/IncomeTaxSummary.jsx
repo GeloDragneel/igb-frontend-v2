@@ -57,7 +57,7 @@ const manualRow = (type, months) => ({
     uid: newUid(), type, manual: true, code: "", label: "", values: zeroValues(months), refs: {}, total: 0, adjustment: 0, nonvat: 0,
 });
 
-const fromApi = (r) => ({
+export const fromApi = (r) => ({
     sales: r.sales.map((x) => ({ ...x, uid: newUid() })),
     purchases: [manualRow("COGS", r.months), ...r.purchases.map((x) => ({ ...x, uid: newUid() }))],
     expenses: [manualRow("EXP", r.months), ...r.expenses.map((x) => ({ ...x, uid: newUid() }))],
@@ -221,7 +221,7 @@ const sumRows = (rows = [], months = []) => {
 };
 
 /* ---------- all the totals (same rules as the old page) ---------- */
-function calc(st, months, brackets, corporate) {
+export function calc(st, months, brackets, corporate) {
     const S = sumRows(st.sales, months);
     const P = sumRows(st.purchases, months);
     const E = sumRows(st.expenses, months);

@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth, apiFetch } from "../context/AuthContext";
 import { usePeriod } from "../context/PeriodContext";
 import Icon from "../components/Icons";
 import { fmtDate, money } from "../utils/format";
+import { calc as itsCalc, fromApi as itsFromApi } from "./bir/IncomeTaxSummary";
+import "./HomePayables.css";
 
 /* =========================================================
    BIR filing calendar (Philippines) – the dates of the RETURN DEADLINE schedule, exactly as written
@@ -82,7 +84,31 @@ const BIR_LINKS = [
     ["ORUS", "https://orus.bir.gov.ph/"],
     ["eBIRForms", "https://www.bir.gov.ph/ebirforms"],
 ];
-
+/* ---------- number that counts up to its value (₱0 → ₱45,942,161.84) ---------- */
+function CountUp({ value, format = money, duration = 1200 }) {
+    const target = Number(value) || 0;
+    const [shown, setShown] = useState(0);
+    const fromRef = useRef(0);
+    useEffect(() => {
+        const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        const start = fromRef.current;
+        if (reduce || start === target) { setShown(target); fromRef.current = target; return; }
+        let raf = 0;
+        const t0 = performance.now();
+        const tick = (now) => {
+            const p = Math.min(1, (now - t0) / duration);
+            const eased = 1 - Math.pow(1 - p, 3);                 // fast at first, slows down at the end
+            const v = start + (target - start) * eased;
+            setShown(v);
+            fromRef.current = v;
+            if (p < 1) raf = requestAnimationFrame(tick);
+            else fromRef.current = target;
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [target, duration]);
+    return <span className="hd-count-up">{format(Math.round(shown * 100) / 100)}</span>;
+}
 /* ---------- tiny SVG helpers ---------- */
 function Sparkline({ values, color = "#fff" }) {
     const w = 110, h = 34, max = Math.max(1, ...values), min = Math.min(0, ...values);
@@ -179,6 +205,8 @@ export default function Home() {
     const [error, setError] = useState("");
     const [vat, setVat] = useState(() => readPref("home.vat", true));
     const [corp, setCorp] = useState(() => readPref("home.corp", true));
+    const [pay, setPay] = useState(null);            // /bir/payables
+    const [incomeTax, setIncomeTax] = useState();    // undefined = loading · null = not available · number
     const fromMonth = from.slice(0, 7);
     const toMonth = to.slice(0, 7);
 
@@ -188,6 +216,23 @@ export default function Home() {
         apiFetch(`/dashboard?from=${fromMonth}&to=${toMonth}`)
             .then((d) => alive && setData(d))
             .catch((e) => alive && setError(e.message || "Couldn't load the dashboard."));
+        return () => { alive = false; };
+    }, [fromMonth, toMonth, user?.id, user?.caid]);
+
+    // tax payables: returns filed + books; income tax = the same math as BIR & Tax → Income Tax Summary
+    useEffect(() => {
+        let alive = true;
+        setPay(null);
+        setIncomeTax(undefined);
+        const q = `from=${fromMonth}&to=${toMonth}`;
+        apiFetch(`/bir/payables?${q}`).then((d) => alive && setPay(d)).catch(() => alive && setPay(false));
+        apiFetch(`/reports/income-tax-summary?${q}&branch=all`)
+            .then((r) => {
+                if (!alive) return;
+                const c = itsCalc(itsFromApi(r), r.months, r.brackets, r.corporate);
+                setIncomeTax(Math.round(c.payable * 100) / 100);
+            })
+            .catch(() => alive && setIncomeTax(null));
         return () => { alive = false; };
     }, [fromMonth, toMonth, user?.id, user?.caid]);
 
@@ -202,7 +247,11 @@ export default function Home() {
     const trend = data?.trend || [];
     const costs = data ? data.buy.purchases + data.buy.expenses : 0;
     const net = data ? data.sales.total - costs : 0;
-    const vatPay = data?.vat_payable ?? 0;
+    // VAT on Home = the BIR return numbers (all branches, sales + purchases/expenses + GRN by declared month)
+    const vatBooks = pay && pay.vat && pay.vat.output != null ? pay.vat : null;
+    const vatPay = vatBooks ? vatBooks.books : (data?.vat_payable ?? 0);
+    const outVat = vatBooks ? vatBooks.output : (data?.sales.vat ?? 0);
+    const inVat = vatBooks ? vatBooks.input : (data?.buy.vat ?? 0);
 
     const a = data?.attention;
     const sc = a?.scanned || {};
@@ -216,10 +265,17 @@ export default function Home() {
     ] : [];
 
     const tiles = [
-        { label: "Sales", value: data?.sales.total, sub: data ? `${data.sales.count} invoices` : "", icon: "receipt", g: "hd-g1", spark: trend.map((t) => t.sales), to: "/task/sales" },
-        { label: "Purchases & expenses", value: costs, sub: data ? `${data.buy.count} records` : "", icon: "cart", g: "hd-g2", spark: trend.map((t) => t.costs), to: "/task/purchases" },
-        { label: net >= 0 ? "Net (sales − costs)" : "Net loss", value: net, sub: data && data.sales.total ? `${Math.round((net / data.sales.total) * 100)}% of sales` : "", icon: "barChart", g: net >= 0 ? "hd-g3" : "hd-g5", spark: trend.map((t) => t.sales - t.costs), to: "/financial/trial-balance" },
-        { label: vatPay >= 0 ? "VAT payable" : "Excess input VAT", value: Math.abs(vatPay), sub: "Output − Input VAT", icon: "fileText", g: "hd-g4", spark: null, to: "/bir/vat-summary" },
+        { label: "Sales", value: data?.sales.total, sub: data ? `${data.sales.count} invoices` : "", icon: "receipt", g: "hd-g1", ready: !!data, failed: false, spark: trend.map((t) => t.sales), to: "/task/sales" },
+        { label: "Purchases & expenses", value: costs, sub: data ? `${data.buy.count} records` : "", icon: "cart", g: "hd-g2", ready: !!data, failed: false, spark: trend.map((t) => t.costs), to: "/task/purchases" },
+        { label: "Accounts receivable", value: pay ? pay.ar?.total : undefined, sub: pay ? `${pay.ar?.count ?? 0} unpaid invoice${pay.ar?.count === 1 ? "" : "s"} · no receipt yet` : "", icon: "wallet", g: "hd-g3", ready: !!pay, failed: pay === false, spark: null, to: "/books/receivables" },
+        { label: "Accounts payable", value: pay ? pay.ap?.total : undefined, sub: pay ? `${pay.ap?.count ?? 0} unpaid bill${pay.ap?.count === 1 ? "" : "s"} · no payment yet` : "", icon: "cart", g: "hd-g5", ready: !!pay, failed: pay === false, spark: null, to: "/books/payables" },
+    ];
+
+    const payCards = [
+        { key: "vat", label: "VAT payable", neg: "Excess input VAT", hint: "Output − Input VAT", value: pay ? pay.vat.books : undefined, to: "/bir/vat-summary", c: "pv-g1", icon: "fileText" },
+        { key: "ewt", label: "Withholding tax payable", neg: "Withholding tax payable", hint: "EWT on purchases & expenses", value: pay ? pay.ewt.books : undefined, to: "/bir/returns", c: "pv-g2", icon: "cart" },
+        { key: "income", label: "Income tax payable", neg: "Income tax (excess credits)", hint: "From Income Tax Summary", value: incomeTax, to: "/bir/income-tax", c: "pv-g3", icon: "barChart" },
+        { key: "comp", label: "Compensation payable", neg: "Compensation payable", hint: "Withholding on compensation (1601-C)", value: pay ? (pay.comp.returns ? pay.comp.filed : null) : undefined, to: "/bir/returns", c: "pv-g4", icon: "wallet" },
     ];
 
     const topMax = Math.max(1, ...(data?.top_customers || []).map((c) => c.total));
@@ -258,13 +314,38 @@ export default function Home() {
                             <span className="hd-tile-icon"><Icon name={t.icon} size={18} /></span>
                             <span className="hd-tile-label">{t.label}</span>
                         </div>
-                        <div className="hd-tile-value">{data ? money(t.value) : <span className="hd-sk" />}</div>
+                        <div className="hd-tile-value">{t.failed ? "—" : t.ready ? <CountUp value={t.value} /> : <span className="hd-sk" />}</div>
                         <div className="hd-tile-bottom">
                             <span>{t.sub}</span>
                             {t.spark && t.spark.length > 1 && <Sparkline values={t.spark} />}
                         </div>
                     </Link>
                 ))}
+            </section>
+
+            {/* ---------- tax payables (same tiles as above) ---------- */}
+            <section className="hd-tiles">
+                {payCards.map((p) => {
+                    const r = pay ? pay[p.key] : null;
+                    const failed = p.key === "income" || p.key === "comp" ? p.value === null : pay === false;
+                    const loading = !failed && p.value === undefined;
+                    const v = Number(p.value) || 0;
+                    return (
+                        <Link key={p.key} to={p.to} className={`hd-tile ${p.c}`}>
+                            <div className="hd-tile-top">
+                                <span className="hd-tile-icon"><Icon name={p.icon} size={18} /></span>
+                                <span className="hd-tile-label">{v < 0 ? p.neg : p.label}</span>
+                            </div>
+                            <div className="hd-tile-value">{loading ? <span className="hd-sk" /> : failed ? "—" : <CountUp value={Math.abs(v)} />}</div>
+                            <div className="hd-tile-bottom pv-bottom">
+                                <span>{p.hint}</span>
+                                {r && (r.returns
+                                    ? <span className="pv-pill">{r.balance > 0.009 ? `Unpaid ${money(r.balance)}` : "Filed · Paid"}</span>
+                                    : <span className="pv-pill pv-pill-dim">Not filed</span>)}
+                            </div>
+                        </Link>
+                    );
+                })}
             </section>
 
             {/* ---------- needs attention ---------- */}
@@ -294,15 +375,15 @@ export default function Home() {
                     {data ? (
                         <>
                             <div className="hd-ring">
-                                <Ring a={data.sales.vat} b={data.buy.vat} />
+                                <Ring a={outVat} b={inVat} />
                                 <div className="hd-ring-center">
                                     <span>{vatPay >= 0 ? "Payable" : "Excess"}</span>
                                     <b>{short(Math.abs(vatPay))}</b>
                                 </div>
                             </div>
                             <ul className="hd-vat-list">
-                                <li><i className="hd-dot-a" />Output VAT<b>{money(data.sales.vat)}</b></li>
-                                <li><i className="hd-dot-b" />Input VAT<b>{money(data.buy.vat)}</b></li>
+                                <li><i className="hd-dot-a" />Output VAT<b>{money(outVat)}</b></li>
+                                <li><i className="hd-dot-b" />Input VAT<b>{money(inVat)}</b></li>
                             </ul>
                             <Link to="/bir/vat-summary" className="hd-link">Open VAT Summary →</Link>
                         </>

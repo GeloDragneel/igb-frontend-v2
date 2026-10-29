@@ -99,8 +99,7 @@ export default function EsubReport() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [printAs, setPrintAs] = useState("xlsx");          // xlsx | pdf
-    const [printing, setPrinting] = useState(false);
+    const [printing, setPrinting] = useState(false);         // false | "pdf" | "xlsx" (the button that is busy)
     const [pdf, setPdf] = useState(null);                    // { url, name } for the preview
     const [per, setPer] = useState(25);                      // 5 | 25 | 50 | 0 (All)
     const [page, setPage] = useState(1);
@@ -196,17 +195,17 @@ export default function EsubReport() {
         setTimeout(() => setFlash(0), 2400);
     };
 
-    // old Print: File Type Excel → xlsx from the template, PDF → shown in a popup
-    const print = async () => {
+    // PDF → shown in a popup · Excel → downloaded
+    const print = async (format) => {
         if (report.disabled) return;
         if (!report.yearly && (!from || !to)) { setError("Choose both months."); return; }
-        setPrinting(true);
+        setPrinting(format);
         setError("");
         try {
-            const params = report.yearly ? { type, year, format: printAs } : { type, from, to, format: printAs };
+            const params = report.yearly ? { type, year, format } : { type, from, to, format };
             const blob = await apiBlob(`/print/esub?${new URLSearchParams(params)}`);
-            const name = `${PRINT_NAMES[type] || "Report1601EQ"}-${user?.id ?? ""}.${printAs}`;
-            if (printAs === "pdf") {
+            const name = `${PRINT_NAMES[type] || "Report1601EQ"}-${user?.id ?? ""}.${format}`;
+            if (format === "pdf") {
                 setPdf({ url: URL.createObjectURL(new Blob([blob], { type: "application/pdf" })), name });
             } else {
                 const url = URL.createObjectURL(blob);
@@ -278,16 +277,17 @@ export default function EsubReport() {
                         )}
 
                         <div className="es-row es-btns">
-                            <button className="btn btn-sm btn-primary" onClick={load} disabled={off}>{loading ? "…" : "View"}</button>
+                            <button className="btn btn-sm btn-primary" onClick={load} disabled={off}>{loading ? "…" : "SEARCH"}</button>
                             <button className="btn btn-sm" onClick={downloadDat} disabled={off} title="Save the DAT file">DAT</button>
                         </div>
 
                         <div className="es-row es-btns">
-                            <select className="input es-in es-printas" value={printAs} onChange={(e) => setPrintAs(e.target.value)} aria-label="File type" disabled={report.disabled}>
-                                <option value="xlsx">Excel</option>
-                                <option value="pdf">PDF</option>
-                            </select>
-                            <button className="btn btn-sm" onClick={print} disabled={off || printing} title="Print as Excel or PDF">{printing ? "…" : "Print"}</button>
+                            <button className="btn btn-sm" onClick={() => print("pdf")} disabled={off || !!printing} title="Open as PDF">
+                                {printing === "pdf" ? "…" : "PDF"}
+                            </button>
+                            <button className="btn btn-sm" onClick={() => print("xlsx")} disabled={off || !!printing} title="Download as Excel">
+                                {printing === "xlsx" ? "…" : "Excel"}
+                            </button>
                         </div>
                     </div>
 
