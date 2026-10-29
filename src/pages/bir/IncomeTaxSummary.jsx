@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import Modal from "../../components/Modal";
 import SearchSelect from "../../components/SearchSelect";
@@ -11,6 +11,20 @@ const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigi
 const pct = (v) => `${((Number(v) || 0) * 100).toFixed(2)}%`;
 const monLabel = (ym) => MON[+ym.slice(5) - 1];
 const rangeText = (a, b) => (a && b ? `${MON[+a.slice(5) - 1]} - ${MON[+b.slice(5) - 1]} ${b.slice(0, 4)}` : "");
+
+/* ---------- remembered filters (From / To / Branch) per login + client ---------- */
+const isYm = (v) => /^\d{4}-\d{2}$/.test(v || "");
+const filterKey = (u) => `igb-its-filter:${u?.id ?? ""}:${u?.caid ?? ""}`;
+const readFilter = (u) => {
+    try {
+        const f = JSON.parse(localStorage.getItem(filterKey(u)) || "null");
+        if (!f || !isYm(f.from) || !isYm(f.to)) return null;
+        return { from: f.from, to: f.to, branch: f.branch ? String(f.branch) : "all" };
+    } catch { return null; }
+};
+const writeFilter = (u, f) => {
+    try { localStorage.setItem(filterKey(u), JSON.stringify(f)); } catch { /* storage blocked: just don't remember */ }
+};
 
 let seq = 0;
 const newUid = () => `r${++seq}`;
@@ -63,16 +77,117 @@ const withNewUids = (st) => ({
     expenses: (st.expenses || []).map((x) => ({ ...x, uid: newUid() })),
 });
 
+/* ---------- old-system save → { months, st } ----------
+ * old shape: { columns:{0:{key:"07-Jul"}…}, sales:{rows:{…}}, costOfSales:{inventoryBeginning, purchaseRows, inventoryEnding},
+ *              expenses:{rows:{…}}, taxAdjustments:{otherIncome, taxPaymentsPreviousQtr, creditableWithholdingPreviousQtr, creditableWithholding2307ThisQtr} }
+ * month keys have no year ("07-Jul"), so the year comes from the saved period (from → to) */
+const listOf = (x) => (Array.isArray(x) ? x : x && typeof x === "object" ? Object.values(x) : []);
+
+const periodMonths = (from, to) => {
+    if (!/^\d{4}-\d{2}$/.test(from || "")) return [];
+    const end = /^\d{4}-\d{2}$/.test(to || "") ? to : from;
+    const out = [];
+    let [y, m] = from.split("-").map(Number);
+    for (let i = 0; i < 24; i++) {
+        const k = `${y}-${String(m).padStart(2, "0")}`;
+        out.push(k);
+        if (k >= end) break;
+        if (++m > 12) { m = 1; y++; }
+    }
+    return out;
+};
+
+const fromOldSave = (d, period, fallbackMonths) => {
+    const cols = listOf(d.columns).map((c) => String(c?.key ?? c ?? "")).filter(Boolean);
+    const known = [...(period || []), ...(fallbackMonths || [])];
+    const year = Number((known[0] || "").slice(0, 4)) || new Date().getFullYear();
+
+    // "07-Jul" → "2026-07"; months before the first one roll into the next year (Nov-Dec-Jan)
+    const firstMM = Number((cols[0] || "").slice(0, 2)) || 1;
+    const toYm = (key) => {
+        const s = String(key || "");
+        if (/^\d{4}-\d{2}$/.test(s)) return s;
+        const mm = Number(s.slice(0, 2));
+        if (!mm) return null;
+        const hit = known.find((k) => Number(k.slice(5)) === mm);
+        if (hit) return hit;
+        return `${mm < firstMM ? year + 1 : year}-${String(mm).padStart(2, "0")}`;
+    };
+    const months = [...new Set(cols.map(toYm).filter(Boolean))];
+
+    const remap = (obj, isRef) => {
+        const out = {};
+        Object.entries(obj || {}).forEach(([k, v]) => {
+            const ym = toYm(k);
+            if (!ym) return;
+            out[ym] = isRef ? String(v ?? "").split(",").map((t) => t.trim()).filter(Boolean).join(",") : Number(v) || 0;
+        });
+        return out;
+    };
+
+    const row = (r, type) => {
+        const values = { ...zeroValues(months), ...remap(r?.values) };
+        const manual = !!r?.isManualRow || /manual/i.test(String(r?.field || ""));
+        return {
+            type: r?._origType || type,
+            manual,
+            code: r?.accountCode ? String(r.accountCode) : "",
+            label: r?.label || "",
+            values,
+            refs: remap(r?.refNos, true),
+            total: r?.total != null ? Number(r.total) || 0 : Object.values(values).reduce((a, b) => a + b, 0),
+            adjustment: Number(r?.adjustment) || 0,
+            nonvat: Number(r?.nonVAT ?? r?.nonvat) || 0,
+        };
+    };
+    const field = (f) => ({ total: Number(f?.total) || 0, adjustment: Number(f?.adjustment) || 0 });
+
+    const cos = d.costOfSales || {};
+    const ta = d.taxAdjustments || {};
+    const pick = (re) => ta[Object.keys(ta).find((k) => re.test(k))];
+
+    let purchases = listOf(cos.purchaseRows).map((r) => row(r, "COGS"));
+    let expenses = listOf(d.expenses?.rows).map((r) => row(r, "EXP"));
+    // keep the blank manual row on top like a fresh report
+    if (!purchases.some((r) => r.manual)) purchases = [manualRow("COGS", months), ...purchases];
+    if (!expenses.some((r) => r.manual)) expenses = [manualRow("EXP", months), ...expenses];
+
+    return {
+        months: months.length ? months : fallbackMonths,
+        st: {
+            sales: listOf(d.sales?.rows).map((r) => row(r, "SALES")),
+            purchases,
+            expenses,
+            beg: field(cos.inventoryBeginning),
+            end: field(cos.inventoryEnding),
+            other: field(ta.otherIncome),
+            taxPrev: field(ta.taxPaymentsPreviousQtr ?? pick(/taxPayment/i)),
+            cwPrev: field(ta.creditableWithholdingPreviousQtr ?? pick(/previous/i)),
+            cw2307: field(ta.creditableWithholding2307ThisQtr ?? pick(/2307/)),
+        },
+    };
+};
+
 /**
  * a saved adjustment → { months, st } or null
- * accepts: { months, st } · the same as a JSON string · an older save that is the statement itself ({ sales, purchases, … })
+ * accepts: { months, st } · the same as a JSON string · the statement itself ({ sales:[…], purchases, … })
+ *          · an old-system save ({ columns, sales:{rows}, costOfSales, expenses:{rows}, taxAdjustments })
+ * period = [from, to] of the saved version (gives the year to old-system month keys)
  */
-const parseSaved = (raw, fallbackMonths) => {
+const parseSaved = (raw, fallbackMonths, period = []) => {
     let d = raw;
-    if (typeof d === "string") {
-        try { d = JSON.parse(d); } catch { return null; }
+    for (let i = 0; i < 3 && typeof d === "string"; i++) {
+        const t = d.replace(/^\uFEFF/, "").trim();
+        if (!t) return null;
+        try { d = JSON.parse(t); } catch { return null; }
     }
     if (!d || typeof d !== "object") return null;
+
+    // old system
+    if (!d.st && (d.columns || d.costOfSales || d.taxAdjustments || (d.sales && !Array.isArray(d.sales) && d.sales.rows))) {
+        return fromOldSave(d, periodMonths(period[0], period[1]), fallbackMonths);
+    }
+
     const st = d.st && typeof d.st === "object" ? d.st : (Array.isArray(d.sales) ? d : null);
     if (!st) return null;
     const row = (r) => ({
@@ -186,9 +301,10 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
     const { from: pFrom, to: pTo } = usePeriod();
     const scope = embedded ? { user_ids: userIds } : {};
 
-    const [from, setFrom] = useState(embedded ? fixedFrom : pFrom.slice(0, 7));
-    const [to, setTo] = useState(embedded ? fixedTo : pTo.slice(0, 7));
-    const [branch, setBranch] = useState("all");
+    const cached = useMemo(() => (embedded ? null : readFilter(user)), []); // eslint-disable-line react-hooks/exhaustive-deps
+    const [from, setFrom] = useState(embedded ? fixedFrom : cached?.from || pFrom.slice(0, 7));
+    const [to, setTo] = useState(embedded ? fixedTo : cached?.to || pTo.slice(0, 7));
+    const [branch, setBranch] = useState(embedded ? "all" : cached?.branch || "all");
 
     const [info, setInfo] = useState(null);     // company, branches, brackets, corporate
     const [months, setMonths] = useState([]);
@@ -205,11 +321,25 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
     const [busy, setBusy] = useState(false);
     const [printing, setPrinting] = useState(false);
 
+    // the global period only takes over when it changes after the page opened (so the remembered filter wins on open)
+    const firstPeriod = useRef(true);
     useEffect(() => {
         if (embedded) return;
+        if (firstPeriod.current) {
+            firstPeriod.current = false;
+            if (cached) return;
+        }
         setFrom(pFrom.slice(0, 7));
         setTo(pTo.slice(0, 7));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pFrom, pTo, embedded]);
+
+    // remember the filter
+    useEffect(() => {
+        if (embedded || !isYm(from) || !isYm(to)) return;
+        writeFilter(user, { from, to, branch });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [from, to, branch, embedded, user?.id, user?.caid]);
 
     const load = useCallback(async () => {
         if (!from || !to) return setError("Choose both months.");
@@ -231,6 +361,13 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { load(); }, [user?.id, user?.caid, embedded ? userIds : ""]);
+
+    // a remembered branch that no longer exists → All branches
+    useEffect(() => {
+        if (embedded || !info || branch === "all") return;
+        if (!(info.branches || []).some((b) => String(b.id) === String(branch))) setBranch("all");
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [info]);
 
     const c = useMemo(
         () => (st && info ? calc(st, months, info.brackets, info.corporate) : null),
@@ -325,7 +462,7 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
     };
 
     const apply = (item) => {
-        const saved = parseSaved(item?.data, months);
+        const saved = parseSaved(item?.data, months, [item?.from || used?.from || from, item?.to || used?.to || to]);
         if (!saved) {
             notify(`Version ${item?.version ?? ""} can't be opened: the saved data is empty or not in the expected format.`, "error");
             return;
@@ -725,12 +862,12 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
                 <Modal title={`Saved adjustments · ${rangeText(from, to)}`} onClose={() => setPicker(null)}>
                     <div className="its-scroll">
                         <table className="table">
-                            <thead><tr><th>Employee</th><th>Date Added</th><th>Date Updated</th><th>Version</th><th /></tr></thead>
+                            <thead><tr><th>Employee</th><th>Date Added</th><th>Version</th><th /></tr></thead>
                             <tbody>
                                 {picker.map((x) => (
                                     <tr key={x.id}>
                                         <td>{x.employee}{x.mine && <span className="muted"> (you)</span>}</td>
-                                        <td>{x.date_added}</td><td>{x.date_updated}</td><td>{x.version}</td>
+                                        <td>{x.date_added}</td><td>{x.version}</td>
                                         <td><button className="btn btn-sm btn-primary" onClick={() => apply(x)}>Open</button></td>
                                     </tr>
                                 ))}
