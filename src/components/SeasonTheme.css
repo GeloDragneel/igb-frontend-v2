@@ -2210,6 +2210,11 @@ html[data-theme="dark"] .topbar .sn-fall.is-snow i {
     animation: sn-swim 14s linear infinite;
 }
 
+/* the fish picture faces left but swims to the right → turn it around so it swims head-first */
+.sn-fishes>span>svg {
+    transform: scaleX(-1);
+}
+
 .sn-fishes .f1 {
     top: 36%;
 }
