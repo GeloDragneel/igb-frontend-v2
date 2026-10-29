@@ -10,6 +10,8 @@ import { useToast } from "../../components/Toast";
 import { useAuth, apiFetch, apiBlob, apiForm } from "../../context/AuthContext";
 import { useLookups } from "../../context/LookupsContext";
 import { usePeriod } from "../../context/PeriodContext";
+import { AccountForm } from "./ChartOfAccounts";
+import "./ProductUnits.css";
 
 const TABLE_HEIGHT = "calc(100vh - 330px)";
 const num = (n, d = 2) => (Number(n) || 0).toLocaleString("en-PH", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -197,6 +199,18 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const { refresh: refreshLookups } = useLookups();
+  const [newAccts, setNewAccts] = useState([]);   // accounts added from this popup (shown right away)
+  const [addAcct, setAddAcct] = useState(null);   // { key, label, prefix, name }
+  const [coa, setCoa] = useState(null);           // full chart for the Charts of Account popup (loaded in the background)
+  const [coaError, setCoaError] = useState("");
+  const loadCoa = useCallback(() => {
+    setCoaError("");
+    apiFetch("/accounts")
+      .then((r) => setCoa(Array.isArray(r) ? r : Array.isArray(r?.data) ? r.data : Array.isArray(r?.accounts) ? r.accounts : []))
+      .catch((e) => setCoaError(e.message || "Couldn't load the chart of accounts."));
+  }, []);
+  useEffect(() => { loadCoa(); }, [loadCoa]);
 
   // existing units + image
   useEffect(() => {
@@ -238,15 +252,53 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
   };
 
   const setUnit = (key, k, v) => setUnits((list) => list.map((u) => (u.key === key ? { ...u, [k]: v } : u)));
+
+  // Excel-like keys in the unit grid: Enter / ↓ next row (a new one at the end), ↑ previous, ← → next cell
+  const focusCell = (r, c) => requestAnimationFrame(() => document.querySelector(`.pu-input[data-r="${r}"][data-c="${c}"]`)?.focus());
+  const addUnitRow = (openUnit = false) => {
+    setUnits((l) => [...l, newUnit()]);
+    if (openUnit) requestAnimationFrame(() => {
+      const rows = document.querySelectorAll(".pu-unit button");
+      rows[rows.length - 1]?.focus();
+    });
+  };
+  const unitKey = (e, r, c) => {
+    const last = r === units.length - 1;
+    if (e.key === "Enter" || e.key === "ArrowDown") {
+      e.preventDefault();
+      if (last) { setUnits((l) => [...l, newUnit()]); focusCell(r + 1, c); } else focusCell(r + 1, c);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (r > 0) focusCell(r - 1, c);
+    } else if (e.key === "ArrowRight" && e.target.selectionStart === e.target.value.length && c < 2) {
+      e.preventDefault();
+      focusCell(r, c + 1);
+    } else if (e.key === "ArrowLeft" && e.target.selectionStart === 0 && c > 0) {
+      e.preventDefault();
+      focusCell(r, c - 1);
+    }
+  };
   const removeUnit = (key) => setUnits((list) => list.filter((u) => u.key !== key));
 
   // posting accounts only (old: Root_Name != 0), filtered by first digit
-  const acctOpts = (prefix) => [
-    { value: "", label: "— None —" },
-    ...accounts
+  const acctOpts = (prefix) => {
+    const list = accounts
       .filter((a) => String(a.account_code).startsWith(prefix) && a.root_name && String(a.root_name) !== "0")
-      .map((a) => ({ value: a.account_code, label: `${a.account_code} - ${a.account_name}` })),
-  ];
+      .map((a) => ({ value: String(a.account_code), label: `${a.account_code} - ${a.account_name}` }));
+    const extra = newAccts
+      .filter((a) => a.account_code.startsWith(prefix) && !list.some((o) => o.value === a.account_code))
+      .map((a) => ({ value: a.account_code, label: `${a.account_code} - ${a.account_name}` }));
+    return [{ value: "", label: "— None —" }, ...list, ...extra];
+  };
+
+  // "+ Add new account" → the Charts of Account popup; the saved account is selected here
+  const accountAdded = (key, acct) => {
+    setNewAccts((l) => [...l, { account_code: String(acct.account_code), account_name: acct.account_name }]);
+    loadCoa();                   // the next "Add new account" sees it too
+    set(key, String(acct.account_code));
+    setAddAcct(null);
+    refreshLookups?.();          // every account dropdown in the app picks it up
+  };
 
   const submit = async () => {
     const e = {};
@@ -300,7 +352,6 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
       footer={
         <>
           <button className="btn" onClick={onClose} disabled={saving}>Close</button>
-          <button className="btn btn-info" onClick={() => setUnits((l) => [...l, newUnit()])} disabled={saving}>ADD UNIT</button>
           <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? "Saving…" : record ? "UPDATE" : "SAVE"}</button>
         </>
       }
@@ -364,46 +415,81 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
           <fieldset className="prod-box">
             <legend>Unit List</legend>
             {errors.units && <div className="field-error" style={{ marginBottom: 8 }}>{errors.units}</div>}
-            <table className="prod-units">
-              <thead>
-                <tr>
-                  <th style={{ width: "30%" }}>Unit</th>
-                  <th style={{ width: "18%" }} className="ta-right">Value</th>
-                  <th style={{ width: "22%" }} className="ta-right">Price</th>
-                  <th style={{ width: "22%" }} className="ta-right">Cost</th>
-                  <th style={{ width: "8%" }} />
-                </tr>
-              </thead>
-              <tbody>
-                {unitsLoading && (
-                  <tr><td colSpan={5}><span className="sk sk-cell" style={{ width: "100%" }} /></td></tr>
-                )}
-                {!unitsLoading && units.length === 0 && (
-                  <tr><td colSpan={5} className="muted ta-center">No units. Click <strong>ADD UNIT</strong>.</td></tr>
-                )}
-                {units.map((u) => (
-                  <tr key={u.key}>
-                    <td>
-                      <SearchSelect
-                        value={u.unit_type_id}
-                        onChange={(v) => setUnit(u.key, "unit_type_id", v)}
-                        options={[{ value: "", label: "— Select —" }, ...opts.unit_types.map((t) => ({ value: String(t.id), label: t.name }))]}
-                        aria-label="Unit"
-                      />
-                    </td>
-                    <td><input className="input ta-right" inputMode="decimal" value={u.value} onChange={(e) => setUnit(u.key, "value", cleanNum(e.target.value))} aria-label="Value" /></td>
-                    <td><input className="input ta-right" inputMode="decimal" value={u.price} onChange={(e) => setUnit(u.key, "price", cleanNum(e.target.value))} aria-label="Price" /></td>
-                    <td><input className="input ta-right" inputMode="decimal" value={u.cost} onChange={(e) => setUnit(u.key, "cost", cleanNum(e.target.value))} aria-label="Cost" /></td>
-                    <td className="ta-center">
-                      <button type="button" className="inv-icon danger" onClick={() => removeUnit(u.key)} aria-label="Remove unit">
-                        <Icon name="x" size={16} />
-                      </button>
-                    </td>
+            <div className="pu-sheet" role="grid" aria-label="Unit list">
+              <table className="pu-table">
+                <colgroup>
+                  <col style={{ width: 40 }} />
+                  <col />
+                  <col style={{ width: "17%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: 34 }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="pu-num">#</th>
+                    <th>Unit</th>
+                    <th className="ta-right">Value</th>
+                    <th className="ta-right">Price</th>
+                    <th className="ta-right">Cost</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="field-hint" style={{ marginTop: 8 }}>The first unit is the default unit and price on invoices.</p>
+                </thead>
+                <tbody>
+                  {unitsLoading && (
+                    <tr><td colSpan={6}><span className="sk sk-cell" style={{ width: "100%" }} /></td></tr>
+                  )}
+                  {!unitsLoading && units.map((u, r) => (
+                    <tr key={u.key} className={r === 0 ? "is-default" : ""}>
+                      <td className="pu-num" title={r === 0 ? "Default unit on invoices" : undefined}>{r === 0 ? "★" : r + 1}</td>
+                      <td className="pu-cell pu-unit">
+                        <SearchSelect
+                          value={u.unit_type_id}
+                          onChange={(v) => setUnit(u.key, "unit_type_id", v)}
+                          options={[{ value: "", label: "— Select —" }, ...opts.unit_types.map((t) => ({ value: String(t.id), label: t.name }))]}
+                          aria-label={`Unit, row ${r + 1}`}
+                        />
+                      </td>
+                      {["value", "price", "cost"].map((k, c) => (
+                        <td key={k} className="pu-cell">
+                          <input
+                            className="pu-input"
+                            inputMode="decimal"
+                            data-r={r}
+                            data-c={c}
+                            value={u[k]}
+                            placeholder={k === "value" ? "1" : "0.0000"}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => setUnit(u.key, k, cleanNum(e.target.value))}
+                            onKeyDown={(e) => unitKey(e, r, c)}
+                            aria-label={`${k[0].toUpperCase()}${k.slice(1)}, row ${r + 1}`}
+                          />
+                        </td>
+                      ))}
+                      <td className="pu-cell pu-del">
+                        <button type="button" onClick={() => removeUnit(u.key)} aria-label={`Remove row ${r + 1}`} title="Remove row">
+                          <Icon name="x" size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!unitsLoading && (
+                    <tr className="pu-new">
+                      <td className="pu-num">+</td>
+                      <td colSpan={5}>
+                        <button type="button" className="pu-add" onClick={() => addUnitRow(true)}>
+                          {units.length ? "Add unit" : "No units yet – click to add the first unit"}
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="field-hint" style={{ marginTop: 8 }}>
+              ★ = the default unit and price on invoices. <kbd>Enter</kbd> / <kbd>↓</kbd> next row (adds one at the end) · <kbd>↑</kbd> row above · <kbd>←</kbd> <kbd>→</kbd> next cell.
+            </p>
+
           </fieldset>
         </div>
 
@@ -420,10 +506,30 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
             ].map(([key, label, prefix]) => (
               <div className="field" key={key}>
                 <span className="field-label">{label}</span>
-                <SearchSelect value={f[key]} onChange={(v) => set(key, v)} options={acctOpts(prefix)} searchPlaceholder="Search account..." aria-label={label} />
+                <SearchSelect
+                  value={f[key]}
+                  onChange={(v) => set(key, v)}
+                  options={acctOpts(prefix)}
+                  searchPlaceholder="Search account..."
+                  onAddNew={(typed) => setAddAcct({ key, label, prefix, name: typed || "" })}
+                  addNewLabel="Add new account"
+                  aria-label={label}
+                />
               </div>
             ))}
           </fieldset>
+
+          {addAcct && (
+            <AddAccountPopup
+              info={addAcct}
+              accounts={coa}
+              loadError={coaError}
+              onRetry={loadCoa}
+              current={f[addAcct.key]}
+              onClose={() => setAddAcct(null)}
+              onAdded={(acct) => accountAdded(addAcct.key, acct)}
+            />
+          )}
 
           <fieldset className="prod-box">
             <legend>Inventory Settings</legend>
@@ -439,6 +545,71 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
         </div>
       </div>
     </Modal>
+  );
+}
+
+/* =========================================================
+   "+ Add new account" from an account dropdown → the Charts of Account popup (AccountForm)
+   Opens under the header of the account picked in that dropdown (else the first header of that group, e.g. 4xxxx),
+   with the typed text as the name. Saves like Setup → Charts of Account (POST /accounts).
+   ========================================================= */
+const ACCT_TYPES = ["Asset", "Liability", "Equity", "Revenue", "Cost of Sales", "Expense"];
+const byNumCode = (x, y) => x.code.localeCompare(y.code, undefined, { numeric: true });
+
+function AddAccountPopup({ info, accounts, loadError, onRetry, current, onClose, onAdded }) {
+  const notify = useToast();
+
+  const byCode = useMemo(() => Object.fromEntries((accounts || []).map((a) => [a.code, a])), [accounts]);
+  const kids = useMemo(() => {
+    const map = {};
+    (accounts || []).forEach((a) => { if (a.parent) (map[a.parent] ??= []).push(a); });
+    return map;
+  }, [accounts]);
+  const childrenOf = (code) => kids[code] || [];
+  const descendants = (code) => {
+    const out = [];
+    const walk = (c, d) => { if (d > 20) return; childrenOf(c).forEach((k) => { out.push(k.code); walk(k.code, d + 1); }); };
+    walk(code, 0);
+    return out;
+  };
+  const typeOptions = useMemo(() => [...new Set([...ACCT_TYPES, ...(accounts || []).map((a) => a.type).filter(Boolean)])], [accounts]);
+
+  // header to put the new account under: the picked account's parent, else the first header of the group (prefix)
+  const defaultParent = useMemo(() => {
+    if (!accounts) return null;
+    const cur = current ? byCode[current] : null;
+    if (cur?.parent && byCode[cur.parent]) return cur.parent;
+    const headers = accounts.filter((a) => a.isGroup && String(a.code).startsWith(info.prefix)).sort(byNumCode);
+    return (headers.find((h) => childrenOf(h.code).some((k) => !k.isGroup)) || headers[0])?.code || null;
+  }, [accounts, current, byCode, info.prefix]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loadError || !accounts) {
+    return (
+      <Modal title="Add Account" onClose={onClose} size="sm"
+        footer={<>{loadError && <button className="btn" onClick={onRetry}>Try again</button>}<button className="btn" onClick={onClose}>Close</button></>}>
+        {loadError
+          ? <div className="alert-error" role="alert">{loadError}</div>
+          : <p className="muted">Loading the chart of accounts…</p>}
+      </Modal>
+    );
+  }
+
+  return (
+    <AccountForm
+      defaultParent={defaultParent}
+      defaultName={info.name}
+      accounts={accounts}
+      byCode={byCode}
+      typeOptions={typeOptions}
+      childrenOf={childrenOf}
+      descendants={descendants}
+      onClose={onClose}
+      onSave={async (acc) => {
+        const res = await apiFetch("/accounts", { method: "POST", body: JSON.stringify(acc) });
+        notify(res.message || "Account added.");
+        onAdded({ account_code: acc.code, account_name: acc.name });
+      }}
+    />
   );
 }
 

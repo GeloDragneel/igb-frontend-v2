@@ -512,7 +512,8 @@ export default function BillingDashboard() {
                             <button className="btn btn-sm btn-primary" disabled={st === PAID || !(s.balance > 0.009)} onClick={() => payNow(s)}
                               title={st === PAID ? "Already paid" : "Add payment for this service"}>Pay</button>
                           )}
-                          <button className="btn btn-sm" disabled={dead || st === PAID} onClick={() => setOptionsFor(s)}
+                          {/* disabled={dead || st === PAID}  */}
+                          <button className="btn btn-sm" onClick={() => setOptionsFor(s)}
                             title="VAT, withholding, discount">Option</button>
                           <button className="btn btn-sm" onClick={() => editService(s, dead)}
                             title={dead ? "View (void / cancelled)" : "Edit service"}>Edit</button>

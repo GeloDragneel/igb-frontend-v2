@@ -1,0 +1,178 @@
+/* Setup → Products · Unit List as a spreadsheet grid */
+.pu-sheet {
+    border: 1px solid var(--border, #d1d5db);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--card, #fff);
+}
+
+.pu-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.pu-table th {
+    padding: 6px 8px;
+    background: rgba(100, 116, 139, .1);
+    color: var(--muted, #64748b);
+    font-size: 11.5px;
+    font-weight: 700;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    border-bottom: 1px solid var(--border, #d1d5db);
+    border-right: 1px solid var(--border, #e2e8f0);
+}
+
+.pu-table th:last-child {
+    border-right: 0;
+}
+
+.pu-table td {
+    padding: 0;
+    height: 34px;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    border-right: 1px solid var(--border, #e2e8f0);
+    vertical-align: middle;
+}
+
+.pu-table td:last-child {
+    border-right: 0;
+}
+
+.pu-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.pu-num {
+    background: rgba(100, 116, 139, .07);
+    color: var(--muted, #64748b);
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.pu-table tr.is-default .pu-num {
+    color: #ca8a04;
+    font-size: 13px;
+}
+
+/* cells look like plain spreadsheet cells; the focused one gets the green Excel frame */
+.pu-cell {
+    position: relative;
+}
+
+.pu-input {
+    width: 100%;
+    height: 34px;
+    box-sizing: border-box;
+    padding: 0 8px;
+    border: 0;
+    outline: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: right;
+}
+
+.pu-input::placeholder {
+    color: rgba(100, 116, 139, .45);
+}
+
+.pu-input:focus {
+    box-shadow: inset 0 0 0 2px #16a34a;
+    background: rgba(22, 163, 74, .04);
+}
+
+.pu-cell:hover .pu-input:not(:focus) {
+    background: rgba(100, 116, 139, .05);
+}
+
+/* the Unit dropdown inside a cell: no box, same height as the cell */
+.pu-unit .ss-trigger,
+.pu-unit>*>button,
+.pu-unit button.input,
+.pu-unit .input {
+    height: 34px;
+    min-height: 34px;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent;
+}
+
+.pu-unit :focus-visible {
+    box-shadow: inset 0 0 0 2px #16a34a !important;
+}
+
+.pu-del {
+    text-align: center;
+}
+
+.pu-del button {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 34px;
+    border: 0;
+    background: none;
+    color: #dc2626;
+    opacity: .55;
+    cursor: pointer;
+}
+
+.pu-del button:hover {
+    opacity: 1;
+    background: rgba(220, 38, 38, .08);
+}
+
+.pu-new td {
+    height: 32px;
+}
+
+.pu-new .pu-num {
+    color: #2563eb;
+    font-size: 14px;
+}
+
+.pu-add {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border: 0;
+    background: none;
+    color: #2563eb;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pu-add:hover {
+    background: rgba(37, 99, 235, .06);
+}
+
+.field-hint kbd {
+    padding: 0 4px;
+    border: 1px solid var(--border, #d1d5db);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: inherit;
+}
+
+[data-theme="dark"] .pu-sheet {
+    border-color: rgba(148, 163, 184, .25);
+}
+
+[data-theme="dark"] .pu-table th {
+    border-color: rgba(148, 163, 184, .2);
+}
+
+[data-theme="dark"] .pu-table td {
+    border-color: rgba(148, 163, 184, .14);
+}
