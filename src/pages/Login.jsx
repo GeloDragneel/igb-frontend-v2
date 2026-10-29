@@ -197,60 +197,74 @@ export default function Login() {
                 {/* ================= Form ================= */}
                 <main className="lg-main">
                     {signup ? (
-                        <form key={`su${shake}`} className={`lg-form ${shake ? "lg-shake" : ""}`} onSubmit={createAccount} noValidate>
-                            <header className="lg-head">
+                        <form key={`su${shake}`} className={`lg-form su ${shake ? "lg-shake" : ""}`} onSubmit={createAccount} noValidate>
+                            {/* steps */}
+                            <ol className="su-steps" aria-label="Sign-up steps">
+                                <li className="is-done"><span><Icon name="check" size={12} strokeWidth={3} /></span>{PROVIDER_NAME[signup.provider]}</li>
+                                <li className="is-on"><span>2</span>Your business</li>
+                                <li><span>3</span>Business details</li>
+                            </ol>
+
+                            <header className="su-head">
+                                <span className="su-badge">15-day free trial · no payment</span>
                                 <h2>Create your account</h2>
-                                <p>Start your <b>15-day free trial</b>. You can fill up the rest of your business details next.</p>
+                                <p>Tell us your business name. The rest you can fill up next in Settings.</p>
                             </header>
 
-                            <div className="lg-su-who">
-                                {signup.avatar ? <img src={signup.avatar} alt="" referrerPolicy="no-referrer" /> : <span>{(signup.name || "?")[0]}</span>}
-                                <div>
+                            <div className="su-who">
+                                <span className="su-avatar">
+                                    {signup.avatar ? <img src={signup.avatar} alt="" referrerPolicy="no-referrer" /> : (signup.name || "?")[0]}
+                                    <i className={`su-prov is-${signup.provider}`} aria-hidden="true">{signup.provider === "google" ? "G" : "f"}</i>
+                                </span>
+                                <div className="su-who-text">
                                     <b>{signup.name || signup.email}</b>
-                                    <small>{signup.email || "No email from " + PROVIDER_NAME[signup.provider]} · {PROVIDER_NAME[signup.provider]}</small>
+                                    <small>{signup.email || `No email from ${PROVIDER_NAME[signup.provider]}`}</small>
                                 </div>
+                                <span className="su-verified"><Icon name="check" size={12} strokeWidth={3} /> Verified</span>
                             </div>
 
                             {error && <div className="lg-error" role="alert"><Icon name="alert" size={16} />{error}</div>}
 
-                            <div className="lg-field lg-field-plain">
-                                <input id="su-trade" autoFocus placeholder=" " value={su.trade_name} onChange={setSuField("trade_name")} maxLength={255} />
-                                <label htmlFor="su-trade">Business / trade name</label>
+                            <label className="su-field">
+                                <span>Business / trade name <b>*</b></span>
+                                <input autoFocus value={su.trade_name} onChange={setSuField("trade_name")} maxLength={255}
+                                    placeholder="e.g. 3 SON MINI HARDWARE" autoComplete="organization" />
+                                <small>As registered with BIR / DTI. You can add more branches later.</small>
+                            </label>
+                            <div className="su-row">
+                                <label className="su-field">
+                                    <span>Last name <b>*</b></span>
+                                    <input value={su.last_name} onChange={setSuField("last_name")} maxLength={100} autoComplete="family-name" />
+                                </label>
+                                <label className="su-field">
+                                    <span>First name <b>*</b></span>
+                                    <input value={su.first_name} onChange={setSuField("first_name")} maxLength={100} autoComplete="given-name" />
+                                </label>
                             </div>
-                            <div className="lg-su-two">
-                                <div className="lg-field lg-field-plain">
-                                    <input id="su-last" placeholder=" " value={su.last_name} onChange={setSuField("last_name")} maxLength={100} />
-                                    <label htmlFor="su-last">Last name</label>
-                                </div>
-                                <div className="lg-field lg-field-plain">
-                                    <input id="su-first" placeholder=" " value={su.first_name} onChange={setSuField("first_name")} maxLength={100} />
-                                    <label htmlFor="su-first">First name</label>
-                                </div>
-                            </div>
-                            <div className="lg-su-two">
-                                <div className="lg-field lg-field-plain">
-                                    <input id="su-mid" placeholder=" " value={su.middle_name} onChange={setSuField("middle_name")} maxLength={100} />
-                                    <label htmlFor="su-mid">Middle name (optional)</label>
-                                </div>
-                                <div className="lg-field lg-field-plain">
-                                    <input id="su-phone" placeholder=" " inputMode="tel" value={su.phone} onChange={setSuField("phone")} maxLength={50} />
-                                    <label htmlFor="su-phone">Mobile no. (optional)</label>
-                                </div>
+                            <div className="su-row">
+                                <label className="su-field">
+                                    <span>Middle name</span>
+                                    <input value={su.middle_name} onChange={setSuField("middle_name")} maxLength={100} placeholder="Optional" autoComplete="additional-name" />
+                                </label>
+                                <label className="su-field">
+                                    <span>Mobile no.</span>
+                                    <input value={su.phone} onChange={setSuField("phone")} maxLength={50} placeholder="09XX XXX XXXX" inputMode="tel" autoComplete="tel" />
+                                </label>
                             </div>
 
-                            <ul className="lg-su-points">
-                                <li><Icon name="check" size={14} /> 15 days free, no payment needed</li>
-                                <li><Icon name="check" size={14} /> Next: Profile, Address, Compliance, Valid IDs, Business Accounts</li>
-                                <li><Icon name="check" size={14} /> Sign in anytime with {PROVIDER_NAME[signup.provider]}</li>
-                            </ul>
+                            <div className="su-next">
+                                <b>Next, in Settings</b>
+                                <span>Profile · Address · Business ownership · Compliance · Valid IDs · Business accounts</span>
+                            </div>
 
                             <button className="lg-submit" disabled={busy}>
                                 {busy ? <><span className="lg-spinner" aria-hidden="true" /> Creating your account…</>
                                     : <>Create account &amp; start trial <Icon name="chevron" size={17} strokeWidth={2.5} /></>}
                             </button>
-                            <button type="button" className="lg-link lg-su-back" disabled={busy}
+                            <p className="su-terms">By creating an account you agree to IGB Accounting's terms and privacy policy.</p>
+                            <button type="button" className="lg-link su-back" disabled={busy}
                                 onClick={() => { setSignup(null); setError(""); }}>
-                                I already have an account – back to sign in
+                                ← I already have an account
                             </button>
                         </form>
                     ) : (
@@ -285,7 +299,18 @@ export default function Login() {
                                 )}
                                 {social === "facebook" ? "Opening Facebook…" : "Continue with Facebook"}
                             </button>
-                            <p className="lg-su-hint">New client? Continue with Google or Facebook to start a <b>15-day free trial</b>.</p>
+                            <div className="lg-trial" role="note">
+                                <span className="lg-trial-icon" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
+                                        <path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5" />
+                                    </svg>
+                                </span>
+                                <div className="lg-trial-text">
+                                    <b>New client? Try it free for <span className="lg-nowrap">15 days</span></b>
+                                    <small>Use Google or Facebook above · no payment needed</small>
+                                </div>
+                            </div>
                             <div className="lg-divider"><span>or sign in with username</span></div>
 
                             {social === "code" && (

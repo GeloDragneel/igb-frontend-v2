@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SocialLinks from "../components/SocialLinks";
+import PricingPlans from "../components/PricingPlans";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Modal from "../components/Modal";
 import SearchSelect from "../components/SearchSelect";
@@ -181,11 +182,15 @@ export default function Settings() {
         try { return new URLSearchParams(location.search).get("welcome") === "1" || sessionStorage.getItem("igb-welcome") === "1"; } catch { return false; }
     });
     useEffect(() => {
-        if (new URLSearchParams(location.search).get("welcome") !== "1") return;
+        const q = new URLSearchParams(location.search);
+        const sec = q.get("section");
+        if (sec && (SECTIONS.some(([k]) => k === sec) || sec === "billing")) setSection(sec);   // from the welcome popup: open that part
+        if (q.get("welcome") !== "1") return;
+        setWelcome(true);
         try { sessionStorage.setItem("igb-welcome", "1"); } catch { /* blocked */ }
         navigate("/settings", { replace: true });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [location.search]);
     const endWelcome = () => { setWelcome(false); try { sessionStorage.removeItem("igb-welcome"); } catch { /* blocked */ } };
     const [form, setForm] = useState(null);
     const [saved, setSaved] = useState(null);
@@ -235,6 +240,17 @@ export default function Settings() {
     const dirty = !!form && saved !== JSON.stringify(form);
     const set = (patch) => setForm((f) => ({ ...f, ...patch }));
     const L = data?.lookups || {};
+    // client that signed up with Google / Facebook (saved status FEDERATED): status is set by IGB, so it's hidden
+    const statusName = (id) => {
+        const o = (L.status || []).find((x) => String(x.id ?? x.value) === String(id));
+        return String(o?.status_name ?? o?.name ?? o?.label ?? o?.description ?? "");
+    };
+    const savedStatusId = useMemo(() => { try { return saved ? JSON.parse(saved).status_id : null; } catch { return null; } }, [saved]);
+    const federated = /federated/i.test(statusName(savedStatusId));
+    // Google / Facebook clients also get "Billing & plans" (before Sign-in)
+    const navSections = federated
+        ? [...SECTIONS.filter(([k]) => k !== "signin"), ["billing", "Billing & plans"], ["signin", "Sign-in (Google / Facebook)"]]
+        : SECTIONS;
 
     // warn before leaving the page with unsaved changes
     useEffect(() => {
@@ -242,6 +258,15 @@ export default function Settings() {
         window.addEventListener("beforeunload", h);
         return () => window.removeEventListener("beforeunload", h);
     }, [dirty]);
+
+    // setup guide: which parts are already filled up (refreshed after every save)
+    const [ob, setOb] = useState(null);
+    const idsCount = data?.valid_ids?.length ?? 0;
+    const accCount = data?.accounts?.length ?? 0;
+    useEffect(() => {
+        if (!welcome) return;
+        apiFetch("/onboarding").then(setOb).catch(() => setOb(null));
+    }, [welcome, saved, idsCount, accCount]);
 
     const go = (key) => {
         setSection(key);
@@ -525,38 +550,57 @@ export default function Settings() {
 
             {welcome && (() => {
                 const i = Math.max(0, WELCOME_STEPS.findIndex(([k]) => k === section));
-                const onStep = WELCOME_STEPS.some(([k]) => k === section);
+                const doneOf = (k) => ob?.steps?.find((x) => x.key === k)?.done;
+                const total = WELCOME_STEPS.length;
+                const doneCount = WELCOME_STEPS.filter(([k]) => doneOf(k)).length;
+                const days = ob?.trial?.trial && !ob.trial.expired ? ob.trial.days_left : null;
                 return (
-                    <div className="st-welcome" role="status">
-                        <div className="st-welcome-top">
-                            <div>
-                                <b>Welcome! Let's set up your business.</b>
-                                <span>Fill up each part, then press <b>Save changes</b>. Your 15-day free trial has started.</span>
+                    <section className="sw" role="status" aria-label="Setup guide">
+                        <div className="sw-top">
+                            <span className="sw-icon" aria-hidden="true">🚀</span>
+                            <div className="sw-text">
+                                <h3>Welcome! Let's set up your business</h3>
+                                <p>Fill up each part below, then press <b>Save changes</b>. You can come back anytime.</p>
                             </div>
-                            <button type="button" className="st-welcome-x" onClick={endWelcome} aria-label="Hide the guide">×</button>
+                            {days !== null && (
+                                <span className="sw-trial"><b>{days}</b><small>day{days === 1 ? "" : "s"} left<br />free trial</small></span>
+                            )}
+                            <button type="button" className="sw-x" onClick={endWelcome} aria-label="Hide the guide" title="Hide the guide">×</button>
                         </div>
-                        <ol className="st-welcome-steps">
-                            {WELCOME_STEPS.map(([k, l], n) => (
-                                <li key={k} className={`${k === section ? "is-on" : ""}${onStep && n < i ? " is-done" : ""}`}>
-                                    <button type="button" onClick={() => go(k)}><em>{n + 1}</em>{l}</button>
-                                </li>
-                            ))}
+
+                        <div className="sw-progress">
+                            <div className="sw-bar"><span style={{ width: `${Math.round((doneCount / total) * 100)}%` }} /></div>
+                            <span>{doneCount} of {total} done</span>
+                        </div>
+
+                        <ol className="sw-steps">
+                            {WELCOME_STEPS.map(([k, l], n) => {
+                                const done = doneOf(k);
+                                return (
+                                    <li key={k} className={`${k === section ? "is-on" : ""}${done ? " is-done" : ""}`}>
+                                        <button type="button" onClick={() => go(k)} aria-current={k === section ? "step" : undefined}>
+                                            <em>{done ? "✓" : n + 1}</em><span>{l}</span>
+                                        </button>
+                                    </li>
+                                );
+                            })}
                         </ol>
-                        <div className="st-welcome-nav">
-                            <span>Step {i + 1} of {WELCOME_STEPS.length}</span>
-                            <button type="button" className="btn btn-sm" onClick={() => go(WELCOME_STEPS[Math.max(0, i - 1)][0])} disabled={i === 0}>Back</button>
-                            {i < WELCOME_STEPS.length - 1
-                                ? <button type="button" className="btn btn-sm btn-primary" onClick={() => go(WELCOME_STEPS[i + 1][0])}>Next: {WELCOME_STEPS[i + 1][1]}</button>
+
+                        <div className="sw-nav">
+                            <span className="sw-where">Step <b>{i + 1}</b> of {total} · <b>{WELCOME_STEPS[i][1]}</b></span>
+                            <button type="button" className="btn btn-sm" onClick={() => go(WELCOME_STEPS[Math.max(0, i - 1)][0])} disabled={i === 0}>‹ Back</button>
+                            {i < total - 1
+                                ? <button type="button" className="btn btn-sm btn-primary" onClick={() => go(WELCOME_STEPS[i + 1][0])}>Next: {WELCOME_STEPS[i + 1][1]} ›</button>
                                 : <button type="button" className="btn btn-sm btn-primary" onClick={() => { if (dirty) setAskSave(true); endWelcome(); }}>Finish{dirty ? " & save" : ""}</button>}
                         </div>
-                    </div>
+                    </section>
                 );
             })()}
 
             <div className="st-layout">
                 {/* ---------- left nav ---------- */}
                 <nav className="card st-nav" aria-label="Settings sections">
-                    {SECTIONS.map(([k, l]) => (
+                    {navSections.map(([k, l]) => (
                         <button key={k} type="button" className={`st-nav-item ${section === k ? "is-active" : ""}`}
                             aria-current={section === k ? "page" : undefined} onClick={() => go(k)}>
                             <span>{l}</span>
@@ -589,29 +633,58 @@ export default function Settings() {
                                     <span className="field-label">Suffix</span>
                                     <input className="input" value={form.suffix} placeholder="Jr., Sr., III…" onChange={(e) => set({ suffix: e.target.value })} />
                                 </label>
-                                <div className="field">
-                                    <span className="field-label">Gender</span>
-                                    <div className="st-seg" role="radiogroup" aria-label="Gender">
-                                        {["MALE", "FEMALE"].map((g) => (
-                                            <button key={g} type="button" role="radio" aria-checked={form.gender === g}
-                                                className={`st-seg-btn ${form.gender === g ? "is-active" : ""}`} onClick={() => set({ gender: g })}>
-                                                {g === "MALE" ? "Male" : "Female"}
-                                            </button>
-                                        ))}
+                                {federated ? (
+                                    /* Google / Facebook sign-up: no Client status → Date of birth | Civil status, then Gender */
+                                    <>
+                                        <label className="field">
+                                            <span className="field-label">Date of birth</span>
+                                            <input type="date" className="input" value={form.birthdate} onChange={(e) => set({ birthdate: e.target.value })} />
+                                        </label>
+                                        <div className="field">
+                                            <span className="field-label">Civil status</span>
+                                            <SearchSelect value={form.civ_stat_id} options={opts(L.civil)} onChange={(v) => set({ civ_stat_id: v })} aria-label="Civil status" />
+                                        </div>
+                                        <div className="field">
+                                            <span className="field-label">Gender</span>
+                                            <div className="st-seg" role="radiogroup" aria-label="Gender">
+                                                {["MALE", "FEMALE"].map((g) => (
+                                                    <button key={g} type="button" role="radio" aria-checked={form.gender === g}
+                                                        className={`st-seg-btn ${form.gender === g ? "is-active" : ""}`} onClick={() => set({ gender: g })}>
+                                                        {g === "MALE" ? "Male" : "Female"}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="field">
+                                            <span className="field-label">Gender</span>
+                                            <div className="st-seg" role="radiogroup" aria-label="Gender">
+                                                {["MALE", "FEMALE"].map((g) => (
+                                                    <button key={g} type="button" role="radio" aria-checked={form.gender === g}
+                                                        className={`st-seg-btn ${form.gender === g ? "is-active" : ""}`} onClick={() => set({ gender: g })}>
+                                                        {g === "MALE" ? "Male" : "Female"}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <label className="field">
+                                            <span className="field-label">Date of birth</span>
+                                            <input type="date" className="input" value={form.birthdate} onChange={(e) => set({ birthdate: e.target.value })} />
+                                        </label>
+                                        <div className="field">
+                                            <span className="field-label">Civil status</span>
+                                            <SearchSelect value={form.civ_stat_id} options={opts(L.civil)} onChange={(v) => set({ civ_stat_id: v })} aria-label="Civil status" />
+                                        </div>
+                                    </>
+                                )}
+                                {!federated && (
+                                    <div className="field">
+                                        <span className="field-label">Client status</span>
+                                        <SearchSelect value={form.status_id} options={opts(L.status)} onChange={(v) => set({ status_id: v })} aria-label="Client status" />
                                     </div>
-                                </div>
-                                <label className="field">
-                                    <span className="field-label">Date of birth</span>
-                                    <input type="date" className="input" value={form.birthdate} onChange={(e) => set({ birthdate: e.target.value })} />
-                                </label>
-                                <div className="field">
-                                    <span className="field-label">Civil status</span>
-                                    <SearchSelect value={form.civ_stat_id} options={opts(L.civil)} onChange={(v) => set({ civ_stat_id: v })} aria-label="Civil status" />
-                                </div>
-                                <div className="field">
-                                    <span className="field-label">Client status</span>
-                                    <SearchSelect value={form.status_id} options={opts(L.status)} onChange={(v) => set({ status_id: v })} aria-label="Client status" />
-                                </div>
+                                )}
                             </div>
                             <p className="st-note"><b className="st-req">*</b> Required</p>
                         </>
@@ -803,6 +876,15 @@ export default function Settings() {
                                     <input type="date" className="input" value={form.date_registered} onChange={(e) => set({ date_registered: e.target.value })} />
                                 </label>
                             </div>
+                        </>
+                    )}
+
+                    {/* BILLING & PLANS (Google / Facebook clients) */}
+                    {section === "billing" && federated && (
+                        <>
+                            <h2 className="st-h">Billing &amp; plans</h2>
+                            <p className="st-note st-note-top">Pick the plan that fits your business. You can change plans anytime.</p>
+                            <PricingPlans />
                         </>
                     )}
 
@@ -1086,10 +1168,12 @@ export default function Settings() {
                                     <input className="input mono" value={acct.rdo} placeholder="000" onChange={(e) => setA({ rdo: e.target.value })} />
                                 </label>
                             )}
-                            <div className="field">
-                                <span className="field-label">Account status</span>
-                                <SearchSelect value={acct.status_id} options={opts(L.status)} onChange={(v) => setA({ status_id: v })} aria-label="Account status" />
-                            </div>
+                            {!federated && (
+                                <div className="field">
+                                    <span className="field-label">Account status</span>
+                                    <SearchSelect value={acct.status_id} options={opts(L.status)} onChange={(v) => setA({ status_id: v })} aria-label="Account status" />
+                                </div>
+                            )}
                             <label className="st-switch-row">
                                 <input type="checkbox" checked={!!acct.is_active} onChange={(e) => setA({ is_active: e.target.checked })} />
                                 <span>Active</span>
