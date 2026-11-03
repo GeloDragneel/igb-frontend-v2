@@ -59,7 +59,9 @@ export default function LoanManagement() {
   const stats = useMemo(() => ({
     outstanding: loans.filter((l) => l.status === "active").reduce((n, l) => n + l.outstanding, 0),
     dueThisMonth: loans.filter((l) => l.next_due && l.next_due.date.slice(0, 7) <= thisMonth && l.status === "active").reduce((n, l) => n + l.next_due.total, 0),
-    overdue: loans.filter((l) => l.overdue).length,
+    overdue: loans.filter((l) => l.status === "active").reduce((n, l) => n + (l.overdue_count || 0), 0),
+    overdueAmt: loans.filter((l) => l.status === "active").reduce((n, l) => n + (l.overdue_amount || 0), 0),
+    overdueLoans: loans.filter((l) => l.status === "active" && l.overdue_count > 0).length,
     count: loans.filter((l) => l.status === "active").length,
   }), [loans, thisMonth]);
 
@@ -97,7 +99,7 @@ export default function LoanManagement() {
     },
     {
       key: "next", label: "Next due", value: (l) => l.next_due?.date || "", render: (l) => (l.status !== "active" || !l.next_due ? <span className="muted">—</span> : (
-        <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>{fmtDay(l.next_due.date)}{l.overdue && <Badge tone="red">Overdue</Badge>}</span>
+        <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>{fmtDay(l.next_due.date)}{l.overdue && <Badge tone="red">{l.overdue_count > 1 ? `${l.overdue_count} overdue` : "Overdue"}</Badge>}</span>
       ))
     },
     { key: "status", label: "Status", render: (l) => <Badge tone={STATUS[l.status]?.[0]}>{STATUS[l.status]?.[1]}</Badge> },
@@ -135,7 +137,7 @@ export default function LoanManagement() {
         {[
           [payable ? "Owed to lenders" : "Owed to us", n2(stats.outstanding), `${stats.count} active loan${stats.count === 1 ? "" : "s"}`],
           [payable ? "Due this month" : "To collect this month", n2(stats.dueThisMonth), "next installments"],
-          ["Overdue", String(stats.overdue), stats.overdue ? "loans past their due date" : "nothing overdue"],
+          ["Overdue", n2(stats.overdueAmt), stats.overdue ? `${stats.overdue} installment${stats.overdue === 1 ? "" : "s"} past due · ${stats.overdueLoans} loan${stats.overdueLoans === 1 ? "" : "s"}` : "nothing overdue"],
         ].map(([label, value, sub], i) => (
           <div key={label} className="card" style={{ padding: "12px 14px", borderLeft: `4px solid ${i === 2 && stats.overdue ? "#ef4444" : i === 1 ? "#f59e0b" : "#2563eb"}` }}>
             <div className="muted small">{label}</div>
