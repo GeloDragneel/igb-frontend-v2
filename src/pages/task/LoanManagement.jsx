@@ -24,6 +24,7 @@ const STATUS = { active: ["blue", "Active"], closed: ["green", "Fully paid"], vo
 const ROW = { paid: ["green", "Paid"], partial: ["orange", "Partial"], overdue: ["red", "Overdue"], open: ["gray", "Open"] };
 
 // guess an account by its name
+const METHOD_LABEL = { diminishing: "Diminishing", straight: "Straight", actual360: "Actual days / 360" };
 const pick = (accounts, re) => accounts.find((a) => re.test(a.account_name))?.account_code || "";
 
 export default function LoanManagement() {
@@ -67,7 +68,7 @@ export default function LoanManagement() {
     const first = addMonth(today());
     setForm({
       id: null, direction, party_id: "", party_name: "", reference: "", principal: "", annual_rate: "", term_months: "12",
-      method: "diminishing", release_date: today(), first_due_date: first,
+      method: "actual360", monthly_payment: "", release_date: today(), first_due_date: first,
       loan_account: pick(accounts, payable ? /loan.*payable|notes payable/i : /loan.*receivable|notes receivable|advances to/i),
       interest_account: pick(accounts, payable ? /interest expense/i : /interest income/i),
       cash_account: pick(accounts, /cash in bank|bank/i), post_release: true, remarks: "", locked: false,
@@ -82,7 +83,7 @@ export default function LoanManagement() {
       )
     },
     { key: "principal", label: "Principal", align: "right", value: (l) => l.principal, render: (l) => <span className="mono">{n2(l.principal)}</span> },
-    { key: "terms", label: "Terms", value: (l) => l.term_months, render: (l) => <span className="small">{l.annual_rate}% · {l.term_months} mo · {l.method === "diminishing" ? "Diminishing" : "Straight"}</span> },
+    { key: "terms", label: "Terms", value: (l) => l.term_months, render: (l) => <span className="small">{l.annual_rate}% · {l.term_months} mo · {METHOD_LABEL[l.method] || l.method}</span> },
     { key: "monthly", label: "Monthly", align: "right", value: (l) => l.monthly, render: (l) => <span className="mono">{n2(l.monthly)}</span> },
     {
       key: "outstanding", label: "Balance", align: "right", value: (l) => l.outstanding, render: (l) => (
@@ -164,7 +165,7 @@ export default function LoanManagement() {
           data={data}
           onClose={() => setOpenId(null)}
           onChanged={(m) => { if (m) notify(m); load(); }}
-          onEdit={(l) => { setOpenId(null); setForm({ ...l, party_id: l.party_id ? String(l.party_id) : "", principal: String(l.principal), annual_rate: String(l.annual_rate), term_months: String(l.term_months), cash_account: l.cash_account || "", post_release: !!l.release_jv_no, reference: l.reference || "", remarks: l.remarks || "", locked: l.paid_principal > 0 || l.paid_interest > 0 }); }}
+          onEdit={(l) => { setOpenId(null); setForm({ ...l, party_id: l.party_id ? String(l.party_id) : "", principal: String(l.principal), annual_rate: String(l.annual_rate), term_months: String(l.term_months), monthly_payment: l.monthly_payment ? String(l.monthly_payment) : "", cash_account: l.cash_account || "", post_release: !!l.release_jv_no, reference: l.reference || "", remarks: l.remarks || "", locked: l.paid_principal > 0 || l.paid_interest > 0 }); }}
         />
       )}
     </>
@@ -190,11 +191,11 @@ function LoanForm({ initial, data, onClose, onSaved }) {
     clearTimeout(timer.current);
     if (!(Number(f.principal) > 0) || !(Number(f.term_months) >= 1) || f.annual_rate === "" || !f.first_due_date) { setPreview(null); return undefined; }
     timer.current = setTimeout(() => {
-      apiFetch(`${API}/preview`, { method: "POST", body: JSON.stringify({ principal: Number(f.principal), annual_rate: Number(f.annual_rate), term_months: Number(f.term_months), method: f.method, first_due_date: f.first_due_date }) })
+      apiFetch(`${API}/preview`, { method: "POST", body: JSON.stringify({ principal: Number(f.principal), annual_rate: Number(f.annual_rate), term_months: Number(f.term_months), method: f.method, first_due_date: f.first_due_date, release_date: f.release_date || null }) })
         .then(setPreview).catch(() => setPreview(null));
     }, 350);
     return () => clearTimeout(timer.current);
-  }, [f.principal, f.annual_rate, f.term_months, f.method, f.first_due_date]);
+  }, [f.principal, f.annual_rate, f.term_months, f.method, f.first_due_date, f.release_date]);
 
   const save = async () => {
     setError("");
@@ -208,6 +209,7 @@ function LoanForm({ initial, data, onClose, onSaved }) {
       const body = {
         direction: f.direction, party_id: f.party_id ? Number(f.party_id) : null, party_name: f.party_name.trim(), reference: f.reference || null,
         principal: Number(f.principal), annual_rate: Number(f.annual_rate), term_months: Number(f.term_months), method: f.method,
+        monthly_payment: null,   // always computed from rate, term and dates
         release_date: f.release_date, first_due_date: f.first_due_date, loan_account: f.loan_account, interest_account: f.interest_account,
         cash_account: f.cash_account || null, post_release: !!f.post_release, remarks: f.remarks || null,
       };
@@ -245,6 +247,7 @@ function LoanForm({ initial, data, onClose, onSaved }) {
         <Field label="Term (months) *"><input className="input ta-right" inputMode="numeric" disabled={f.locked} value={f.term_months} onChange={(e) => set("term_months", e.target.value.replace(/\D/g, ""))} /></Field>
         <Field label="Method">
           <select className="input" disabled={f.locked} value={f.method} onChange={(e) => set("method", e.target.value)}>
+            <option value="actual360">Diminishing – actual days / 360 (bank)</option>
             <option value="diminishing">Diminishing balance (equal payments)</option>
             <option value="straight">Straight / add-on interest</option>
           </select>
@@ -285,12 +288,13 @@ function ScheduleTable({ rows, maxHeight = 320 }) {
   return (
     <div className="table-scroll" style={{ maxHeight }}>
       <table className="table">
-        <thead><tr><th>#</th><th>Due date</th><th className="ta-right">Principal</th><th className="ta-right">Interest</th><th className="ta-right">Payment</th><th className="ta-right">Balance</th>{rows[0]?.status && <th>Status</th>}</tr></thead>
+        <thead><tr><th>#</th><th>Due date</th>{rows[0]?.days != null && <th className="ta-right">Days</th>}<th className="ta-right">Principal</th><th className="ta-right">Interest</th><th className="ta-right">Payment</th><th className="ta-right">Balance</th>{rows[0]?.status && <th>Status</th>}</tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.no}>
               <td className="muted">{r.no}</td>
               <td>{fmtDay(r.due_date)}</td>
+              {r.days != null && <td className="ta-right muted">{r.days}</td>}
               <td className="ta-right mono">{n2(r.principal)}</td>
               <td className="ta-right mono">{n2(r.interest)}</td>
               <td className="ta-right mono strong">{n2(r.total)}</td>
@@ -378,7 +382,7 @@ function LoanDetail({ id, data, onClose, onChanged, onEdit }) {
           </div>
           <p className="small muted" style={{ marginTop: 0 }}>
             <Badge tone={STATUS[loan.status][0]}>{STATUS[loan.status][1]}</Badge>{" "}
-            {loan.annual_rate}% per year, {loan.term_months} months, {loan.method === "diminishing" ? "diminishing balance" : "straight / add-on"}. Released {fmtDay(loan.release_date)}
+            {loan.annual_rate}% per year, {loan.term_months} months, {loan.method === "diminishing" ? "diminishing balance" : loan.method === "actual360" ? `diminishing, actual days / 360` : "straight / add-on"}. Released {fmtDay(loan.release_date)}
             {loan.release_jv_no ? ` (journal ${loan.release_jv_no})` : " (release not posted)"}. Loan account {loan.loan_account} {accName(loan.loan_account)}; interest {loan.interest_account} {accName(loan.interest_account)}.
           </p>
 

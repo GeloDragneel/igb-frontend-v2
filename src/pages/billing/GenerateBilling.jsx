@@ -233,6 +233,9 @@ function ResultModal({ result, onClose }) {
     );
 }
 
+// m_transaction_type id → m_service_type id (1 RETURN → 3 RETURNS · 2 EO → 2 EO · 3 PF → 4 PF)
+const SER_TYPE_BY_TRANS = { 1: 3, 2: 2, 3: 4 };
+
 const blankLine = () => ({ key: Math.random().toString(36).slice(2), ser_list_id: "", ser_fee_id: null, prep_target_date: plusDays(5), service_fee: "", qty: "1" });
 
 // old "GENERATE MANUAL BILLING": one account, picked services → SOA (R / EO / PF) + services + sales invoices
@@ -262,9 +265,15 @@ export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
         .map((a) => ({ value: String(a.id), label: (a.client_name || "").trim() || "—", hint: branchTrade(a) }))
         .sort((x, y) => `${x.label} ${x.hint}`.localeCompare(`${y.label} ${y.hint}`))], [lk]);
     const picked = (lk?.accounts || []).find((a) => String(a.id) === String(f.ca_id));
-    const serviceOpts = useMemo(() => [{ value: "", label: "— Select service —" }, ...services.map((s) => ({
-        value: String(s.id), label: `${s.name}${Number(s.fee) ? ` · ${n2(s.fee)}` : ""}`,
-    }))], [services]);
+    // Transaction type → service type: 1 RETURN → 3 · 2 EO → 2 · 3 PF → 4
+    const typeServices = useMemo(() => {
+        const st = SER_TYPE_BY_TRANS[Number(f.trans_type_id)];
+        return st ? services.filter((s) => Number(s.ser_type_id) === st) : [];
+    }, [services, f.trans_type_id]);
+    const serviceOpts = useMemo(() => [
+        { value: "", label: f.trans_type_id ? "— Select service —" : "— Pick transaction type first —" },
+        ...typeServices.map((s) => ({ value: String(s.id), label: `${s.name}${Number(s.fee) ? ` · ${n2(s.fee)}` : ""}` })),
+    ], [typeServices, f.trans_type_id]);
 
     const pickService = (key, v) => {
         const s = services.find((x) => String(x.id) === v);
@@ -279,6 +288,12 @@ export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
     const pickType = (v) => setF((x) => ({
         ...x, trans_type_id: v,
         service_period: x.service_period && isEoPeriod(x.service_period) === (Number(v) === 2) ? x.service_period : "",
+        // drop services that don't belong to the new transaction type
+        lines: x.lines.map((l) => {
+            const s = services.find((z) => String(z.id) === String(l.ser_list_id));
+            return s && Number(s.ser_type_id) === SER_TYPE_BY_TRANS[Number(v)]
+                ? l : { ...l, ser_list_id: "", ser_fee_id: null, service_fee: "" };
+        }),
     }));
 
     const grand = f.lines.reduce((t, l) => t + num(l.service_fee) * num(l.qty), 0);
