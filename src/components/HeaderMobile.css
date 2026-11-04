@@ -1,0 +1,146 @@
+/* Header on phones: ☰ · business name (one line) · AI · chat · bell · photo
+   Greeting and the dark-mode button are hidden (dark mode stays in the photo menu). Desktop is unchanged. */
+
+@media (max-width: 640px) {
+    .app .topbar {
+        gap: 6px;
+        padding-left: 8px;
+        padding-right: 10px;
+        min-height: 56px;
+    }
+
+    .app .topbar .hd-greet {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .app .topbar .hd-hello {
+        display: none;
+    }
+
+    /* business / branch name: one line, cut with … */
+    .app .topbar .hd-business,
+    .app .topbar .hd-branch-select {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .app .topbar .hd-business .ss-value,
+    .app .topbar .hd-business.is-static {
+        display: block;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-size: 15px;
+    }
+
+    .app .topbar .topbar-right {
+        flex: none;
+        gap: 2px;
+    }
+
+    .app .topbar .hd-theme-btn {
+        display: none;
+    }
+
+    /* smaller round buttons */
+    .app .topbar .topbar-right .icon-btn.round,
+    .app .topbar .topbar-right .icon-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        padding: 0;
+    }
+
+    .app .topbar .topbar-right .icon-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* photo only (name / role / caret hidden) */
+    .app .topbar .me {
+        padding: 2px;
+        gap: 0;
+    }
+
+    .app .topbar .me-text,
+    .app .topbar .me-caret {
+        display: none;
+    }
+
+    .app .topbar .me .me-photo,
+    .app .topbar .me img,
+    .app .topbar .me .avatar {
+        width: 32px;
+        height: 32px;
+    }
+
+    /* header pop-ups (Messenger chat list, notifications, user menu): full width under the header, never cut off */
+    .app .topbar .pop-wrap>.popover,
+    .app .topbar .pop-wrap>.ms-list {
+        position: fixed !important;
+        top: 60px !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: calc(100vh - 76px) !important;
+        transform: none !important;
+    }
+
+    /* Messenger chat windows (bottom dock): one at a time, full width */
+    .ms-dock {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        justify-content: stretch !important;
+    }
+
+    .ms-dock>.ms-win:not(:last-child) {
+        display: none !important;
+    }
+
+    .ms-dock>.ms-win {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: min(75vh, 560px) !important;
+        border-radius: 16px 16px 0 0 !important;
+        margin: 0 !important;
+    }
+
+    /* open tabs: one row that scrolls sideways */
+    .app .crumbbar {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .app .crumbbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .app .crumbbar>* {
+        flex-wrap: nowrap;
+    }
+}
+
+/* very small phones: a bit tighter */
+@media (max-width: 380px) {
+
+    .app .topbar .topbar-right .icon-btn.round,
+    .app .topbar .topbar-right .icon-btn {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+    }
+
+    .app .topbar .hd-business .ss-value,
+    .app .topbar .hd-business.is-static {
+        font-size: 14px;
+    }
+}

@@ -70,7 +70,7 @@ export const fromApi = (r) => ({
 });
 
 // saved adjustments get fresh row ids
-const withNewUids = (st) => ({
+const withNewUids = (st, months = []) => ({
     ...st,
     sales: (st.sales || []).map((x) => ({ ...x, uid: newUid() })),
     purchases: (st.purchases || []).map((x) => ({ ...x, uid: newUid() })),
@@ -378,6 +378,16 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
     const patchRow = (sec, uid, patch) =>
         setSt((s) => ({ ...s, [sec]: s[sec].map((r) => (r.uid === uid ? { ...r, ...(typeof patch === "function" ? patch(r) : patch) } : r)) }));
 
+    // small + : a new manual line under the other manual lines · × removes one
+    const addRow = (sec) =>
+        setSt((s) => {
+            const rows = s[sec];
+            const at = rows.reduce((last, r, i) => (r.manual ? i : last), -1) + 1;
+            return { ...s, [sec]: [...rows.slice(0, at), manualRow(sec === "purchases" ? "COGS" : "EXP", months), ...rows.slice(at)] };
+        });
+
+    const removeRow = (sec, uid) => setSt((s) => ({ ...s, [sec]: s[sec].filter((r) => r.uid !== uid) }));
+
     const setManualValue = (sec, uid, m, v) =>
         patchRow(sec, uid, (r) => {
             const values = { ...r.values, [m]: v };
@@ -569,8 +579,12 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
             return (
                 <tr key={r.uid} className="its-manual">
                     <td className="its-label">
-                        <input className="xl-input its-in its-name" placeholder="+ Add item" value={r.label}
-                            onChange={(e) => patchRow(sec, r.uid, { label: e.target.value })} aria-label="Item name" />
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <input className="xl-input its-in its-name" placeholder="+ Add item" value={r.label}
+                                onChange={(e) => patchRow(sec, r.uid, { label: e.target.value })} aria-label="Item name" style={{ flex: 1, minWidth: 0 }} />
+                            <button type="button" className="its-chip its-chip-red no-print" title="Remove this item"
+                                onClick={() => removeRow(sec, r.uid)} aria-label={`Remove ${r.label || "item"}`}>×</button>
+                        </div>
                     </td>
                     {months.map((m) => (
                         <td key={m}><MoneyInput value={r.values[m]} allowNegative={false} label={`${monLabel(m)} amount`} onChange={(v) => setManualValue(sec, r.uid, m, v)} /></td>
@@ -641,7 +655,27 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
     const sumRow = (key, label, x, bold = true) =>
         calcRow(key, label, { values: x.values, subtotal: x.total, adjustment: x.adjustment, total: x.total + x.adjustment }, { bold });
 
-    const section = (label) => <tr key={`sec-${label}`} className="its-sec"><td colSpan={cols}><i>{label}</i></td></tr>;
+    const section = (label, sec) => (
+        <tr key={`sec-${label}`} className="its-sec">
+            <td colSpan={cols}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 14, position: "sticky", left: 10 }}>
+                    <i style={{ position: "static" }}>{label}</i>
+                    {sec && (
+                        <button type="button" className="no-print" title="Add item" aria-label={`Add item to ${label}`}
+                            onClick={() => addRow(sec)}
+                            style={{
+                                marginLeft: 0, display: "inline-flex", alignItems: "center", gap: 4, height: 24, padding: "0 10px",
+                                border: 0, borderRadius: 999, background: "var(--brand, #4f46e5)", color: "#fff",
+                                fontSize: 12, fontWeight: 700, fontStyle: "normal", cursor: "pointer", verticalAlign: "middle",
+                                boxShadow: "0 2px 6px rgba(79, 70, 229, .35)",
+                            }}>
+                            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add item
+                        </button>
+                    )}
+                </span>
+            </td>
+        </tr>
+    );
     const gap = (k) => <tr key={k} className="its-gap"><td colSpan={cols} /></tr>;
 
     const lineRow = (key, left, right, value, bold = false) => (
@@ -717,7 +751,7 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
                                     {st.sales.map((r) => drillRow("sales", r))}
                                     {sumRow("sales-total", "TOTAL SALES", c.S)}
 
-                                    {section("COST OF SALES")}
+                                    {section("COST OF SALES", "purchases")}
                                     {fieldRow("beg", "Merchandise Inventory, Beginning")}
                                     {st.purchases.map((r) => drillRow("purchases", r))}
                                     {calcRow("cogas", "Total cost of goods available for sale", c.cogas)}
@@ -727,7 +761,7 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
                                     {calcRow("gross", "GROSS AMOUNT", c.gross, { bold: true })}
                                     {calcRow("gpr", "Gross Profit Rate", c.gpr, { percent: true })}
 
-                                    {section("1601-C")}
+                                    {section("1601-C", "expenses")}
                                     {st.expenses.map((r) => drillRow("expenses", r))}
                                     {sumRow("exp-total", "TOTAL EXPENSES", c.E)}
                                     {calcRow("subject", "INCOME SUBJECT TO INCOME TAX", c.subject)}

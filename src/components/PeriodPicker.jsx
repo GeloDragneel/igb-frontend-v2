@@ -13,6 +13,9 @@ const label = (iso) => {
   return `${SHORT[m - 1]} ${String(d).padStart(2, "0")}, ${y}`;
 };
 
+// phones: the popover opens as a centered sheet over the page (there's no room to the right of the sidebar)
+const isPhone = () => window.innerWidth <= 640;
+
 const ym = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
 
 // months between two "YYYY-MM" (inclusive)
@@ -51,6 +54,13 @@ function MonthCal({ anchor, edge, value, min, onPick, onClose }) {
       const e = edge.current?.getBoundingClientRect();
       if (!f || !e) return;
       const h = 250;
+      if (isPhone()) {
+        // under the field, centered on the screen
+        const w = Math.min(236, window.innerWidth - 24);
+        const top = Math.max(8, Math.min(f.bottom + 8, window.innerHeight - h - 8));
+        setPos({ top, left: (window.innerWidth - w) / 2, arrow: 0, sheet: true });
+        return;
+      }
       const top = Math.max(8, Math.min(f.top + f.height / 2 - 42, window.innerHeight - h - 8));
       setPos({ top, left: e.right + 12, arrow: f.top + f.height / 2 - top });
     };
@@ -62,7 +72,7 @@ function MonthCal({ anchor, edge, value, min, onPick, onClose }) {
 
   if (!pos) return null;
   return createPortal(
-    <div className="pp-cal" style={{ top: pos.top, left: pos.left, "--arrow": `${pos.arrow}px` }} role="dialog" aria-label="Pick a month">
+    <div className={`pp-cal${pos.sheet ? " is-sheet" : ""}`} style={{ top: pos.top, left: pos.left, "--arrow": `${pos.arrow}px` }} role="dialog" aria-label="Pick a month">
       <div className="pp-cal-year">
         <button type="button" onClick={() => setYear(year - 1)} aria-label="Previous year">‹</button>
         <strong>{year}</strong>
@@ -135,6 +145,12 @@ export default function PeriodPicker() {
     const place = () => {
       const b = btn.current?.getBoundingClientRect();
       if (!b) return;
+      if (isPhone()) {
+        const h = pop.current?.offsetHeight || 380;
+        const width = Math.min(360, window.innerWidth - 24);
+        setPos({ top: Math.max(12, (window.innerHeight - h) / 2), left: (window.innerWidth - width) / 2, width, arrow: 0, sheet: true });
+        return;
+      }
       // start after the sidebar's right edge (fallback: the button's)
       const side = btn.current.closest(".sidebar, aside, nav")?.getBoundingClientRect();
       const right = side && side.right > b.right ? side.right : b.right;
@@ -189,9 +205,17 @@ export default function PeriodPicker() {
         <span>{label(from)} to {label(to)}</span>
       </button>
 
+      {open && pos?.sheet && createPortal(<div className="pp-scrim" aria-hidden="true" />, document.body)}
+
       {open && createPortal(
-        <div className="period-pop pp" ref={pop} role="dialog" aria-label="Choose period"
-          style={{ position: "fixed", top: pos?.top ?? -9999, left: pos?.left ?? -9999, "--arrow": `${pos?.arrow ?? 20}px` }}>
+        <div className={`period-pop pp${pos?.sheet ? " is-sheet" : ""}`} ref={pop} role="dialog" aria-label="Choose period"
+          style={{ position: "fixed", top: pos?.top ?? -9999, left: pos?.left ?? -9999, ...(pos?.width ? { width: pos.width } : {}), "--arrow": `${pos?.arrow ?? 20}px` }}>
+          {pos?.sheet && (
+            <div className="pp-sheet-head">
+              <strong>Accounting period</strong>
+              <button type="button" className="pp-x" onClick={() => setOpen(false)} aria-label="Close">×</button>
+            </div>
+          )}
           <div className="pp-title">Quick select</div>
           <div className="pp-quick">
             {quick.map((p) => (

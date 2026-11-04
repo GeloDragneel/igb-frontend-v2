@@ -343,3 +343,78 @@
     outline: 2px solid rgba(52, 211, 166, .7);
     outline-offset: 2px;
 }
+
+/* ---------- phones: centered sheet over the page (no room beside the sidebar) ---------- */
+.pp-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1899;
+    background: rgba(2, 6, 23, .55);
+    animation: pp-fade .15s ease-out;
+}
+
+@keyframes pp-fade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.period-pop.pp.is-sheet {
+    max-width: calc(100vw - 24px);
+    padding: 16px 16px 18px;
+    border-radius: 16px;
+    animation: pp-fade .15s ease-out;
+}
+
+.period-pop.pp.is-sheet::before,
+.pp-cal.is-sheet::before {
+    display: none;
+    /* no arrow on phones */
+}
+
+.period-pop.pp .pp-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.period-pop.pp .pp-sheet-head strong {
+    color: #f1f5f9;
+    font-size: 15px;
+}
+
+.period-pop.pp .pp-x {
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .06);
+    color: #cbd5e1;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.period-pop.pp.is-sheet .pp-chip {
+    padding: 10px 8px;
+    font-size: 13px;
+}
+
+.period-pop.pp.is-sheet .pp-box {
+    height: 42px;
+}
+
+.period-pop.pp.is-sheet .pp-apply {
+    padding: 10px 24px;
+    font-size: 14px;
+}
+
+.pp-cal.is-sheet {
+    width: min(236px, calc(100vw - 24px));
+    z-index: 2001;
+}

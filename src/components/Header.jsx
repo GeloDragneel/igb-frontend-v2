@@ -11,6 +11,7 @@ import NotificationBell from "./NotificationBell";
 import AiAssistant from "./AiAssistant";
 import Messenger from "./Messenger";
 import "./PersonAvatar.css"; // header photo styles
+import "./HeaderMobile.css"; // phone layout: one clean row
 import { useAppData, saleBalance } from "../context/AppDataContext";
 
 /* ---------- small hooks ---------- */
@@ -222,8 +223,9 @@ export default function Header({ onMenu }) {
         {/* AI Assistant: messenger-style chat (bottom right) */}
         <AiAssistant />
 
+        {/* dark mode: on phones it's only in the user menu (less crowded) */}
         <button
-          className="icon-btn round"
+          className="icon-btn round hd-theme-btn"
           onClick={toggleTheme}
           aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         >
