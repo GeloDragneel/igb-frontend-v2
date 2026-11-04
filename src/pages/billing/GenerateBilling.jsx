@@ -79,7 +79,7 @@ export default function GenerateBilling() {
                 </label>
                 <label className="bsv-field bsv-sm">
                     <span className="field-label">Service period</span>
-                    <input className="input" type="month" value={period} max={THIS_MONTH} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
+                    <input className="input" type="month" value={period} onChange={(e) => e.target.value && setPeriod(e.target.value)} />
                 </label>
                 <label className="bsv-field bsv-sm">
                     <span className="field-label">Show</span>
@@ -169,7 +169,6 @@ function GenerateModal({ repTypes, repType, period, toBill, onClose, onDone }) {
     const run = async () => {
         setError("");
         if (!f.date_start || !f.service_period || !f.rep_type_id) return setError("Please provide all required data!");
-        if (f.service_period > THIS_MONTH) return setError("Service period cannot be in the future.");
         if (!sure) return setSure(true);
         setBusy(true);
         try {
@@ -193,7 +192,7 @@ function GenerateModal({ repTypes, repType, period, toBill, onClose, onDone }) {
             {error && <div className="alert-error" role="alert">{error}</div>}
             <div className="bsv-form">
                 <Field label="Date *"><input className="input" type="date" value={f.date_start} onChange={(e) => set("date_start", e.target.value)} disabled={busy} /></Field>
-                <Field label="Service period *"><input className="input" type="month" value={f.service_period} max={THIS_MONTH} onChange={(e) => set("service_period", e.target.value)} disabled={busy} /></Field>
+                <Field label="Service period *"><input className="input" type="month" value={f.service_period} onChange={(e) => set("service_period", e.target.value)} disabled={busy} /></Field>
                 <div className="bsv-span">
                     <Field label="Reporting type *">
                         <select className="input" value={f.rep_type_id} onChange={(e) => set("rep_type_id", e.target.value)} disabled={busy}>
