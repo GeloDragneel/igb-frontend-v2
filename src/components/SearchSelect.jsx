@@ -14,6 +14,7 @@ import Icon from "./Icons";
     onAddNew={(typedText) => ...} // optional: shows an "Add new" button at the bottom
     addNewLabel="Add new account"
     rememberKey="hd-branch-search" // optional: keeps the last search (this browser) – shown again, selected, on the next open
+    stacked                         // optional: the hint goes on its own line under the label
   />
 
   Any extra props (aria-label, data-*, onKeyDown...) go on the trigger button.
@@ -31,6 +32,7 @@ export default function SearchSelect({
     onAddNew,
     addNewLabel = "Add new",
     rememberKey,
+    stacked = false,
     ...rest
 }) {
     const [open, setOpen] = useState(false);
@@ -257,9 +259,13 @@ export default function SearchSelect({
                                     onMouseDown={(e) => e.preventDefault()} // keep focus in the search box
                                     onClick={() => choose(o)}
                                 >
-                                    <span className="ss-opt-text">
-                                        <span className="ss-opt-label"><Highlight text={o.label} query={query} /></span>
-                                        {o.hint && <span className="ss-opt-hint"><Highlight text={o.hint} query={query} /></span>}
+                                    <span className="ss-opt-text" style={stacked ? { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, minWidth: 0 } : undefined}>
+                                        <span className="ss-opt-label" style={stacked ? { fontWeight: 600 } : undefined}><Highlight text={o.label} query={query} /></span>
+                                        {o.hint && (
+                                            <span className="ss-opt-hint" style={stacked ? { fontSize: 12, opacity: 0.75, marginLeft: 0 } : undefined}>
+                                                <Highlight text={o.hint} query={query} />
+                                            </span>
+                                        )}
                                     </span>
                                     {String(o.value) === String(value) && <Icon name="check" size={14} className="ss-check" />}
                                 </li>

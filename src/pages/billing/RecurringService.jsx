@@ -70,8 +70,11 @@ export default function RecurringService() {
 
     useEffect(() => { load(""); }, [caid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Trade name (Branch code) on top, client name under it
     const accountOpts = useMemo(() => [{ value: "", label: "— All accounts —" }, ...accounts.map((a) => ({
-        value: String(a.id), label: `${a.client_name || "—"} — ${a.trade_name || "—"}${a.branch_code ? ` | ${a.branch_code}` : ""}`,
+        value: String(a.id),
+        label: `${a.trade_name || "—"}${a.branch_code ? ` (${a.branch_code})` : ""}`,
+        hint: a.client_name || "—",
     }))], [accounts]);
     const versions = data?.versions?.length ? data.versions : data ? [data.eo_version] : [];
     const rows = data?.rows || [];
@@ -106,8 +109,8 @@ export default function RecurringService() {
         <div className="bsv">
             <section className="card bsv-bar">
                 <div className="bsv-field bsv-grow">
-                    <span className="field-label">Account (client — trade name | branch)</span>
-                    <SearchSelect value={caid} onChange={setCaid} options={accountOpts} searchPlaceholder="Search client, trade name or branch..." aria-label="Account" />
+                    <span className="field-label">Account (trade name — client)</span>
+                    <SearchSelect value={caid} onChange={setCaid} options={accountOpts} stacked searchPlaceholder="Search trade name, branch or client..." aria-label="Account" />
                 </div>
                 <label className="bsv-field bsv-sm">
                     <span className="field-label">EO version</span>
