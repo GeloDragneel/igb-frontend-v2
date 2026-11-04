@@ -12,6 +12,22 @@ const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigi
 const num = (v) => Number(String(v ?? "").replace(/,/g, "")) || 0;
 const cleanNum = (v) => String(v).replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
 const DISC = { SC: ["Senior Citizen", 0.2], SP: ["Solo Parent", 0.1], PWD: ["Person w/ Disability", 0.2], Others: ["Others", 0] };
+// client account status → [label, badge tone]; works with 1/0, true/false or text like "Active"
+const acctStatus = (v) => {
+    if (v === null || v === undefined || v === "") return ["—", "gray"];
+    const t = String(v).trim().toLowerCase();
+    if (["1", "true", "active", "yes"].includes(t)) return ["Active", "green"];
+    if (["0", "false", "inactive", "no"].includes(t)) return ["Inactive", "gray"];
+    if (["hold", "on hold", "suspended"].includes(t)) return [String(v), "amber"];
+    if (["closed", "terminated", "cancelled", "canceled"].includes(t)) return [String(v), "red"];
+    return [String(v), "blue"];
+};
+// status text + Active checkbox → one badge ("RECURRING", gray when the account is inactive)
+const acctBadge = (status, active) => {
+    const [label, tone] = acctStatus(status);
+    if (Number(active) === 0) return [label === "—" ? "Inactive" : `${label} · Inactive`, "gray"];
+    return [label, tone];
+};
 const discOf = (r) => (Number(r.d_less_sc) ? "SC" : Number(r.d_less_sp) ? "SP" : Number(r.d_less_pwd) ? "PWD" : Number(r.d_less_others) ? "Others" : "");
 
 export default function RecurringService() {
@@ -60,7 +76,7 @@ export default function RecurringService() {
     const versions = data?.versions?.length ? data.versions : data ? [data.eo_version] : [];
     const rows = data?.rows || [];
     const all = !caid;
-    const cols = all ? 10 : 9;
+    const cols = all ? 11 : 10;
 
     const toggle = async (r) => {
         try {
@@ -106,6 +122,7 @@ export default function RecurringService() {
                 </div>
                 {account && (
                     <p className="bsv-info">
+                        <span>Status <Badge tone={acctBadge(account.account_status, account.account_active)[1]}>{acctBadge(account.account_status, account.account_active)[0]}</Badge></span>
                         <span>TIN <b>{account.tin || "—"}</b></span>
                         <span>{account.branch_type || "—"}</span>
                         <span>{[account.street, account.barangay, account.city, account.province].filter(Boolean).join(", ") || "No address"}</span>
@@ -121,6 +138,7 @@ export default function RecurringService() {
                         <thead>
                             <tr>
                                 {all && <th>Account</th>}
+                                <th className="c">Account status</th>
                                 <th>Service</th><th className="n">Qty</th><th className="n">Unit price</th><th className="n">Less</th><th className="n">Surcharge (%)</th>
                                 <th>Options</th><th className="n">Total</th><th className="c">Active</th><th />
                             </tr>
@@ -140,6 +158,7 @@ export default function RecurringService() {
                                                 </div>
                                             </td>
                                         )}
+                                        <td className="c">{(() => { const [label, tone] = acctBadge(r.account_status, r.account_active); return <Badge tone={tone}>{label}</Badge>; })()}</td>
                                         <td className="bsv-name strong" title={r.service}>{r.service}</td>
                                         <td className="n">{r.qty}</td>
                                         <td className="n">{n2(r.service_fee)}</td>
@@ -162,7 +181,7 @@ export default function RecurringService() {
                             })}
                         </tbody>
                         {!loading && rows.length > 0 && (
-                            <tfoot><tr><td colSpan={all ? 7 : 6}>Per period · {rows.filter((r) => r.is_active).length} active service(s)</td><td className="n">{n2(data.total)}</td><td /><td /></tr></tfoot>
+                            <tfoot><tr><td colSpan={all ? 8 : 7}>Per period · {rows.filter((r) => r.is_active).length} active service(s)</td><td className="n">{n2(data.total)}</td><td /><td /></tr></tfoot>
                         )}
                     </table>
                 </div>
