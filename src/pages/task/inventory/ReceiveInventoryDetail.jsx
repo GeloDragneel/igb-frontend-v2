@@ -122,7 +122,7 @@ function ReceiveForm({ lookups, setLookups, data, onReload }) {
     itemId: l.item_id ? String(l.item_id) : "", itemLabel: [l.item_code, l.description].filter(Boolean).join(" · "),
     accountCode: l.account_code || "", unitTypeId: l.unit_type_id || null,
     qty: l.qty ?? 1, price: l.price ?? 0, discount: l.discount ?? 0, vatType: l.vat_type || "vatable",
-    poId: l.po_id || 0, poNumber: l.po_number || null, apInvoiceNo: l.ap_invoice_no || null, left: l.po_id ? l.qty : null,
+    poId: l.po_id || 0, poNumber: l.po_number || null, apInvoiceNo: l.invoice_no || null, left: l.po_id ? l.qty : null,
   });
   const blank = () => toLine({});
 
@@ -213,7 +213,7 @@ function ReceiveForm({ lookups, setLookups, data, onReload }) {
     lines: f.lines.filter((l) => l.itemId).map((l) => ({
       item_id: Number(l.itemId), account_code: l.accountCode || null, unit_type_id: l.unitTypeId || null,
       qty: Number(l.qty), price: Number(l.price) || 0, discount: Number(l.discount) || 0, vat_type: l.vatType,
-      po_id: l.poId || null, po_number: l.poNumber || null, ap_invoice_no: l.apInvoiceNo || null,
+      po_id: l.poId || null, po_number: l.poNumber || null, invoice_no: l.apInvoiceNo || null,
     })),
   });
 
