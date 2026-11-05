@@ -127,7 +127,7 @@ export default function EsubReport() {
     const load = async () => {
         if (report.disabled) return null;
         if (!report.yearly && (!from || !to)) { setError("Choose both months."); return null; }
-        const id = ++reqId.current;
+        const id = ++reqId.current; 
         setLoading(true);
         setError("");
         try {

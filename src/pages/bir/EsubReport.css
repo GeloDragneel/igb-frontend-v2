@@ -1,7 +1,8 @@
 /* BIR & Tax → E-Sub Report: only the table body scrolls; header, totals and pager stay */
 .es-scroll {
-    max-height: calc(100vh - 420px);
-    min-height: 160px;
+    max-height: calc(100vh - 600px);
+    /* room for the header, RELIEF strip, line count and the pager below */
+    min-height: 260px;
     overflow: auto;
     overscroll-behavior: contain;
 }
@@ -36,8 +37,13 @@
     justify-content: space-between;
     gap: 8px 12px;
     margin-top: 12px;
-    padding-top: 12px;
+    padding: 12px 0 10px;
     border-top: 1px solid var(--line);
+    /* always on screen: sticks to the bottom of the window while the page scrolls */
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: var(--card);
 }
 
 .es-pager-info {
@@ -119,7 +125,8 @@
     }
 
     .es-scroll thead th,
-    .es-scroll tfoot td {
+    .es-scroll tfoot td,
+    .es-pager {
         position: static;
         box-shadow: none;
     }
