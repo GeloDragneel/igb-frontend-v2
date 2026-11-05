@@ -9,6 +9,17 @@ const hhmmss = () => { const d = new Date(); return pad(d.getHours()) + pad(d.ge
 const ym = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 const T_ = (v) => v === "true";
 
+// eBIRForms keeps some text encoded more than once (1601-C line of business = 3×)
+const encN = (s, n = 1) => { let x = String(s ?? ""); for (let i = 0; i < n; i++) x = encodeURIComponent(x); return x; };
+// decode until nothing changes (a value saved 1×, 2× or 3× encoded → plain text)
+export const decodeAll = (s) => {
+    let x = String(s ?? "");
+    for (let i = 0; i < 5; i++) {
+        try { const y = decodeURIComponent(x); if (y === x) break; x = y; } catch { break; }
+    }
+    return x;
+};
+
 /* ---------- field builders ---------- */
 const S = (title) => ({ t: "section", title });
 const T = (k, label = "", o = {}) => ({ t: "text", k, label, ...o });
@@ -207,13 +218,15 @@ const F0619E = {
 
 /* =========================================================
    1601C – Compensation
+   (matches the file eBIRForms saves: item 13 = No by default, selTreaty "0",
+    line of business encoded 3×, footer without the trailing "0")
    ========================================================= */
 const W = "frm1601c:";
 const W_MY = [[`${W}txtMonth`, "m"], [`${W}txtYear`, "y"]];
 const W_TIN = [`${W}txtTIN1`, `${W}txtTIN2`, `${W}txtTIN3`, `${W}txtBranchCode`];
 
 const F1601C = {
-    id: "1601C", file: "1601Cv2018", title: "1601C – Monthly Remittance on Compensation", footer: FOOT0,
+    id: "1601C", file: "1601Cv2018", title: "1601C – Monthly Remittance on Compensation", footer: FOOT,
     fields: [
         S("Part I – Background information"),
         MY("1 For the month", W_MY),
@@ -227,7 +240,7 @@ const F1601C = {
         O("cat", `${W}CatAgent_P`, "Private", "11 Category of withholding agent"), O("cat", `${W}CatAgent_G`, "Government"),
         T("txtEmail", "12 Email address", { wide: true }),
         O("treaty", `${W}SpecialTax_1`, "Yes", "13 Special rates / tax treaty?"), O("treaty", `${W}SpecialTax_2`, "No"),
-        T(`${W}selTreaty`, "13A If yes, specify"),
+        T(`${W}selTreaty`, "13A If yes, specify", { blank: "0" }),
         S("Part II – Computation of tax"),
         N(`${W}txtTax14`, "14 Total amount of compensation"),
         N(`${W}txtTax15`, "15 Statutory minimum wage (MWEs)"),
@@ -265,11 +278,14 @@ const F1601C = {
         ...[0, 1, 2].flatMap((i) => [N(`${W}sched1:txtShouldTaxDue${i}`, `Row ${i + 1}: should-be tax due`), R(`${W}sched1:txtAdjustments${i}`, `Row ${i + 1}: adjustment`)]),
         R(`${W}sched1:txtTotal1`, "Total adjustment (to item 26)"),
         H(`${W}txtCurrentPage`, "1"), H(`${W}txtMaxPage`, "2"),
-        T(`${W}txtLineBus`, "Line of business", { enc: true, wide: true }),
+        T(`${W}txtLineBus`, "Line of business", { enc: 3, wide: true }),
     ],
     prof: pm(W_TIN, `${W}txtRDOCode`, `${W}txtTaxpayerName`, `${W}txtAddress`, `${W}txtZipCode`, `${W}txtTelNum`, "txtEmail", `${W}txtLineBus`,
         { tin1: [`${W}txtPg2TIN1`], tin2: [`${W}txtPg2TIN2`], tin3: [`${W}txtPg2TIN3`], tin4: [`${W}txtPg2BranchCode`], fn: [`${W}txtPg2TaxpayerName`] }),
-    defaults: (now) => ({ ...isoToParts(W_MY, ym(now)), [`${W}AmendedRtn_2`]: "true", [`${W}txtSheets`]: "0", [`${W}txtATC`]: "WW010" }),
+    defaults: (now) => ({
+        ...isoToParts(W_MY, ym(now)), [`${W}AmendedRtn_2`]: "true", [`${W}txtSheets`]: "0", [`${W}txtATC`]: "WW010",
+        [`${W}SpecialTax_2`]: "true", [`${W}selTreaty`]: "0",
+    }),
     compute: (v) => {
         const g = (n) => p(v[`${W}txtTax${n}`]);
         const adj = [0, 1, 2].map((i) => p(v[`${W}sched1:txtShouldTaxDue${i}`]) - p(v[`${W}sched1:txtTaxPaid${i}`]));
@@ -287,6 +303,7 @@ const F1601C = {
     validate: (v) => {
         if (!T_(v[`${W}TaxWithheld_1`]) && !T_(v[`${W}TaxWithheld_2`])) return "Choose an option for item 3.";
         if (!T_(v[`${W}CatAgent_P`]) && !T_(v[`${W}CatAgent_G`])) return "Choose an option for item 11.";
+        if (!T_(v[`${W}SpecialTax_1`]) && !T_(v[`${W}SpecialTax_2`])) return "Choose an option for item 13.";
         if (T_(v[`${W}TaxWithheld_1`]) && p(v[`${W}txtTax14`]) <= 0) return "Item 14 must be greater than 0.";
         if (T_(v[`${W}TaxWithheld_1`]) && p(v[`${W}txtTax25`]) <= 0) return "Item 25 must be greater than 0.";
         return tinErr(v, W_TIN);
@@ -1314,7 +1331,7 @@ export function fromProfile(form, profile) {
     const out = {};
     Object.entries(form.prof || {}).forEach(([pk, keys]) => {
         let val = profile?.[pk] ?? "";
-        if (pk === "lob") { try { val = decodeURIComponent(val); } catch { /* keep */ } }
+        if (pk === "lob") val = decodeAll(val);          // eBIRForms profile keeps it encoded (sometimes more than once)
         keys.filter(Boolean).forEach((k) => { out[k] = val; });
     });
     return out;
@@ -1323,7 +1340,10 @@ export function fromProfile(form, profile) {
 export function fromFile(form, data) {
     const v = blank(form);
     form.fields.forEach((fl) => {
-        keysOf(fl).forEach((k) => { if (fl.t !== "const" && data[k] !== undefined) v[k] = data[k]; });
+        keysOf(fl).forEach((k) => {
+            if (fl.t === "const" || data[k] === undefined) return;
+            v[k] = fl.enc ? decodeAll(data[k]) : data[k];   // encoded fields → plain text for the form
+        });
     });
     if (form.fields.some((fl) => fl.t === "sched3")) {
         const rows = [];
@@ -1345,7 +1365,13 @@ export function buildXml(form, v) {
     form.fields.forEach((fl) => {
         switch (fl.t) {
             case "section": break;
-            case "text": add(fl.k, fl.enc ? encodeURIComponent(v[fl.k] ?? "") : v[fl.k] ?? ""); break;
+            case "text": {
+                const raw = v[fl.k] ?? "";
+                // blank → the value eBIRForms writes (e.g. selTreaty "0") · enc: true = 1×, enc: 3 = 3× (1601-C line of business)
+                add(fl.k, raw === "" && fl.blank !== undefined ? fl.blank
+                    : fl.enc ? encN(raw, fl.enc === true ? 1 : fl.enc) : raw);
+                break;
+            }
             case "select": add(fl.k, v[fl.k] || "0"); break;
             case "num": add(fl.k, v[fl.k] === "" || v[fl.k] == null ? (fl.blank ?? "0.00") : v[fl.k]); break;
             case "opt": case "check": add(fl.k, v[fl.k] === "true" ? "true" : "false"); break;
