@@ -28,6 +28,34 @@ const pageNums = (page, pages) => {
     return out;
 };
 
+// loaded reports are kept (per client + report + period): in memory, and in sessionStorage so a browser
+// refresh shows them right away. SEARCH always loads fresh from the server.
+const CACHE = new Map();
+const MAX_CACHED = 30;
+const SAVE_KEY = "esub-report";                            // the picked report, months, year and rows per page
+const DATA_KEY = "esub-report-data:";                      // + cache key → the loaded report
+
+const readSaved = () => {
+    try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch { return {}; }
+};
+const cacheGet = (k) => {
+    if (CACHE.has(k)) return CACHE.get(k);
+    try {
+        const v = JSON.parse(sessionStorage.getItem(DATA_KEY + k));
+        if (v) CACHE.set(k, v);
+        return v || null;
+    } catch { return null; }
+};
+const cacheSet = (k, v) => {
+    CACHE.delete(k);
+    CACHE.set(k, v);
+    if (CACHE.size > MAX_CACHED) CACHE.delete(CACHE.keys().next().value);   // drop the oldest
+    try {
+        Object.keys(sessionStorage).filter((x) => x.startsWith(DATA_KEY) && x !== DATA_KEY + k).forEach((x) => sessionStorage.removeItem(x));
+        sessionStorage.setItem(DATA_KEY + k, JSON.stringify(v));            // only the latest one (keeps storage small)
+    } catch { /* storage full / blocked – the memory copy still works */ }
+};
+
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtTin = (t) => String(t || "").replace(/(\d{3})(\d{3})(\d{3})(\d{3})?/, (_, a, b, c, d) => [a, b, c, d].filter(Boolean).join("-"));
 
@@ -92,16 +120,18 @@ export default function EsubReport() {
     const notify = useToast();
     const { from: pFrom, to: pTo } = usePeriod();
 
-    const [type, setType] = useState("P");
-    const [from, setFrom] = useState(pFrom.slice(0, 7));
-    const [to, setTo] = useState(pTo.slice(0, 7));
-    const [year, setYear] = useState(pTo.slice(0, 4));
+    // after a refresh: the same report, months, year and rows per page as before
+    const [saved] = useState(readSaved);
+    const [type, setType] = useState(REPORTS.some((r) => r.id === saved.type && !r.disabled) ? saved.type : "P");
+    const [from, setFrom] = useState(saved.from || pFrom.slice(0, 7));
+    const [to, setTo] = useState(saved.to || pTo.slice(0, 7));
+    const [year, setYear] = useState(saved.year || pTo.slice(0, 4));
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [printing, setPrinting] = useState(false);         // false | "pdf" | "xlsx" (the button that is busy)
     const [pdf, setPdf] = useState(null);                    // { url, name } for the preview
-    const [per, setPer] = useState(25);                      // 5 | 25 | 50 | 0 (All)
+    const [per, setPer] = useState(PER_OPTIONS.includes(saved.per) ? saved.per : 25);   // 5 | 25 | 50 | 0 (All)
     const [page, setPage] = useState(1);
     const [check, setCheck] = useState(null);                // validation popup: { data, mode: "errors" | "warnings" }
     const [flash, setFlash] = useState(0);                   // line number to highlight
@@ -111,30 +141,47 @@ export default function EsubReport() {
     const report = REPORTS.find((r) => r.id === type);
     const years = useMemo(() => Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear() + 1 - i)), []);
 
-    // follow the Reporting Period
+    // remember the choices (they stay after a refresh)
     useEffect(() => {
+        try { localStorage.setItem(SAVE_KEY, JSON.stringify({ type, from, to, year, per })); } catch { /* blocked */ }
+    }, [type, from, to, year, per]);
+
+    // follow the Reporting Period – but not on the first load, so the saved months stay after a refresh
+    const firstPeriod = useRef(true);
+    useEffect(() => {
+        if (firstPeriod.current) { firstPeriod.current = false; if (saved.from) return; }
         setFrom(pFrom.slice(0, 7));
         setTo(pTo.slice(0, 7));
         setYear(pTo.slice(0, 4));
     }, [pFrom, pTo]);
 
-    // reset when the client changes
-    useEffect(() => { setData(null); }, [user?.id, user?.caid]);
-
     // free the PDF preview
     useEffect(() => () => { if (pdf) URL.revokeObjectURL(pdf.url); }, [pdf]);
 
-    const load = async () => {
+    // force = true → always from the server (SEARCH); otherwise the cached copy is used when there is one
+    const load = async (force = false) => {
         if (report.disabled) return null;
         if (!report.yearly && (!from || !to)) { setError("Choose both months."); return null; }
-        const id = ++reqId.current; 
-        setLoading(true);
+        const params = report.yearly ? { type, year } : { type, from, to };
+        const key = JSON.stringify(params);
+        const cacheKey = `${user?.id ?? ""}|${user?.caid ?? ""}|${key}`;
+        const id = ++reqId.current;
         setError("");
+
+        const hit = force ? null : cacheGet(cacheKey);
+        if (hit) {
+            setData(hit);
+            setPage(1);
+            setLoading(false);
+            return hit;
+        }
+
+        setLoading(true);
         try {
-            const params = report.yearly ? { type, year } : { type, from, to };
             const r = await apiFetch(`/reports/esub?${new URLSearchParams(params)}`);
             if (id !== reqId.current) return null;            // another report was picked meanwhile
-            const withKey = { ...r, key: JSON.stringify(params) };
+            const withKey = { ...r, key };
+            cacheSet(cacheKey, withKey);
             setData(withKey);
             setPage(1);
             return withKey;
@@ -146,10 +193,12 @@ export default function EsubReport() {
         }
     };
 
-    // picking a report (and opening the page) shows its data right away
+    // picking a report, opening the page, a refresh or another client → its data right away
+    // (from the cache when it was loaded before; another client never sees this client's data – the key has the client)
     useEffect(() => {
+        setData(null);
         if (!report.disabled) load();
-    }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [type, user?.id, user?.caid]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // reuse what's on screen if it's for the same report and period
     const paramsKey = JSON.stringify(report.yearly ? { type, year } : { type, from, to });
@@ -277,7 +326,7 @@ export default function EsubReport() {
                         )}
 
                         <div className="es-row es-btns">
-                            <button className="btn btn-sm btn-primary" onClick={load} disabled={off}>{loading ? "…" : "SEARCH"}</button>
+                            <button className="btn btn-sm btn-primary" onClick={() => load(true)} disabled={off}>{loading ? "…" : "SEARCH"}</button>
                             <button className="btn btn-sm" onClick={downloadDat} disabled={off} title="Save the DAT file">DAT</button>
                         </div>
 
