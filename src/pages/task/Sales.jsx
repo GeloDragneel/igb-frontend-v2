@@ -151,8 +151,11 @@ export default function Sales() {
     { key: "audit_status", label: "Audit Status", render: (r) => (r.audit_status ? <Badge tone={auditTone(r.audit_status)}>{r.audit_status}</Badge> : "—") },
   ];
 
+  // the < > buttons in the details follow this list (what the search shows, same order)
   const openInvoice = (r) =>
-    navigate(`/task/sales/${encodeURIComponent(r.invoice_no)}`, { state: { from: location.pathname } });
+    navigate(`/task/sales/${encodeURIComponent(r.invoice_no)}`, {
+      state: { from: location.pathname, list: filtered.map((x) => x.invoice_no) },
+    });
 
   // ⋮ menu for each row
   const rowActions = (r) => [

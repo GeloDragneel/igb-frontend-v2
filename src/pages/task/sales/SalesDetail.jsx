@@ -202,7 +202,9 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     const isAuditor = AUDITOR_DESIGNATIONS.includes(Number(user?.designation_id));
 
     const backTo = location.state?.from || (isBilling ? FOR_COLLECTION_PATH : "/task/sales");
-    const navState = { state: { from: backTo } };
+    // invoice list from the Sales page (search result) → the < > buttons follow it
+    const navList = Array.isArray(location.state?.list) ? location.state.list : null;
+    const navState = { state: { from: backTo, ...(navList ? { list: navList } : {}) } };
 
     // data from a scanned receipt (only for a new invoice)
     const scan = !saved ? location.state?.scan || null : null;
@@ -352,10 +354,19 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     const [nav, setNav] = useState({ prev: null, next: null });
     useEffect(() => {
         if (!isAuditor || !inv?.invoice_no) return;
+        // opened from the Sales list → previous / next = the row above / below in that list
+        if (navList) {
+            const i = navList.indexOf(inv.invoice_no);
+            setNav({
+                prev: i > 0 ? navList[i - 1] : null,
+                next: i >= 0 && i < navList.length - 1 ? navList[i + 1] : null,
+            });
+            return;
+        }
         apiFetch(`/sales/invoice/${encodeURIComponent(inv.invoice_no)}/neighbors?from=${from.slice(0, 7)}&to=${to.slice(0, 7)}`)
             .then(setNav)
             .catch(() => setNav({ prev: null, next: null }));
-    }, [isAuditor, inv?.invoice_no, from, to]);
+    }, [isAuditor, inv?.invoice_no, from, to, navList]);
     const goTo = (no) => no && navigate(`/task/sales/${encodeURIComponent(no)}`, navState);
 
     /* ---------- dropdown options ---------- */
