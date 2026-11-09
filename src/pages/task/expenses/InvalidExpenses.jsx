@@ -9,6 +9,7 @@ import { EXPENSE_TABS } from "../../../components/routesMeta";
 import { useAuth, apiFetch } from "../../../context/AuthContext";
 import { usePeriod } from "../../../context/PeriodContext";
 import { TicketViewModal } from "./ExpenseDetail";
+import InvoiceLogsModal from "../../../components/invoice/InvoiceLogsModal";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const TABLE_HEIGHT = "calc(100vh - 375px)";
@@ -45,6 +46,8 @@ export default function InvalidExpenses() {
     const [clearTicks, setClearTicks] = useState(0);
     const [journalFor, setJournalFor] = useState(null);
     const [ticketFor, setTicketFor] = useState(null);
+    const [logsFor, setLogsFor] = useState(null);
+    const [remarksFor, setRemarksFor] = useState(null);   // row whose invalid reason is shown
     const fromMonth = from.slice(0, 7);
     const toMonth = to.slice(0, 7);
 
@@ -117,10 +120,8 @@ export default function InvalidExpenses() {
     // ⋮ menu for each row
     const rowActions = (r) => [
         { label: "Journal", onClick: () => setJournalFor(r.invoice_no) },
-        { label: "2307", onClick: () => alert(`2307 for ${r.invoice_no}`) },
-        { label: "Logs", onClick: () => alert(`Logs for ${r.invoice_no}`) },
-        { label: "Expense Invoice", onClick: () => openInvoice(r) },
-        { label: "Voucher", onClick: () => alert(`Voucher for ${r.invoice_no}`) },
+        { label: "Logs", onClick: () => setLogsFor(r.invoice_no) },
+        { label: "Reason", onClick: () => setRemarksFor(r) },
     ];
 
     // "Update Declared Month" only when something is ticked (no Add Sale here)
@@ -177,6 +178,21 @@ export default function InvalidExpenses() {
             )}
             {journalFor && <JournalModal invoiceNo={journalFor} onClose={() => setJournalFor(null)} />}
             {ticketFor && <TicketViewModal ticketNo={ticketFor} onClose={() => setTicketFor(null)} />}
+            {logsFor && <InvoiceLogsModal type="expenses" invoiceNo={logsFor} onClose={() => setLogsFor(null)} />}
+            {remarksFor && (
+                <Modal title="Reason" onClose={() => setRemarksFor(null)} size="sm"
+                    footer={<button className="btn" onClick={() => setRemarksFor(null)}>Close</button>}>
+                    <p className="muted small" style={{ marginTop: 0 }}>
+                        {remarksFor.invoice_no} · {remarksFor.customer_name}
+                        {SCAN_STATUS[remarksFor.scan_status] && <> · <Badge tone={SCAN_STATUS[remarksFor.scan_status].tone}>{SCAN_STATUS[remarksFor.scan_status].label}</Badge></>}
+                    </p>
+                    <Field label="Reason">
+                        <div className="input" style={{ minHeight: 80, whiteSpace: "pre-wrap", height: "auto" }}>
+                            {remarksFor.reason?.trim() || <span className="muted">No reason was saved for this invoice.</span>}
+                        </div>
+                    </Field>
+                </Modal>
+            )}
         </>
     );
 }
