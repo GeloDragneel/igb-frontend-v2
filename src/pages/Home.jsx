@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth, apiFetch } from "../context/AuthContext";
 import { usePeriod } from "../context/PeriodContext";
 import Icon from "../components/Icons";
+import Modal from "../components/Modal";
 import { fmtDate, money } from "../utils/format";
 import { calc as itsCalc, fromApi as itsFromApi } from "./bir/IncomeTaxSummary";
 import "./HomePayables.css";
@@ -22,7 +23,7 @@ const lastDay = (y, m) => new Date(y, m + 1, 0).getDate();            // m = 0-b
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const at = (y, m, day) => new Date(y, m, Math.min(day, lastDay(y, m)));
 
-function birDeadlines(today, { vat, corp }) {
+function birDeadlines(today, { vat, corp }, maxDays = 120) {
     const out = [];
     const add = (form, title, due, period, tag) => out.push({ form, title, due, period, tag });
     const y0 = today.getFullYear();
@@ -63,7 +64,7 @@ function birDeadlines(today, { vat, corp }) {
     const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     return out
         .map((x) => ({ ...x, days: Math.round((x.due - t) / 86400000) }))
-        .filter((x) => x.days >= -5 && x.days <= 120)
+        .filter((x) => x.days >= -5 && x.days <= maxDays)
         .sort((a, b) => a.due - b.due);
 }
 
@@ -238,7 +239,30 @@ export default function Home() {
 
     const deadlines = useMemo(() => birDeadlines(new Date(), { vat, corp }), [vat, corp]);
     const upcoming = deadlines.filter((d) => d.days >= -5).slice(0, 6);
+    // "All deadlines" popup: the next 12 months
+    const [allOpen, setAllOpen] = useState(false);
+    const allDeadlines = useMemo(() => (allOpen ? birDeadlines(new Date(), { vat, corp }, 366) : []), [allOpen, vat, corp]);
+    const allByMonth = useMemo(() => {
+        const m = [];
+        for (const d of allDeadlines) {
+            const key = `${MONTHS[d.due.getMonth()]} ${d.due.getFullYear()}`;
+            const g = m.find((x) => x.key === key);
+            if (g) g.items.push(d); else m.push({ key, items: [d] });
+        }
+        return m;
+    }, [allDeadlines]);
     const next = deadlines.find((d) => d.days >= 0);
+    // next 2 due dates; forms with the same due date are merged in one box (e.g. 1601-C + 0619-E on the 10th)
+    const nextDue = useMemo(() => {
+        const groups = [];
+        for (const d of deadlines) {
+            if (d.days < 0) continue;
+            const g = groups.find((x) => x.days === d.days);
+            if (g) g.items.push(d);
+            else if (groups.length < 2) groups.push({ days: d.days, due: d.due, items: [d] });
+        }
+        return groups;
+    }, [deadlines]);
 
     const hour = new Date().getHours();
     const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -290,16 +314,27 @@ export default function Home() {
                     <p>{data ? <>You made <b>{money(data.sales.total)}</b> in sales and spent <b>{money(costs)}</b> this period.</> : "Loading your numbers…"}</p>
                     <div className="hd-hero-actions">
                         <Link to="/task/sales/new" className="hd-btn hd-btn-light"><Icon name="plus" size={16} /> New invoice</Link>
+                        <Link to="/task/purchases/new" className="hd-btn hd-btn-ghost">New purchase</Link>
                         <Link to="/task/expenses/new" className="hd-btn hd-btn-ghost">New expense</Link>
+                        <Link to="/setup/product" className="hd-btn hd-btn-ghost">New item</Link>
                         <Link to="/task/general-journal" className="hd-btn hd-btn-ghost">Journal entry</Link>
                     </div>
                 </div>
                 {next && (
-                    <div className={`hd-count hd-${urgency(next.days)}`}>
-                        <span className="hd-count-label">Next BIR deadline</span>
-                        <span className="hd-count-num">{next.days}<small>{next.days === 1 ? "day" : "days"}</small></span>
-                        <span className="hd-count-form">{next.form} · {next.period}</span>
-                        <span className="hd-count-date">{fmtDate(ymd(next.due))}</span>
+                    <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+                        <div style={{ display: "flex", flexDirection: "row-reverse", gap: 12, flexWrap: "wrap", justifyContent: "flex-start" }}>
+                            {/* box 1 = next due date, box 2 = the due date after it; same due date = one box */}
+                            {nextDue.map((g, i) => (
+                                <div key={g.days} className={`hd-count hd-${urgency(g.days)}`}>
+                                    <span className="hd-count-label">{i === 0 ? "Next due" : "Following due"}</span>
+                                    <span className="hd-count-num">{g.days}<small>{g.days === 1 ? "day" : "days"}</small></span>
+                                    <span className="hd-count-form">Form {g.items.map((d) => d.form).join(" / ")}</span>
+                                    <span className="hd-count-date">Period Covered : {[...new Set(g.items.map((d) => d.period))].join(" / ")}</span>
+                                    <span className="hd-count-date">Due : {fmtDate(ymd(g.due))}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <button type="button" className="hd-btn hd-btn-ghost" onClick={() => setAllOpen(true)}>Show more</button>
                     </div>
                 )}
             </section>
@@ -391,6 +426,32 @@ export default function Home() {
                 </div>
             </section>
 
+            {/* all upcoming BIR deadlines (next 12 months) */}
+            {allOpen && (
+                <Modal title="Upcoming BIR deadlines" onClose={() => setAllOpen(false)} size="lg"
+                    footer={<button className="btn" onClick={() => setAllOpen(false)}>Close</button>}>
+                    <p className="muted small" style={{ marginTop: 0 }}>
+                        Next 12 months · {vat ? "VAT" : "Non-VAT"} · {corp ? "Corporation" : "Individual"}
+                    </p>
+                    <div style={{ display: "grid", gap: 18 }}>
+                        {allByMonth.map((g) => (
+                            <section key={g.key}>
+                                <h4 style={{ margin: "0 0 6px", fontSize: 13, letterSpacing: ".04em", textTransform: "uppercase", opacity: 0.7 }}>{g.key}</h4>
+                                <ol className="hd-timeline" style={{ margin: 0 }}>
+                                    {g.items.map((d, i) => (
+                                        <li key={i} className={`hd-${urgency(d.days)}`}>
+                                            <span className="hd-tl-date"><small>{MONTHS[d.due.getMonth()]}</small>{d.due.getDate()}</span>
+                                            <span className="hd-tl-body"><b>Form {d.form}</b><small>{d.title} · Period Covered : {d.period}</small></span>
+                                            <span className="hd-tl-due">{dueText(d.days)}</span>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </section>
+                        ))}
+                    </div>
+                </Modal>
+            )}
+
             {/* ---------- deadlines + customers + recent ---------- */}
             <section className="hd-row hd-row-3">
                 <div className="hd-card">
@@ -414,6 +475,10 @@ export default function Home() {
                             </li>
                         ))}
                     </ol>
+                    <button type="button" className="btn btn-primary" onClick={() => setAllOpen(true)}
+                        style={{ width: "100%", justifyContent: "center", margin: "12px 0 8px", display: "flex", alignItems: "center", gap: 6 }}>
+                        <Icon name="calendar" size={16} /> Show all upcoming deadlines
+                    </button>
                     <div className="hd-birlinks">
                         {BIR_LINKS.map(([l, href]) => <a key={l} href={href} target="_blank" rel="noopener noreferrer">{l} ↗</a>)}
                     </div>
