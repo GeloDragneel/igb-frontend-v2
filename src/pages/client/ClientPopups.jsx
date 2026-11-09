@@ -6,6 +6,7 @@ import SearchSelect from "../../components/SearchSelect";
 import { useToast } from "../../components/Toast";
 import { apiFetch } from "../../context/AuthContext";
 import "./ClientCoa.css";
+import AccountLogo from "./AccountLogo";
 
 const SECTIONS = [
     ["profile", "Profile"],
@@ -937,6 +938,7 @@ export function AccountPopup({ account, clientNum, L, hasRdo, onClose, onSaved, 
                         <input type="checkbox" checked={!!acct.is_active} onChange={(e) => setA({ is_active: e.target.checked })} />
                         <span>Active</span>
                     </label>
+                    <AccountLogo accountId={account?._draft ? null : acct.id} logo={account?.logo || ""} />
                 </div>
             )}
 
