@@ -270,7 +270,7 @@ function JournalModal({ invoiceNo, onClose }) {
                         {collection.length > 0 && (
                             <>
                                 <tr className="journal-section">
-                                    <td colSpan={3}>COLLECTION</td>
+                                    <td colSpan={3}>{data?.collection_label || "PAYMENT"}</td>
                                 </tr>
                                 {collection.map((r, i) => <Row key={`c${i}`} r={r} />)}
                             </>

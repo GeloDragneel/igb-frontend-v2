@@ -20,6 +20,14 @@ const fmtDay = (iso) => {
 };
 const fmt4 = (n) => Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const fmt2 = (n) => (Number(n) ? Number(n).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
+const statusTone = (s) => {
+  const v = String(s || "").toUpperCase();
+  if (v.includes("VOID") || v.includes("CANCEL")) return "gray";
+  if (v.includes("UNPAID")) return "red";
+  if (v.includes("PARTIAL")) return "orange";
+  if (v.includes("PAID")) return "green";
+  return "blue";
+};
 
 export default function Inventory() {
   const { user } = useAuth();
@@ -66,7 +74,7 @@ export default function Inventory() {
     { key: "location", label: "Location" },
     { key: "po", label: "PO / Invoice", render: (r) => <span className="mono">{r.po || "—"}</span> },
     { key: "total", label: "Total", align: "right", value: (r) => Number(r.total), render: (r) => <span className="mono">{fmt4(r.total)}</span> },
-    { key: "status", label: "Status", render: (r) => <Badge tone={r.status === "VOID" ? "gray" : "green"}>{r.status}</Badge> },
+    { key: "status", label: "Status", render: (r) => <Badge tone={statusTone(r.status)}>{r.status}</Badge> },
   ];
 
   const rowActions = (r) => [
@@ -109,15 +117,25 @@ export default function Inventory() {
 }
 
 function JournalModal({ no, onClose }) {
-  const [rows, setRows] = useState(null);
+  const [data, setData] = useState(null); // { journal: [], collection: [], collection_label }
   const [error, setError] = useState("");
   useEffect(() => {
     apiFetch(`/inventory/receive/record/${encodeURIComponent(no)}/journal`)
-      .then((res) => setRows(Array.isArray(res) ? res : res.journal || []))
+      .then((res) => setData(Array.isArray(res) ? { journal: res, collection: [] } : res))
       .catch((e) => setError(e.message || "Couldn't load the journal."));
   }, [no]);
+  const rows = data ? data.journal || [] : null;
+  const pay = data?.collection || [];
+  // totals = receive journal only (payment is shown, not added)
   const dr = (rows || []).reduce((n, r) => n + Number(r.debit || 0), 0);
   const cr = (rows || []).reduce((n, r) => n + Number(r.credit || 0), 0);
+  const Row = ({ r }) => (
+    <tr>
+      <td>{r.account_code} - {r.account_name}</td>
+      <td className="ta-right mono">{fmt2(r.debit)}</td>
+      <td className="ta-right mono">{fmt2(r.credit)}</td>
+    </tr>
+  );
   return (
     <Modal title="Journal" onClose={onClose} size="lg">
       <p className="muted small" style={{ marginTop: 0 }}>{no}</p>
@@ -128,13 +146,13 @@ function JournalModal({ no, onClose }) {
           <tbody>
             {!rows && !error && <tr><td colSpan={3}><span className="sk sk-cell" style={{ width: "60%" }} /></td></tr>}
             {rows && rows.length === 0 && <tr><td colSpan={3} className="empty">No journal entries.</td></tr>}
-            {rows?.map((r, i) => (
-              <tr key={i}>
-                <td>{r.account_code} - {r.account_name}</td>
-                <td className="ta-right mono">{fmt2(r.debit)}</td>
-                <td className="ta-right mono">{fmt2(r.credit)}</td>
-              </tr>
-            ))}
+            {rows?.map((r, i) => <Row key={`j${i}`} r={r} />)}
+            {pay.length > 0 && (
+              <>
+                <tr className="journal-section"><td colSpan={3}>{data?.collection_label || "PAYMENT"}</td></tr>
+                {pay.map((r, i) => <Row key={`p${i}`} r={r} />)}
+              </>
+            )}
           </tbody>
           {rows && rows.length > 0 && (
             <tfoot><tr><td /><td className="ta-right mono strong">{fmt2(dr) || "0.00"}</td><td className="ta-right mono strong">{fmt2(cr) || "0.00"}</td></tr></tfoot>

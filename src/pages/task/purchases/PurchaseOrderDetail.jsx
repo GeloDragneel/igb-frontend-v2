@@ -354,6 +354,29 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     const salesAccounts = lookups.sales_accounts || [];
     const cust = lookups.customers.find((c) => String(c.id) === String(f.customerId));
 
+    /* ---------- PRINT: PURCHASE ORDER FORM (PDF from the server, shown in a popup like the other prints) ---------- */
+    const [printing, setPrinting] = useState(false);
+    const [pdf, setPdf] = useState(null); // { url, name }
+    const printPo = async () => {
+        if (!f.invoiceNo) return;
+        setPrinting(true);
+        try {
+            const blob = await apiBlob(`/print/purchase-order/${encodeURIComponent(f.invoiceNo)}`);
+            setPdf({ url: URL.createObjectURL(new Blob([blob], { type: "application/pdf" })), name: `PURCHASE-ORDER-${f.invoiceNo}.pdf` });
+        } catch (e) {
+            notify(e.message || "Couldn't print the purchase order.", "error");
+        } finally {
+            setPrinting(false);
+        }
+    };
+    const closePdf = () => { if (pdf) URL.revokeObjectURL(pdf.url); setPdf(null); };
+    const savePdf = () => {
+        const a = Object.assign(document.createElement("a"), { href: pdf.url, download: pdf.name });
+        document.body.append(a);
+        a.click();
+        a.remove();
+    };
+
     const attachmentName = pendingFile?.name || f.attachment || "";
     const hasAttachment = !!attachmentName;
 
@@ -875,7 +898,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                             <button className="btn" onClick={() => navigate(backTo)}>Close</button>
                             <button className="btn btn-warning" disabled={!saved || locked} onClick={() => setTicket({ ...buildBody(), action: "VOID" })}>VOID</button>
                             <button className="btn btn-info" onClick={addItem} disabled={locked || saving}>ADD ITEM</button>
-                            <button className="btn btn-info" onClick={() => window.print()}>PRINT</button>
+                            <button className="btn btn-info" onClick={printPo} disabled={!saved || printing} title={saved ? "Print the purchase order" : "Save the purchase order first"}>{printing ? "PRINTING…" : "PRINT"}</button>
                             <button
                                 className="btn btn-primary inv-actions-left"
                                 onClick={() => navigate("/task/purchases/purchase-orders/new", navState)}
@@ -891,6 +914,21 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
             </div>
 
             {/* ---------- dialogs ---------- */}
+            {pdf && (
+                <Modal
+                    title={`Purchase Order · ${f.documentNo || f.invoiceNo}`}
+                    onClose={closePdf}
+                    size="xxlg"
+                    footer={
+                        <>
+                            <button className="btn" onClick={closePdf}>Close</button>
+                            <button className="btn btn-primary" onClick={savePdf}>Download PDF</button>
+                        </>
+                    }
+                >
+                    <iframe className="es-pdf" src={pdf.url} title={pdf.name} style={{ width: "100%", height: "calc(100vh - 220px)", minHeight: 420, border: 0 }} />
+                </Modal>
+            )}
             {showAudit && (
                 <AuditModal
                     invoiceId={f.id}
