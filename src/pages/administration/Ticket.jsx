@@ -98,7 +98,8 @@ export default function AdminTicket() {
     const data = view?.data;
     const t = data?.ticket;
     const pending = t && t.status === 0;
-    const inv = data && (view.side === "before" && data.before ? data.before : data.requested);
+    const found = !!data?.requested;              // false = the invoice / PO isn't in this system (decline only)
+    const inv = found ? (view.side === "before" && data.before ? data.before : data.requested) : null;
 
     return (
         <div className="at">
@@ -172,7 +173,7 @@ export default function AdminTicket() {
                 <Modal size="xl" onClose={closeView}
                     title={(
                         <span className="at-mtitle">
-                            {data ? TITLE[data.type] : view.row.module}
+                            {data ? TITLE[data.type] || t.module : view.row.module}
                             <span className={`at-tag is-${t ? t.status : view.row.status}`}>{STATUS[t ? t.status : view.row.status]}</span>
                         </span>
                     )}
@@ -180,7 +181,7 @@ export default function AdminTicket() {
                         <div className="at-foot">
                             <button type="button" className="btn" onClick={closeView}>Close</button>
                             {pending && <button type="button" className="btn at-decline" onClick={() => setConfirm("decline")}>Decline</button>}
-                            {pending && <button type="button" className="btn btn-primary" onClick={() => setConfirm("approve")}>Approve</button>}
+                            {pending && found && <button type="button" className="btn btn-primary" onClick={() => setConfirm("approve")}>Approve</button>}
                         </div>
                     )}>
                     {view.error && <div className="alert-error" role="alert">{view.error}</div>}
@@ -197,7 +198,9 @@ export default function AdminTicket() {
                                 <div className="at-reason"><b>Reason</b><span>{t.remarks || "—"}</span></div>
                             </div>
 
-                            {data.before && t.action !== "UNDECLARED" && (
+                            {!found && <div className="alert-error" role="alert">{data.missing || "The invoice of this ticket was not found."}</div>}
+
+                            {found && data.before && t.action !== "UNDECLARED" && (
                                 <div className="at-switch" role="tablist" aria-label="Show">
                                     <button type="button" role="tab" aria-selected={view.side === "requested"} className={view.side === "requested" ? "is-on" : ""}
                                         onClick={() => setView({ ...view, side: "requested" })}>Requested change</button>
@@ -207,7 +210,7 @@ export default function AdminTicket() {
                                 </div>
                             )}
 
-                            {data.type === "importation" || data.type === "exportation" ? (
+                            {!found ? null : data.type === "importation" || data.type === "exportation" ? (
                                 <TradeView key={view.side} type={data.type} inv={inv} ticketNo={t.ticket_no} which={view.side}
                                     compare={view.side === "requested" ? data.before : null} />
                             ) : (
