@@ -91,7 +91,7 @@ export default function Payment() {
             setPicking(false);
             setPaying(r);
             if (!accounts[r.type]) {
-              apiFetch(`/${r.type}/lookups`)
+              apiFetch(`/${r.type === "po" ? "purchases" : r.type}/lookups`)   // a PO uses the Purchases lists
                 .then((l) => setAccounts((a) => ({ ...a, [r.type]: l.accounts || [] })))
                 .catch(() => setAccounts((a) => ({ ...a, [r.type]: [] })));
             }

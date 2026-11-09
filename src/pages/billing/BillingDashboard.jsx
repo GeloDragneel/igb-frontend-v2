@@ -461,7 +461,6 @@ export default function BillingDashboard() {
             </div>
           )}
           {scoped && loading && <p className="bd-empty">Loading…</p>}
-
           {scoped && !loading && tab === "services" && (
             <table className="bd-table">
               <thead>
