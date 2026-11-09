@@ -10,6 +10,7 @@ import { useAuth, apiFetch } from "../../../context/AuthContext";
 import { usePeriod } from "../../../context/PeriodContext";
 import { TicketViewModal } from "./PurchaseDetail";
 import InvoiceLogsModal from "../../../components/invoice/InvoiceLogsModal";
+import InvalidReasonModal from "../../../components/invoice/InvalidReasonModal";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const TABLE_HEIGHT = "calc(100vh - 375px)";
@@ -179,20 +180,7 @@ export default function InvalidPurchases() {
             {journalFor && <JournalModal invoiceNo={journalFor} onClose={() => setJournalFor(null)} />}
             {ticketFor && <TicketViewModal ticketNo={ticketFor} onClose={() => setTicketFor(null)} />}
             {logsFor && <InvoiceLogsModal type="purchases" invoiceNo={logsFor} onClose={() => setLogsFor(null)} />}
-            {remarksFor && (
-                <Modal title="Reason" onClose={() => setRemarksFor(null)} size="sm"
-                    footer={<button className="btn" onClick={() => setRemarksFor(null)}>Close</button>}>
-                    <p className="muted small" style={{ marginTop: 0 }}>
-                        {remarksFor.invoice_no} · {remarksFor.customer_name}
-                        {SCAN_STATUS[remarksFor.scan_status] && <> · <Badge tone={SCAN_STATUS[remarksFor.scan_status].tone}>{SCAN_STATUS[remarksFor.scan_status].label}</Badge></>}
-                    </p>
-                    <Field label="Reason">
-                        <div className="input" style={{ minHeight: 80, whiteSpace: "pre-wrap", height: "auto" }}>
-                            {remarksFor.reason?.trim() || <span className="muted">No reason was saved for this invoice.</span>}
-                        </div>
-                    </Field>
-                </Modal>
-            )}
+            {remarksFor && <InvalidReasonModal row={remarksFor} partyLabel="Vendor" onClose={() => setRemarksFor(null)} />}
         </>
     );
 }
