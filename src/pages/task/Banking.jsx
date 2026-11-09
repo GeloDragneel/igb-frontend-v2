@@ -7,6 +7,7 @@ import Modal from "../../components/Modal";
 import { useAuth, apiFetch } from "../../context/AuthContext";
 import { usePeriod } from "../../context/PeriodContext";
 import { BANKING_TABS, JournalModal, TABLE_HEIGHT, fmtDay, n2 } from "./banking/bankingShared";
+import ReceiveMoneyModal from "../../components/payments/ReceiveMoneyModal";
 
 const API = "/banking/collections";
 
@@ -19,6 +20,9 @@ export default function Banking() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(null);
   const [journal, setJournal] = useState(null);
+  const [picking, setPicking] = useState(false);     // Receive Money → list of unpaid receivables
+  const [receive, setReceive] = useState(null);      // the invoice being paid
+  const [lookups, setLookups] = useState(null);      // accounts + ATC for the Receive Money popup
   const fromMonth = from.slice(0, 7);
   const toMonth = to.slice(0, 7);
 
@@ -53,7 +57,16 @@ export default function Banking() {
         setQuery={setQuery}
         placeholder="Search customer, transaction # or invoice #..."
         navTabs={BANKING_TABS}
-        actions={[{ label: loading ? "Loading…" : "Refresh", icon: "refresh", onClick: load, disabled: loading }]}
+        actions={[
+          { label: loading ? "Loading…" : "Refresh", icon: "refresh", onClick: load, disabled: loading },
+          {
+            label: "Receive Money", icon: "plus", variant: "primary",
+            onClick: () => {
+              setPicking(true);
+              if (!lookups) apiFetch("/sales/lookups").then(setLookups).catch(() => setLookups({ accounts: [], atc: [] }));
+            },
+          },
+        ]}
         sticky
       />
       {error && <div className="alert-error" role="alert">{error} <button className="btn btn-sm" onClick={load}>Try again</button></div>}
@@ -74,6 +87,25 @@ export default function Banking() {
         />
       </div>
       {open && <CollectionDetails row={open} onClose={() => setOpen(null)} onJournal={() => { setJournal(open); setOpen(null); }} />}
+      {picking && (
+        <UnpaidPicker
+          title="Receive Money – unpaid receivables"
+          url="/banking/receivables"
+          partyLabel="Customer"
+          onPick={(r) => { setPicking(false); setReceive(r); }}
+          onClose={() => setPicking(false)}
+        />
+      )}
+      {receive && lookups && (
+        <ReceiveMoneyModal
+          invoiceNo={receive.invoice_no}
+          accounts={lookups.accounts || []}
+          atc={lookups.atc || []}
+          declaredMonth={receive.declared_month || ""}
+          onClose={() => { setReceive(null); setPicking(true); }}
+          onDone={load}
+        />
+      )}
       {journal && <JournalModal title={`Journal · ${journal.rvoucher_no}`} url={`${API}/${encodeURIComponent(journal.rvoucher_no)}/journal`} onClose={() => setJournal(null)} />}
     </>
   );
@@ -107,6 +139,60 @@ function CollectionDetails({ row, onClose, onJournal }) {
             ))}
           </tbody>
           {rows?.length > 0 && <tfoot><tr><td colSpan={3} className="strong">Total</td><td className="ta-right mono strong">{n2(total)}</td></tr></tfoot>}
+        </table>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---------- pick an unpaid invoice (any month) ---------- */
+function UnpaidPicker({ title, url, partyLabel, showBalance, onPick, onClose }) {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState("");
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    apiFetch(url).then(setRows).catch((e) => setError(e.message || "Couldn't load the list."));
+  }, [url]);
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return !rows ? [] : s ? rows.filter((r) => [r.party, r.invoice_no, r.document_no, r.status].join(" ").toLowerCase().includes(s)) : rows;
+  }, [rows, q]);
+  const sum = shown.reduce((n, r) => n + (showBalance ? r.balance : r.total), 0);
+  return (
+    <Modal title={title} onClose={onClose} size="xxlg" footer={<button className="btn" onClick={onClose}>Close</button>}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10 }}>
+        <input className="input" style={{ maxWidth: 340 }} autoFocus value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder={`Search ${partyLabel.toLowerCase()}, invoice # or document #...`} />
+        <span className="muted small">{shown.length} unpaid · {showBalance ? "Balance" : "Total"} <b className="mono">{n2(sum)}</b></span>
+      </div>
+      {error && <div className="alert-error" role="alert">{error}</div>}
+      <div className="table-scroll" style={{ maxHeight: "60vh" }}>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>{partyLabel}</th><th>Date</th><th>Invoice #</th><th>Document #</th>
+              <th className="ta-right">Total</th>
+              {showBalance && <th className="ta-right">Paid</th>}
+              {showBalance && <th className="ta-right">Balance</th>}
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!rows && !error && <tr><td colSpan={8}><span className="sk sk-cell" style={{ width: "60%" }} /></td></tr>}
+            {rows && shown.length === 0 && <tr><td colSpan={8} className="empty">Nothing unpaid.</td></tr>}
+            {shown.map((r) => (
+              <tr key={`${r.type || "s"}-${r.id}`} className="is-link" style={{ cursor: "pointer" }} onClick={() => onPick(r)} title="Open">
+                <td className="strong">{r.party}</td>
+                <td>{fmtDay(r.date)}</td>
+                <td className="mono">{r.invoice_no}</td>
+                <td className="mono">{r.document_no || "—"}</td>
+                <td className="ta-right mono">{n2(r.total)}</td>
+                {showBalance && <td className="ta-right mono">{n2(r.paid)}</td>}
+                {showBalance && <td className="ta-right mono strong">{n2(r.balance)}</td>}
+                <td>{r.status}</td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </Modal>
