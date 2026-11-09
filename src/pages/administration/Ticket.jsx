@@ -8,7 +8,7 @@ import "./Ticket.css";
 
 const STATUS = { 0: "Pending", 1: "Approved", 2: "Declined" };
 const TABS = [["0", "Pending"], ["1", "Approved"], ["2", "Declined"], ["all", "All"]];
-const TITLE = { sales: "Sales / Invoicing", purchase: "Purchases / Invoice", expense: "Expenses / Transaction", importation: "Importation / Purchase Order", exportation: "Exportation / Sales" };
+const TITLE = { sales: "Sales / Invoicing", purchase: "Purchases / Invoice", po: "Vendors / Purchase Order", expense: "Expenses / Transaction", importation: "Importation / Purchase Order", exportation: "Exportation / Sales" };
 const DISCOUNT = { 1: "Senior Citizen", 2: "PWD", 3: "Others" };
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
