@@ -17,7 +17,11 @@ const REPORTS = [
 
 // old File Type → Excel (template) / PDF (preview)
 const PRINT_NAMES = { P: "PurchasesSummary", S: "SalesSummary", "1604E": "Report1604E" };
-const PER_OPTIONS = [5, 25, 50, 0];          // 0 = All
+const PER_OPTIONS = [5, 25, 50, 0]; // 0 = All
+// PDF / Excel: the ticked columns are remembered per report (and the P / S PDF layout)
+const COLS_KEY = "esub-print-cols:";
+const readCols = (type) => { try { return JSON.parse(localStorage.getItem(COLS_KEY + type)) || null; } catch { return null; } };
+const writeCols = (type, v) => { try { localStorage.setItem(COLS_KEY + type, JSON.stringify(v)); } catch { /* blocked */ } };
 /* 1 … 4 5 [6] 7 8 … 20 */
 const pageNums = (page, pages) => {
     const out = [];
@@ -135,6 +139,7 @@ export default function EsubReport() {
     const [page, setPage] = useState(1);
     const [check, setCheck] = useState(null);                // validation popup: { data, mode: "errors" | "warnings" }
     const [flash, setFlash] = useState(0);                   // line number to highlight
+    const [pickFor, setPickFor] = useState(null);            // "pdf" | "xlsx" → the "Columns to print" popup
     const reqId = useRef(0);                                 // only the latest request fills the screen
     // long text columns that get cut off with "…"
     const CLIP = { name: "es-clip-name", address: "es-clip-addr", city: "es-clip-city" };
@@ -245,13 +250,23 @@ export default function EsubReport() {
     };
 
     // PDF → shown in a popup · Excel → downloaded
-    const print = async (format) => {
+    // PDF / Excel button → load the report (for its columns), then ask which columns to print
+    const askColumns = async (format) => {
         if (report.disabled) return;
         if (!report.yearly && (!from || !to)) { setError("Choose both months."); return; }
+        const r = await current();
+        if (r) setPickFor(format);
+    };
+
+    const print = async (format, cols = []) => {
+        if (report.disabled) return;
+        if (!report.yearly && (!from || !to)) { setError("Choose both months."); return; }
+        setPickFor(null);
         setPrinting(format);
         setError("");
         try {
-            const params = report.yearly ? { type, year, format } : { type, from, to, format };
+            const base = report.yearly ? { type, year, format } : { type, from, to, format };
+            const params = { ...base, cols: cols.join(",") };
             const blob = await apiBlob(`/print/esub?${new URLSearchParams(params)}`);
             const name = `${PRINT_NAMES[type] || "Report1601EQ"}-${user?.id ?? ""}.${format}`;
             if (format === "pdf") {
@@ -331,10 +346,10 @@ export default function EsubReport() {
                         </div>
 
                         <div className="es-row es-btns">
-                            <button className="btn btn-sm" onClick={() => print("pdf")} disabled={off || !!printing} title="Open as PDF">
+                            <button className="btn btn-sm" onClick={() => askColumns("pdf")} disabled={off || !!printing} title="Open as PDF">
                                 {printing === "pdf" ? "…" : "PDF"}
                             </button>
-                            <button className="btn btn-sm" onClick={() => print("xlsx")} disabled={off || !!printing} title="Download as Excel">
+                            <button className="btn btn-sm" onClick={() => askColumns("xlsx")} disabled={off || !!printing} title="Download as Excel">
                                 {printing === "xlsx" ? "…" : "Excel"}
                             </button>
                         </div>
@@ -508,6 +523,17 @@ export default function EsubReport() {
                 />
             )}
 
+            {pickFor && shown && (
+                <ColumnPicker
+                    key={`${type}-${pickFor}`}
+                    format={pickFor}
+                    type={type}
+                    columns={shown.columns}
+                    onClose={() => setPickFor(null)}
+                    onPrint={(cols) => print(pickFor, cols)}
+                />
+            )}
+
             {pdf && (
                 <Modal
                     title={`${report.code} · ${report.name}`}
@@ -592,6 +618,71 @@ function DatCheck({ check, onClose, onLine, onDownload }) {
                     </table>
                 </div>
             )}
+        </Modal>
+    );
+}
+
+/* ---------- "Columns to print" popup (PDF / Excel): tick the columns; remembered per report + format ----------
+   Purchases / Sales PDF = the BIR RELIEF printout → its own columns (+ Transaction Date)
+   everything else = the report's columns as on the screen */
+const reliefColumns = (type) => [
+    { key: "date", label: "Transaction Date" },
+    { key: "tin", label: "T.I.N." },
+    { key: "name", label: "Registered Name" },
+    { key: "total", label: type === "S" ? "Total Sales" : "Total Purchases" },
+    { key: "zero", label: "Zero Rated" },
+    { key: "exempt", label: "Exempt" },
+    { key: "gross", label: "Gross Taxable" },
+    { key: "net", label: "Taxable Net" },
+    { key: "tax", label: type === "S" ? "Output Tax" : "Input Tax" },
+];
+
+function ColumnPicker({ format, type, columns, onClose, onPrint }) {
+    const relief = format === "pdf" && (type === "P" || type === "S");
+    const list = relief ? reliefColumns(type) : columns;
+    const all = list.map((c) => c.key);
+    const store = `${type}:${relief ? "relief" : "cols"}`;
+    const [sel, setSel] = useState(() => {
+        const keep = (readCols(store) || []).filter((k) => all.includes(k));
+        return keep.length ? keep : all;                       // first time → everything ticked
+    });
+
+    const toggle = (k) => setSel((x) => (x.includes(k) ? x.filter((y) => y !== k) : all.filter((y) => x.includes(y) || y === k)));
+    const go = () => {
+        writeCols(store, sel);
+        onPrint(sel);
+    };
+
+    return (
+        <Modal
+            title={`Columns to print · ${format === "pdf" ? "PDF" : "Excel"}`}
+            onClose={onClose}
+            size="sm"
+            footer={
+                <>
+                    <button className="btn" onClick={onClose}>Close</button>
+                    <button className="btn btn-primary" onClick={go} disabled={!sel.length}>
+                        {format === "pdf" ? "Open PDF" : "Download Excel"}
+                    </button>
+                </>
+            }
+        >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span className="muted small">{sel.length} of {all.length} column{all.length === 1 ? "" : "s"}</span>
+                <span style={{ display: "flex", gap: 6 }}>
+                    <button type="button" className="btn btn-sm" onClick={() => setSel(all)}>Select all</button>
+                    <button type="button" className="btn btn-sm" onClick={() => setSel([])}>Clear</button>
+                </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 14px" }}>
+                {list.map((c) => (
+                    <label key={c.key} style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border, #e2e8f0)" }}>
+                        <input type="checkbox" checked={sel.includes(c.key)} onChange={() => toggle(c.key)} />
+                        <span>{c.label}</span>
+                    </label>
+                ))}
+            </div>
+            {!sel.length && <p className="alert-error" style={{ marginTop: 10 }}>Tick at least one column.</p>}
         </Modal>
     );
 }
