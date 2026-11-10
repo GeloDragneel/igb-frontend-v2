@@ -227,15 +227,48 @@ export default function Home() {
         setIncomeTax(undefined);
         const q = `from=${fromMonth}&to=${toMonth}`;
         apiFetch(`/bir/payables?${q}`).then((d) => alive && setPay(d)).catch(() => alive && setPay(false));
-        apiFetch(`/reports/income-tax-summary?${q}&branch=all`)
-            .then((r) => {
-                if (!alive) return;
-                const c = itsCalc(itsFromApi(r), r.months, r.brackets, r.corporate);
-                setIncomeTax(Math.round(c.payable * 100) / 100);
-            })
-            .catch(() => alive && setIncomeTax(null));
         return () => { alive = false; };
     }, [fromMonth, toMonth, user?.id, user?.caid]);
+
+    /* ---------- tax tiles = the LATEST period only (the return that is due now), not the whole range ----------
+       VAT            last finished quarter     (2550Q)
+       Withholding    last finished month       (0619-E)
+       Compensation   last finished month       (1601-C)
+       Income tax     last finished quarter     (1701Q / 1702Q; Q4 = annual): Jan→quarter end minus Jan→previous quarter end
+       "now" = today, or the end of the picked period when it is in the past */
+    const latest = useMemo(() => {
+        const today = new Date();
+        const [ty, tm] = toMonth.split("-").map(Number);
+        const ref = new Date(Math.min(today.getTime(), new Date(ty, tm, 1).getTime()));     // first day after the picked period
+        const ym = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;                       // m = 0-based
+        const lm = new Date(ref.getFullYear(), ref.getMonth() - 1, 1);                       // last finished month
+        const qEndMonth = Math.floor(ref.getMonth() / 3) * 3 - 1;                            // last month of the last finished quarter
+        const qEnd = new Date(ref.getFullYear(), qEndMonth, 1);
+        const qStart = new Date(qEnd.getFullYear(), qEnd.getMonth() - 2, 1);
+        const q = Math.floor(qEnd.getMonth() / 3) + 1;
+        const prevEnd = new Date(qEnd.getFullYear(), qEnd.getMonth() - 3, 1);
+        return {
+            month: ym(lm.getFullYear(), lm.getMonth()), monthLabel: `${MONTHS[lm.getMonth()]} ${lm.getFullYear()}`,
+            qFrom: ym(qStart.getFullYear(), qStart.getMonth()), qTo: ym(qEnd.getFullYear(), qEnd.getMonth()),
+            qLabel: `Q${q} ${qEnd.getFullYear()}`, q, year: qEnd.getFullYear(),
+            prevTo: q > 1 ? ym(prevEnd.getFullYear(), prevEnd.getMonth()) : null,
+        };
+    }, [toMonth]);
+    const [payQ, setPayQ] = useState(null);           // /bir/payables for the last quarter  (VAT)
+    const [payM, setPayM] = useState(null);           // /bir/payables for the last month    (EWT, compensation)
+    useEffect(() => {
+        let alive = true;
+        setPayQ(null); setPayM(null); setIncomeTax(undefined);
+        apiFetch(`/bir/payables?from=${latest.qFrom}&to=${latest.qTo}`).then((d) => alive && setPayQ(d)).catch(() => alive && setPayQ(false));
+        apiFetch(`/bir/payables?from=${latest.month}&to=${latest.month}`).then((d) => alive && setPayM(d)).catch(() => alive && setPayM(false));
+        // income tax of the quarter = year-to-date payable up to this quarter − year-to-date up to the previous one
+        const its = (to) => apiFetch(`/reports/income-tax-summary?from=${latest.year}-01&to=${to}&branch=all`)
+            .then((r) => itsCalc(itsFromApi(r), r.months, r.brackets, r.corporate).payable);
+        Promise.all([its(latest.qTo), latest.prevTo ? its(latest.prevTo) : Promise.resolve(0)])
+            .then(([now, before]) => alive && setIncomeTax(Math.round((now - before) * 100) / 100))
+            .catch(() => alive && setIncomeTax(null));
+        return () => { alive = false; };
+    }, [latest, user?.id, user?.caid]);
 
     const deadlines = useMemo(() => birDeadlines(new Date(), { vat, corp }), [vat, corp]);
     const upcoming = deadlines.filter((d) => d.days >= -5).slice(0, 6);
@@ -272,7 +305,7 @@ export default function Home() {
     const costs = data ? data.buy.purchases + data.buy.expenses : 0;
     const net = data ? data.sales.total - costs : 0;
     // VAT on Home = the BIR return numbers (all branches, sales + purchases/expenses + GRN by declared month)
-    const vatBooks = pay && pay.vat && pay.vat.output != null ? pay.vat : null;
+    const vatBooks = payM && payM.vat && payM.vat.output != null ? payM.vat : null;   // same month as the VAT tile
     const vatPay = vatBooks ? vatBooks.books : (data?.vat_payable ?? 0);
     const outVat = vatBooks ? vatBooks.output : (data?.sales.vat ?? 0);
     const inVat = vatBooks ? vatBooks.input : (data?.buy.vat ?? 0);
@@ -295,14 +328,16 @@ export default function Home() {
         { label: "Accounts payable", value: pay ? pay.ap?.total : undefined, sub: pay ? `${pay.ap?.count ?? 0} unpaid bill${pay.ap?.count === 1 ? "" : "s"} · no payment yet` : "", icon: "cart", g: "hd-g5", ready: !!pay, failed: pay === false, spark: null, to: "/books/payables" },
     ];
 
+    // src = the /bir/payables answer the tile's filed / paid pill comes from
     const payCards = [
-        { key: "vat", label: "VAT payable", neg: "Excess input VAT", hint: "Output − Input VAT", value: pay ? pay.vat.books : undefined, to: "/bir/vat-summary", c: "pv-g1", icon: "fileText" },
-        { key: "ewt", label: "Withholding tax payable", neg: "Withholding tax payable", hint: "EWT on purchases & expenses", value: pay ? pay.ewt.books : undefined, to: "/bir/returns", c: "pv-g2", icon: "cart" },
-        { key: "income", label: "Income tax payable", neg: "Income tax (excess credits)", hint: "From Income Tax Summary", value: incomeTax, to: "/bir/income-tax", c: "pv-g3", icon: "barChart" },
-        { key: "comp", label: "Compensation payable", neg: "Compensation payable", hint: "Withholding on compensation (1601-C)", value: pay ? (pay.comp.returns ? pay.comp.filed : null) : undefined, to: "/bir/returns", c: "pv-g4", icon: "wallet" },
+        { key: "vat", label: "VAT payable", neg: "Excess input VAT", hint: `${latest.monthLabel} · Output − Input VAT`, src: payM, value: payM ? payM.vat.books : payM === false ? null : undefined, to: "/bir/vat-summary", c: "pv-g1", icon: "fileText" },
+        { key: "ewt", label: "Withholding tax payable", neg: "Withholding tax payable", hint: `${latest.monthLabel} · 0619-E`, src: payM, value: payM ? payM.ewt.books : payM === false ? null : undefined, to: "/bir/returns", c: "pv-g2", icon: "cart" },
+        { key: "income", label: "Income tax payable", neg: "Income tax (excess credits)", hint: `${latest.qLabel} · ${latest.q === 4 ? "Annual" : "Quarterly"} ITR`, src: null, value: incomeTax, to: "/bir/income-tax", c: "pv-g3", icon: "barChart" },
+        { key: "comp", label: "Compensation payable", neg: "Compensation payable", hint: `${latest.monthLabel} · 1601-C`, src: payM, value: payM ? (payM.comp.returns ? payM.comp.filed : null) : payM === false ? null : undefined, to: "/bir/returns", c: "pv-g4", icon: "wallet" },
     ];
 
     const topMax = Math.max(1, ...(data?.top_customers || []).map((c) => c.total));
+    const [detail, setDetail] = useState(null);      // tile popup: { kind, label, to, value }
 
     return (
         <div className="hd">
@@ -343,8 +378,9 @@ export default function Home() {
 
             {/* ---------- KPI tiles ---------- */}
             <section className="hd-tiles">
-                {tiles.map((t) => (
-                    <Link key={t.label} to={t.to} className={`hd-tile ${t.g}`}>
+                {tiles.map((t, i) => (
+                    <button type="button" key={t.label} className={`hd-tile ${t.g}`} style={{ textAlign: "left", border: 0, cursor: "pointer", font: "inherit", width: "100%" }}
+                        onClick={() => setDetail({ kind: ["sales", "buy", "ar", "ap"][i], label: t.label, to: t.to, value: t.value })}>
                         <div className="hd-tile-top">
                             <span className="hd-tile-icon"><Icon name={t.icon} size={18} /></span>
                             <span className="hd-tile-label">{t.label}</span>
@@ -354,19 +390,20 @@ export default function Home() {
                             <span>{t.sub}</span>
                             {t.spark && t.spark.length > 1 && <Sparkline values={t.spark} />}
                         </div>
-                    </Link>
+                    </button>
                 ))}
             </section>
 
             {/* ---------- tax payables (same tiles as above) ---------- */}
             <section className="hd-tiles">
                 {payCards.map((p) => {
-                    const r = pay ? pay[p.key] : null;
-                    const failed = p.key === "income" || p.key === "comp" ? p.value === null : pay === false;
+                    const r = p.src ? p.src[p.key] : null;
+                    const failed = p.value === null;
                     const loading = !failed && p.value === undefined;
                     const v = Number(p.value) || 0;
                     return (
-                        <Link key={p.key} to={p.to} className={`hd-tile ${p.c}`}>
+                        <button type="button" key={p.key} className={`hd-tile ${p.c}`} style={{ textAlign: "left", border: 0, cursor: "pointer", font: "inherit", width: "100%" }}
+                            onClick={() => setDetail({ kind: p.key, label: v < 0 ? p.neg : p.label, to: p.to, value: p.value })}>
                             <div className="hd-tile-top">
                                 <span className="hd-tile-icon"><Icon name={p.icon} size={18} /></span>
                                 <span className="hd-tile-label">{v < 0 ? p.neg : p.label}</span>
@@ -378,7 +415,7 @@ export default function Home() {
                                     ? <span className="pv-pill">{r.balance > 0.009 ? `Unpaid ${money(r.balance)}` : "Filed · Paid"}</span>
                                     : <span className="pv-pill pv-pill-dim">Not filed</span>)}
                             </div>
-                        </Link>
+                        </button>
                     );
                 })}
             </section>
@@ -406,7 +443,7 @@ export default function Home() {
                 </div>
 
                 <div className="hd-card hd-vat">
-                    <header className="hd-card-head"><h3>VAT this period</h3></header>
+                    <header className="hd-card-head"><h3>VAT · {latest.monthLabel}</h3></header>
                     {data ? (
                         <>
                             <div className="hd-ring">
@@ -425,6 +462,8 @@ export default function Home() {
                     ) : <div className="hd-sk hd-sk-chart" />}
                 </div>
             </section>
+
+            {detail && <TileDetail tile={detail} from={fromMonth} to={toMonth} onClose={() => setDetail(null)} />}
 
             {/* all upcoming BIR deadlines (next 12 months) */}
             {allOpen && (
@@ -517,5 +556,270 @@ export default function Home() {
                 </div>
             </section>
         </div>
+    );
+}
+
+/* =========================================================
+   Tile popup: what is CURRENTLY open first (not filed / unpaid / not reconciled),
+   the earlier periods that are already filed & paid folded below.
+   ========================================================= */
+const KIND_INFO = {
+    sales: { forms: "VAT return (2550M / 2550Q)", party: "Customer", rowsTitle: "Latest sales invoices" },
+    buy: { forms: "VAT return (2550M / 2550Q)", party: "Vendor", rowsTitle: "Latest purchases & expenses" },
+    ar: { party: "Customer", rowsTitle: "Open receivables (no receipt yet)" },
+    ap: { party: "Vendor", rowsTitle: "Open payables (no payment yet)" },
+    vat: { forms: "2550M / 2550Q" },
+    ewt: { forms: "0619-E / 1601-EQ" },
+    income: { forms: "1701Q / 1702Q / 1701 / 1702-RT" },
+    comp: { forms: "1601-C" },
+};
+const pill = (tone, text) => {
+    const c = { green: ["rgba(22,163,74,.12)", "#15803d"], red: ["rgba(220,38,38,.12)", "#b91c1c"], amber: ["rgba(217,119,6,.14)", "#b45309"], gray: ["rgba(100,116,139,.14)", "#475569"] }[tone];
+    return <span style={{ display: "inline-block", padding: "2px 9px", borderRadius: 999, fontSize: 12, fontWeight: 700, background: c[0], color: c[1], whiteSpace: "nowrap" }}>{text}</span>;
+};
+const filedPill = (m) => (m.filed ? pill("green", "Filed") : pill("red", "Not filed"));
+const paidPill = (m) => (!m.filed ? pill("gray", "—") : m.paid ? pill("green", "Paid") : pill("amber", "Unpaid"));
+const reconPill = (v) => (v === true ? pill("green", "Reconciled ✓") : v === false ? pill("red", "Not reconciled") : pill("gray", "No books to compare"));
+
+function TileDetail({ tile, from, to, onClose }) {
+    const [d, setD] = useState(null);
+    const [error, setError] = useState("");
+    const [showPrev, setShowPrev] = useState(false);
+    const info = KIND_INFO[tile.kind] || {};
+    const isTax = ["vat", "ewt", "income", "comp"].includes(tile.kind);
+    const isOpen = tile.kind === "ar" || tile.kind === "ap";
+    const isFlow = tile.kind === "sales" || tile.kind === "buy";      // no BIR filing here – just the numbers
+
+    useEffect(() => {
+        let alive = true;
+        apiFetch(`/bir/payables/detail?${new URLSearchParams({ kind: tile.kind, from, to })}`)
+            .then((r) => alive && setD(r))
+            .catch((e) => alive && setError(e.message || "Couldn't load the details."));
+        return () => { alive = false; };
+    }, [tile.kind, from, to]);
+
+    // income tax "books" per MONTH = Income Tax Summary: year-to-date payable at month end − at the previous month end
+    const [itq, setItq] = useState({});              // { "2026-09": 2310.12 }
+    useEffect(() => {
+        if (tile.kind !== "income") return undefined;
+        let alive = true;
+        const years = [...new Set([from.slice(0, 4), to.slice(0, 4)])];
+        Promise.all(years.map(async (y) => {
+            const ytd = await Promise.all(Array.from({ length: 12 }, (_, i) =>
+                apiFetch(`/reports/income-tax-summary?from=${y}-01&to=${y}-${String(i + 1).padStart(2, "0")}&branch=all`)
+                    .then((r) => itsCalc(itsFromApi(r), r.months, r.brackets, r.corporate).payable).catch(() => null)));
+            return ytd.map((v, i) => [`${y}-${String(i + 1).padStart(2, "0")}`, v == null ? null : Math.round((v - (i ? ytd[i - 1] || 0 : 0)) * 100) / 100]);
+        })).then((all) => alive && setItq(Object.fromEntries(all.flat())));
+        return () => { alive = false; };
+    }, [tile.kind, from, to]);
+
+    // every month is shown; a month that is not over yet is "Not due yet" (not "Not filed")
+    const quarterly = false;
+    const thisMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    const months = useMemo(() => {
+        const list = (d?.months || []).map((m) => (tile.kind === "income" ? { ...m, books: itq[m.month] ?? null } : m));
+        if (!quarterly) return list;
+        const g = [];
+        for (const m of list) {
+            const y = m.month.slice(0, 4), q = Math.floor((+m.month.slice(5, 7) - 1) / 3) + 1, key = `${y}-Q${q}`;
+            let x = g.find((z) => z.key === key);
+            if (!x) g.push(x = { key, month: `${y}-${String(q * 3).padStart(2, "0")}`, label: `Q${q} ${y}`, parts: [] });
+            x.parts.push(m);
+        }
+        return g.map((x) => {
+            const sum = (k) => (x.parts.some((p) => p[k] != null) ? Math.round(x.parts.reduce((n, p) => n + (Number(p[k]) || 0), 0) * 100) / 100 : null);
+            const rets = [];
+            x.parts.forEach((p) => p.returns.forEach((r) => { if (!rets.some((z) => z.form === r.form && z.period === r.period)) rets.push(r); }));
+            const filed = x.parts.every((p) => p.filed);
+            const rec = x.parts.map((p) => p.reconciled);
+            return {
+                ...x, output: sum("output"), input: sum("input"),
+                books: sum("books"),
+                returns: rets, filed, paid: filed && x.parts.every((p) => p.paid),
+                reconciled: !filed ? null : rec.includes(false) ? false : rec.includes(true) ? true : null,
+            };
+        });
+    }, [d, quarterly, tile.kind, itq]);
+    const due = months.filter((m) => m.month < thisMonth);                 // the month is over → the return is due
+    const done = (m) => m.filed && m.paid && m.reconciled !== false;
+    const current = months.filter((m) => !done(m)).reverse();              // newest first (not-due months show "Not due yet")
+    const previous = months.filter(done).reverse();
+    const openReturns = (d?.returns || []).filter((r) => r.status !== "paid" || r.reconciled === false);
+    const s = d?.summary;
+
+    const th = { textAlign: "left", fontSize: 12, fontWeight: 700, opacity: 0.7, padding: "8px 10px", whiteSpace: "nowrap" };
+    const td = { padding: "9px 10px", borderTop: "1px solid var(--border, #e2e8f0)", whiteSpace: "nowrap" };
+    const num = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" };
+
+    const MonthTable = ({ list }) => (
+        <div className="table-scroll">
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr>
+                    <th style={th}>{quarterly ? "Quarter" : "Month"}</th>
+                    {tile.kind === "vat" && <><th style={{ ...th, textAlign: "right" }}>Output VAT</th><th style={{ ...th, textAlign: "right" }}>Input VAT</th></>}
+                    {tile.kind === "buy" && <><th style={{ ...th, textAlign: "right" }}>Purchases</th><th style={{ ...th, textAlign: "right" }}>Expenses</th></>}
+                    <th style={{ ...th, textAlign: "right" }}>{tile.kind === "sales" || tile.kind === "buy" ? "System total" : "Books (system)"}</th>
+                    <th style={th}>BIR return</th><th style={th}>Filed</th><th style={th}>Paid</th><th style={th}>Reconciled</th>
+                </tr></thead>
+                <tbody>
+                    {list.map((m) => (
+                        <tr key={m.month}>
+                            <td style={{ ...td, fontWeight: 700 }}>{m.label}{m.count != null && <small className="muted"> · {m.count}</small>}</td>
+                            {tile.kind === "vat" && <><td style={num}>{money(m.output)}</td><td style={num}>{money(m.input)}</td></>}
+                            {tile.kind === "buy" && <><td style={num}>{money(m.purchases)}</td><td style={num}>{money(m.expenses)}</td></>}
+                            <td style={{ ...num, fontWeight: 700 }}>{m.books == null ? <span className="muted">{tile.kind === "income" ? "…" : "not in the books"}</span> : money(m.books)}</td>
+                            <td style={td}>{m.returns.length ? m.returns.map((r) => `${r.form} · ${r.period}`).join(", ") : <span className="muted">—</span>}</td>
+                            <td style={td}>{!m.filed && m.month >= thisMonth ? pill("gray", "Not due yet") : filedPill(m)}</td>
+                            <td style={td}>{paidPill(m)}</td>
+                            <td style={td}>{m.filed ? reconPill(m.reconciled) : pill("gray", "—")}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+
+    const card = { border: "1px solid var(--border, #e2e8f0)", borderRadius: 14, padding: 14, marginBottom: 14 };
+    const stat = (label, value, tone) => (
+        <div style={{ padding: "10px 14px", borderRadius: 12, background: "var(--surface-2, #f1f5f9)" }}>
+            <div className="muted small">{label}</div>
+            <div style={{ fontWeight: 800, fontSize: 18, color: tone }}>{value}</div>
+        </div>
+    );
+
+    return (
+        <Modal title={tile.label} onClose={onClose} size="xlg"
+            footer={<>
+                <Link to={tile.to} className="btn" onClick={onClose} style={{ marginRight: "auto" }}>Open full page →</Link>
+                <button className="btn btn-primary" onClick={onClose}>Close</button>
+            </>}>
+            {error && <div className="alert-error" role="alert">{error}</div>}
+            {!d && !error && <div className="hd-sk hd-sk-chart" />}
+
+            {d && (
+                <>
+                    {/* headline numbers */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 16 }}>
+                        {stat(isOpen ? "Open balance" : isTax ? "Current (books)" : "This period", tile.value == null ? "—" : money(Math.abs(Number(tile.value) || 0)))}
+                        {isOpen && stat("Open invoices", d.rows.length)}
+                        {isFlow && stat(tile.kind === "sales" ? "Invoices" : "Records", months.reduce((n, m) => n + (m.count || 0), 0))}
+                        {isTax && (() => { const n = due.filter((m) => !m.filed).length; return stat(quarterly ? "Quarters not filed" : "Months not filed", n, n ? "#b91c1c" : "#15803d"); })()}
+                        {isTax && stat("Unpaid on returns", money(s.balance), s.balance > 0.009 ? "#b45309" : "#15803d")}
+                        {isTax && stat("Not reconciled", s.not_reconciled, s.not_reconciled ? "#b91c1c" : "#15803d")}
+                    </div>
+
+                    {/* Sales / Purchases & expenses: per month, no filing columns */}
+                    {isFlow && (
+                        <section style={card}>
+                            <b style={{ display: "block", marginBottom: 8 }}>Per month</b>
+                            <div className="table-scroll">
+                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                    <thead><tr>
+                                        <th style={th}>Month</th>
+                                        <th style={{ ...th, textAlign: "right" }}>{tile.kind === "sales" ? "Invoices" : "Records"}</th>
+                                        {tile.kind === "buy" && <><th style={{ ...th, textAlign: "right" }}>Purchases</th><th style={{ ...th, textAlign: "right" }}>Expenses</th></>}
+                                        <th style={{ ...th, textAlign: "right" }}>Total</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {[...months].reverse().filter((m) => m.count || m.books).map((m) => (
+                                            <tr key={m.month}>
+                                                <td style={{ ...td, fontWeight: 700 }}>{m.label}</td>
+                                                <td style={num}>{m.count}</td>
+                                                {tile.kind === "buy" && <><td style={num}>{money(m.purchases)}</td><td style={num}>{money(m.expenses)}</td></>}
+                                                <td style={{ ...num, fontWeight: 700 }}>{money(m.books)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    )}
+
+                    {/* CURRENT: what still needs action */}
+                    {isTax && (
+                        <section style={card}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                                <b>Current · needs action</b>
+                                <span className="muted small">{info.forms}</span>
+                            </div>
+                            {current.length ? <MonthTable list={current} /> : (
+                                <p style={{ margin: 0, color: "#15803d", fontWeight: 700 }}>✓ Everything in this period is filed, paid and reconciled.</p>
+                            )}
+                            {openReturns.length > 0 && (
+                                <div style={{ marginTop: 12 }}>
+                                    <div className="muted small" style={{ marginBottom: 6 }}>Returns to settle / check</div>
+                                    <div className="table-scroll">
+                                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                            <thead><tr>
+                                                <th style={th}>Return</th><th style={th}>Filed on</th>
+                                                <th style={{ ...th, textAlign: "right" }}>Return amount</th><th style={{ ...th, textAlign: "right" }}>Books</th>
+                                                <th style={{ ...th, textAlign: "right" }}>Difference</th><th style={{ ...th, textAlign: "right" }}>Balance</th><th style={th}>Status</th>
+                                            </tr></thead>
+                                            <tbody>
+                                                {openReturns.map((r) => (
+                                                    <tr key={r.filename}>
+                                                        <td style={{ ...td, fontWeight: 700 }}>{r.form} · {r.period}</td>
+                                                        <td style={td}>{r.filed_date ? fmtDate(r.filed_date) : "—"}</td>
+                                                        <td style={num}>{money(r.amount)}</td>
+                                                        <td style={num}>{r.books == null ? "—" : money(r.books)}</td>
+                                                        <td style={{ ...num, color: r.difference && Math.abs(r.difference) >= 0.01 ? "#b91c1c" : undefined }}>{r.difference == null ? "—" : money(r.difference)}</td>
+                                                        <td style={{ ...num, fontWeight: 700 }}>{money(r.balance)}</td>
+                                                        <td style={td}>
+                                                            {r.status === "paid" ? pill("green", "Paid") : r.status === "partial" ? pill("amber", "Partly paid") : pill("amber", "Unpaid")}{" "}
+                                                            {reconPill(r.reconciled)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+                    )}
+
+                    {/* the transactions behind the tile */}
+                    {d.rows.length > 0 && (
+                        <section style={card}>
+                            <b style={{ display: "block", marginBottom: 8 }}>{info.rowsTitle}</b>
+                            <div className="table-scroll" style={{ maxHeight: 320 }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                    <thead><tr>
+                                        <th style={th}>Date</th><th style={th}>{info.party}</th><th style={th}>Invoice / Document</th>
+                                        {isOpen && <th style={{ ...th, textAlign: "right" }}>Days</th>}
+                                        <th style={{ ...th, textAlign: "right" }}>Amount</th><th style={th}>Status</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {d.rows.map((r) => (
+                                            <tr key={r.invoice_no}>
+                                                <td style={td}>{fmtDate(r.date)}</td>
+                                                <td style={{ ...td, fontWeight: 600, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }} title={r.party}>{r.party}</td>
+                                                <td style={td}><Link to={r.link} onClick={onClose} className="mono">{r.document_no || r.invoice_no}</Link></td>
+                                                {isOpen && <td style={{ ...num, color: r.days > 90 ? "#b91c1c" : r.days > 30 ? "#b45309" : undefined, fontWeight: 700 }}>{r.days ?? "—"}</td>}
+                                                <td style={{ ...num, fontWeight: 700 }}>{money(r.amount)}</td>
+                                                <td style={td}>{/UNPAID/i.test(r.status) ? pill("amber", r.status) : /PAID/i.test(r.status) ? pill("green", r.status) : pill("gray", r.status || "—")}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    )}
+                    {isOpen && !d.rows.length && <p style={{ color: "#15803d", fontWeight: 700 }}>✓ Nothing open – everything is {tile.kind === "ar" ? "collected" : "paid"}.</p>}
+
+                    {/* PREVIOUS: already filed & paid – folded */}
+                    {isTax && previous.length > 0 && (
+                        <section style={{ ...card, marginBottom: 0 }}>
+                            <button type="button" onClick={() => setShowPrev((x) => !x)}
+                                style={{ display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center", border: 0, background: "none", padding: 0, cursor: "pointer", font: "inherit", color: "inherit" }}>
+                                <b>Previous periods · {previous.length} {quarterly ? "quarter" : "month"}{previous.length === 1 ? "" : "s"} filed & paid</b>
+                                <span className="muted small">{showPrev ? "Hide ▲" : "Show ▼"}</span>
+                            </button>
+                            {showPrev && <div style={{ marginTop: 10 }}><MonthTable list={previous} /></div>}
+                        </section>
+                    )}
+                </>
+            )}
+        </Modal>
     );
 }

@@ -84,6 +84,7 @@ export default function Inventory() {
 
   const actions = [
     { label: loading ? "Loading…" : "Refresh", icon: "refresh", onClick: load, disabled: loading },
+    { label: "Reports", icon: "barChart", onClick: () => navigate("/other/inventory") },   // Other Reports → Inventory
     { label: "Receive Inventory", icon: "plus", variant: "primary", onClick: () => navigate(`${RECEIVE_DETAIL_PATH}/new`, { state: { from: location.pathname } }) },
   ];
 
