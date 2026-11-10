@@ -309,6 +309,21 @@ function EntryModal({ initial, accounts, onClose, onSaved, onYear, onRebuild, cl
   };
 
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+
+  // new Normal / Adjusting entry: Reference is auto (JE2026-00001 / AJE2026-00001, per account) — preview only, made on save
+  const autoRef = !f.original && !f.closing;
+  const refType = f.isDepreciation ? "ADJUSTING" : f.entry_type || "NORMAL";
+  const refYear = String(f.transaction_date || "").slice(0, 4);
+  const [preview, setPreview] = useState("");
+  useEffect(() => {
+    if (!autoRef) return undefined;
+    let alive = true;
+    setPreview("");
+    apiFetch(`${API}/next-no?${new URLSearchParams({ type: refType, date: f.transaction_date || today() })}`)
+      .then((r) => alive && setPreview(r.jv_no || ""))
+      .catch(() => alive && setPreview(""));
+    return () => { alive = false; };
+  }, [autoRef, refType, refYear]); // eslint-disable-line react-hooks/exhaustive-deps
   const setLine = (i, p) => setF((x) => ({ ...x, lines: x.lines.map((l, j) => (j === i ? { ...l, ...p } : l)) }));
   const addLines = () => setF((x) => ({ ...x, lines: [...x.lines, ...Array.from({ length: 5 }, blankLine)] }));
 
@@ -320,8 +335,7 @@ function EntryModal({ initial, accounts, onClose, onSaved, onYear, onRebuild, cl
 
   const save = async () => {
     setError("");
-    if (!f.jv_no.trim()) return setError("Please input reference no.");
-    if (!f.closing && !/^CE-/i.test(f.original || "") && /^CE-/i.test(f.jv_no.trim())) return setError("References starting with CE- are for Closing Entry only.");
+    if (!autoRef && !f.jv_no.trim()) return setError("Please input reference no.");
     if (!f.declared_month) return setError("Declared Month is required.");
     if (f.closing) {
       const noAcct = f.lines.findIndex((l) => !l.account_code && (Number(l.debit) > 0 || Number(l.credit) > 0));
@@ -338,12 +352,13 @@ function EntryModal({ initial, accounts, onClose, onSaved, onYear, onRebuild, cl
       const res = await apiFetch(API, {
         method: "POST",
         body: JSON.stringify({
-          original_jv_no: f.original, jv_no: f.jv_no.trim(), transaction_date: f.transaction_date, declared_month: f.declared_month,
+          // jv_no "" → the server makes the next JE / AJE number
+          original_jv_no: f.original, jv_no: autoRef ? "" : f.jv_no.trim(), transaction_date: f.transaction_date, declared_month: f.declared_month,
           ...(f.closing ? {} : { entry_type: f.isDepreciation ? "ADJUSTING" : f.entry_type || "NORMAL" }),
           lines: used.map((l) => ({ account_code: l.account_code, remarks: l.remarks || null, debit: Number(l.debit) || 0, credit: Number(l.credit) || 0, subsidiary: l.subsidiary ?? null })),
         }),
       });
-      onSaved(res.message || "Record successfully saved");
+      onSaved(autoRef && res.jv_no ? `${res.message || "Record successfully saved"} · ${res.jv_no}` : res.message || "Record successfully saved");
     } catch (e) {
       setError(e.message || "Couldn't save.");
       setSaving(false);
@@ -418,9 +433,9 @@ function EntryModal({ initial, accounts, onClose, onSaved, onYear, onRebuild, cl
         )}
         <Field label="Date"><input type="date" className="input" value={f.transaction_date} onChange={(e) => set("transaction_date", e.target.value)} /></Field>
         <Field label="Declared Month"><input type="month" className="input" value={f.declared_month} onChange={(e) => set("declared_month", e.target.value)} /></Field>
-        <Field label="Reference">
-          <input className="input" maxLength={60} value={f.jv_no} onChange={(e) => set("jv_no", e.target.value)} autoFocus={!f.original && !f.closing}
-            readOnly={f.closing || /^CE-/i.test(f.original || "")} title={f.closing ? "Closing entries keep the CE- reference (General Ledger only)" : undefined} />
+        <Field label="Reference" hint={autoRef ? "Auto generated when saved" : undefined}>
+          <input className="input mono" value={autoRef ? preview || "Generating…" : f.jv_no} readOnly
+            title={f.closing ? "Closing entries keep the CE- reference (General Ledger only)" : "Reference no. is auto generated"} />
         </Field>
       </div>
 
