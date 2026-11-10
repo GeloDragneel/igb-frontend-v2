@@ -78,6 +78,7 @@ export const NAV = [
         items: [
           { to: "/other/report-generator", label: "Report Generator" },
           { to: "/other/transactions", label: "Transactions" },
+          { to: "/other/inventory", label: "Inventory" },
         ],
       },
     ],
@@ -241,7 +242,16 @@ export const INVENTORY_TABS = [
   { to: "/task/inventory/adjustment", label: "Adjustment" },
   { to: "/task/inventory/internal-transfer", label: "Internal Transfer" },
 ];
-
+// Other Reports → Inventory (each tab is its own route, all open InventoryReports.jsx)
+export const INVENTORY_REPORT_TABS = [
+  { to: "/other/inventory", label: "Item Costing Report", end: true },
+  { to: "/other/inventory/profitability", label: "Inventory Profitability Report" },
+  { to: "/other/inventory/cogs-journal", label: "Cost of Goods Sold Journal" },
+  { to: "/other/inventory/adjustment-journal", label: "Inventory Adjustment Journal" },
+];
+INVENTORY_REPORT_TABS.slice(1).forEach((t) => {
+  ROUTE_META[t.to] = { title: `Inventory · ${t.label}`, crumbs: ["Accounting", "Other Reports", "Inventory", t.label] };
+});
 
 export const BANKING_TABS = [
   { to: "/task/banking", label: "Collection", end: true },

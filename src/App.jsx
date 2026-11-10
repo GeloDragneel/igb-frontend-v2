@@ -68,6 +68,7 @@ import EsubReport from "./pages/bir/EsubReport";
 import IncomeTaxSummary from "./pages/bir/IncomeTaxSummary";
 import ReportGenerator from "./pages/other/ReportGenerator";
 import Transactions from "./pages/other/Transactions";
+import InventoryReports from "./pages/other/InventoryReports";
 import Team from "./pages/Team";
 import Settings from "./pages/Settings";
 
@@ -214,6 +215,10 @@ const PAGES = {
 
   "/other/report-generator": ReportGenerator,
   "/other/transactions": Transactions,
+  "/other/inventory": InventoryReports,
+  "/other/inventory/profitability": InventoryReports,
+  "/other/inventory/cogs-journal": InventoryReports,
+  "/other/inventory/adjustment-journal": InventoryReports,
 
   "/team": Team,
   "/employees": BranchEmployees,
