@@ -361,7 +361,7 @@ export function ContactForm({ userType, record, opts: optsProp, defaultName = ""
 
                 {/* ---------- right: contact channels (one row per app) ---------- */}
                 {socialList.length > 0 && (
-                    <section style={{ border: "1px solid var(--border, #e2e8f0)", borderRadius: 14, padding: 14, background: "var(--surface-2, #f8fafc)" }}>
+                    <section style={{ border: "1px solid var(--line)", borderRadius: 14, padding: 14, background: "var(--card-2)" }}>
                         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
                             <span style={{ fontWeight: 700 }}>Contact channels</span>
                             <span className="muted small">{filled ? `${filled} saved` : "used by Send via"}</span>
@@ -372,7 +372,7 @@ export function ContactForm({ userType, record, opts: optsProp, defaultName = ""
                                 const isMail = String(x.name).toLowerCase() === "email";
                                 const vals = valuesOf(x.id);
                                 return (
-                                    <div key={x.id} style={{ display: "grid", gridTemplateColumns: "34px 1fr", gap: 10, alignItems: "start", padding: 10, borderRadius: 12, background: "var(--surface, #fff)", border: "1px solid var(--border, #e2e8f0)" }}>
+                                    <div key={x.id} style={{ display: "grid", gridTemplateColumns: "34px 1fr", gap: 10, alignItems: "start", padding: 10, borderRadius: 12, background: "var(--card)", border: "1px solid var(--line)" }}>
                                         <span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: 10, background: color, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>
                                             {isMail
                                                 ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
@@ -380,7 +380,7 @@ export function ContactForm({ userType, record, opts: optsProp, defaultName = ""
                                         </span>
                                         <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                <span style={{ fontWeight: 600, fontSize: 13 }}>{x.name}</span>
+                                                <span style={{ fontWeight: 600, fontSize: 13, color: "var(--ink)" }}>{x.name}</span>
                                                 <button type="button" onClick={() => addValue(x.id)}
                                                     style={{ border: 0, background: "none", color, fontWeight: 700, fontSize: 12, cursor: "pointer", padding: 0 }}>
                                                     + Add another
