@@ -5093,7 +5093,7 @@ td.ta-right .sk-cell {
 
 .bad {
   border-color: #dc2626 !important;
-  background-color: #fff1f2 !important;
+  /* background-color: #fff1f2 !important; */
 }
 
 /* ---------- Invoice: sticky header + footer ---------- */
