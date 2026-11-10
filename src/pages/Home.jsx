@@ -313,10 +313,10 @@ export default function Home() {
                     <h1>{greet}, {name} <span aria-hidden="true">👋</span></h1>
                     <p>{data ? <>You made <b>{money(data.sales.total)}</b> in sales and spent <b>{money(costs)}</b> this period.</> : "Loading your numbers…"}</p>
                     <div className="hd-hero-actions">
-                        <Link to="/task/sales/new" className="hd-btn hd-btn-light"><Icon name="plus" size={16} /> New invoice</Link>
+                        <Link to="/task/sales/new" className="hd-btn hd-btn-light"><Icon name="plus" size={16} /> New Sales Invoice</Link>
                         <Link to="/task/purchases/new" className="hd-btn hd-btn-ghost">New purchase</Link>
                         <Link to="/task/expenses/new" className="hd-btn hd-btn-ghost">New expense</Link>
-                        <Link to="/setup/product" className="hd-btn hd-btn-ghost">New item</Link>
+                        <Link to="/setup/product" className="hd-btn hd-btn-ghost">New Inventory Item</Link>
                         <Link to="/task/general-journal" className="hd-btn hd-btn-ghost">Journal entry</Link>
                     </div>
                 </div>
