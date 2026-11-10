@@ -11,6 +11,7 @@ import AccountLogo from "./AccountLogo";
 const SECTIONS = [
     ["profile", "Profile"],
     ["contact", "Contact"],
+    ["socials", "Socials"],
     ["address", "Address"],
     ["ownership", "Business Ownership"],
     ["classification", "Classification & Compliance"],
@@ -29,6 +30,24 @@ const CLIENT_FIELDS = [
     "business_ownership_type_id", "business_ownership_type_detail_id", "classification_id", "industries_id",
     "date_of_engagement", "date_of_disengagement", "date_started", "date_registered",
 ];
+// Email / Viber / Messenger / WeChat / WhatsApp / Telegram (m_social_list) – placeholder + color per app (same as Vendor)
+const SOCIAL_HINT = {
+    email: ["name@company.com", "#2563eb"],
+    viber: ["09XX XXX XXXX", "#7360f2"],
+    messenger: ["facebook.com/username or name", "#0084ff"],
+    wechat: ["WeChat ID", "#07c160"],
+    whatsapp: ["+63 9XX XXX XXXX", "#25d366"],
+    telegram: ["@username or +63 9XX…", "#229ed9"],
+};
+const hintOf = (name) => SOCIAL_HINT[String(name || "").toLowerCase()] || ["", "#64748b"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// [{social_list_id, value}] → { [social_list_id]: ["value", …] }
+const socialMap = (list) => {
+    const m = {};
+    (list || []).forEach((x) => { (m[x.social_list_id] ||= []).push(String(x.value || "")); });
+    return m;
+};
+
 export const EMPTY_ACCOUNT = {
     id: 0, trade_name: "", nob_id: "", branch_type: "BRANCH", branch_code: "0000", tax_registration: "", rdo: "",
     status_id: "", street: "", province_id: "", city_id: "", brgy_id: "", phone_num: "", tell_num: "", email_address: "", is_active: true,
@@ -40,7 +59,7 @@ const opts = (list, blank = "—") => [{ value: "", label: blank }, ...(list || 
 export const isMain = (a) => String(a?.branch_type || "").toUpperCase() === "MAIN";
 export const isActive = (a) => Number(a?.is_active ?? 1) === 1;
 
-const toForm = (c) => ({
+const toForm = (c, socials = []) => ({
     client_num: str(c?.client_num),
     ...Object.fromEntries(CLIENT_FIELDS.map((k) => [k, str(c?.[k])])),
     birthdate: day(c?.birthdate),
@@ -50,6 +69,7 @@ const toForm = (c) => ({
     date_registered: day(c?.date_registered),
     compliance_ids: str(c?.compliance_ids).split(",").map((x) => x.trim()).filter(Boolean),
     is_top_withholding_agent: Number(c?.is_top_withholding_agent || 0) === 1,
+    socials: socialMap(socials),
 });
 
 // keep only simple formatting tags from stored HTML (same as Settings)
@@ -172,7 +192,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
         try {
             const r = await apiFetch(`/clients/${encodeURIComponent(n)}`);
             setData(r);
-            const f = toForm(r.client);
+            const f = toForm(r.client, r.socials);
             setForm(f);
             setSaved(JSON.stringify(f));
         } catch (e) {
@@ -184,6 +204,15 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
     const isNew = !num;
     const dirty = !!form && (saved !== JSON.stringify(form) || (isNew && (data?.accounts || []).length > 0));
     const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+
+    /* ---------- socials ---------- */
+    const socialList = data?.social_list?.length ? data.social_list : (L.social || []);
+    const valuesOf = (id) => (form?.socials?.[id]?.length ? form.socials[id] : [""]);      // every app shows one box
+    const setSocial = (id, vals) => setForm((f) => ({ ...f, socials: { ...f.socials, [id]: vals } }));
+    const setValue = (id, i, v) => { const a = [...valuesOf(id)]; a[i] = v; setSocial(id, a); };
+    const addValue = (id) => setSocial(id, [...valuesOf(id), ""]);
+    const delValue = (id, i) => { const a = valuesOf(id).filter((_, j) => j !== i); setSocial(id, a.length ? a : [""]); };
+    const socialCount = Object.values(form?.socials || {}).flat().filter((v) => String(v).trim()).length;
     const go = (key) => { setSection(key); panelRef.current?.scrollTo?.({ top: 0 }); };
     const close = () => (dirty ? setAskClose(true) : onClose());
 
@@ -216,6 +245,9 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
         if (!form.last_name.trim()) return ["profile", "Last name is required."];
         if (!form.status_id) return ["profile", "Client status is required."];
         if (!form.phone_num.trim()) return ["contact", "Cellphone number is required."];
+        const mailId = socialList.find((x) => String(x.name).toLowerCase() === "email")?.id;
+        const badMail = mailId ? valuesOf(mailId).map((v) => v.trim()).find((v) => v && !EMAIL_RE.test(v)) : null;
+        if (badMail) return ["socials", `Not a valid email: ${badMail}`];
         if (!form.province_id) return ["address", "Province is required."];
         if (!form.city_id) return ["address", "City / municipality is required."];
         if (!form.brgy_id) return ["address", "Barangay is required."];
@@ -239,15 +271,19 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
         if (m) { go(m[0]); notify(m[1], "error"); return; }
         setSaving(true);
         try {
-            const body = { ...form };
+            const { socials, ...body } = form;
             Object.keys(body).forEach((k) => { if (body[k] === "") body[k] = null; });
             body.compliance_ids = form.compliance_ids.map(Number);
             body.is_top_withholding_agent = !!form.is_top_withholding_agent;
+            if (socialList.length) {
+                body.socials = socialList.flatMap((x) => valuesOf(x.id).map((v) => v.trim()).filter(Boolean)
+                    .map((v) => ({ social_list_id: Number(x.id), value: v })));
+            }
             delete body.client_num;                       // the server assigns / keeps the client #
             if (isNew) body.accounts = data.accounts.map(({ id, _draft, status_label, nature_label, ...a }) => a);   // saved together with the new client
             if (isNew) body.valid_ids = data.valid_ids.map((v) => ({ institution: v.institution, id_num: v.id_num }));  // required on a new client
             const r = await apiFetch(isNew ? "/clients" : `/clients/${encodeURIComponent(num)}`, { method: isNew ? "POST" : "PUT", body: JSON.stringify(body) });
-            const f = toForm(r.client);
+            const f = toForm(r.client, r.socials || body.socials || []);
             setForm(f);
             setSaved(JSON.stringify(f));
             setData((d) => ({ ...d, client: r.client, ...(r.accounts ? { accounts: r.accounts } : {}), ...(r.valid_ids ? { valid_ids: r.valid_ids } : {}) }));
@@ -342,6 +378,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                                         title={locked ? "Save the client first" : undefined}
                                         aria-current={section === k ? "page" : undefined} onClick={() => go(k)}>
                                         <span>{l}</span>
+                                        {k === "socials" && socialCount > 0 && <span className="st-badge">{socialCount}</span>}
                                         {k === "accounts" && <span className="st-badge">{data.accounts.length}</span>}
                                         {k === "ids" && <span className={`st-badge${isNew && !data.valid_ids.length ? " is-required" : ""}`}>{data.valid_ids.length}</span>}
                                     </button>
@@ -414,6 +451,48 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                                             <span className="field-label">Email address</span>
                                             <input className="input" type="email" value={form.email_address} onChange={(e) => set({ email_address: e.target.value })} />
                                         </label>
+                                    </div>
+                                </>
+                            )}
+
+                            {section === "socials" && (
+                                <>
+                                    <h2 className="st-h">Socials</h2>
+                                    {!socialList.length && <p className="st-note st-note-top">Run <span className="mono">php artisan migrate</span> first (m_social_party.client_num).</p>}
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+                                        {socialList.map((x) => {
+                                            const [ph, color] = hintOf(x.name);
+                                            const isMail = String(x.name).toLowerCase() === "email";
+                                            const vals = valuesOf(x.id);
+                                            return (
+                                                <div key={x.id} style={{ display: "grid", gridTemplateColumns: "34px 1fr", gap: 10, alignItems: "start", padding: 10, borderRadius: 12, background: "var(--surface, #fff)", border: "1px solid var(--border, #e2e8f0)" }}>
+                                                    <span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: 10, background: color, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>
+                                                        {isMail
+                                                            ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+                                                            : String(x.name).slice(0, 1)}
+                                                    </span>
+                                                    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                            <span style={{ fontWeight: 600, fontSize: 13 }}>{x.name}</span>
+                                                            <button type="button" onClick={() => addValue(x.id)}
+                                                                style={{ border: 0, background: "none", color, fontWeight: 700, fontSize: 12, cursor: "pointer", padding: 0 }}>
+                                                                + Add another
+                                                            </button>
+                                                        </div>
+                                                        {vals.map((v, i) => (
+                                                            <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                                <input className="input" value={v} placeholder={ph} maxLength={255} type={isMail ? "email" : "text"}
+                                                                    onChange={(e) => setValue(x.id, i, e.target.value)} aria-label={`${x.name} ${i + 1}`}
+                                                                    style={{ flex: 1, minWidth: 0, height: 36, borderColor: v.trim() ? color : undefined }} />
+                                                                {(vals.length > 1 || v) && (
+                                                                    <button type="button" className="icon-btn ghost" onClick={() => delValue(x.id, i)} aria-label={`Remove ${x.name}`} title="Remove">✕</button>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </>
                             )}
