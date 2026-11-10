@@ -357,6 +357,7 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
     /* ---------- PRINT: PURCHASE ORDER FORM (PDF from the server, shown in a popup like the other prints) ---------- */
     const [printing, setPrinting] = useState(false);
     const [pdf, setPdf] = useState(null); // { url, name }
+    const [sending, setSending] = useState(false); // "Send via" popup
     const printPo = async () => {
         if (!f.invoiceNo) return;
         setPrinting(true);
@@ -922,12 +923,24 @@ function InvoiceForm({ lookups, setLookups, data, onReload }) {
                     footer={
                         <>
                             <button className="btn" onClick={closePdf}>Close</button>
+                            <button className="btn" onClick={() => setSending(true)}>Send via…</button>
                             <button className="btn btn-primary" onClick={savePdf}>Download PDF</button>
                         </>
                     }
                 >
                     <iframe className="es-pdf" src={pdf.url} title={pdf.name} style={{ width: "100%", height: "calc(100vh - 220px)", minHeight: 420, border: 0 }} />
                 </Modal>
+            )}
+            {pdf && sending && (
+                <SendPoModal
+                    poNumber={f.invoiceNo}
+                    vendorId={f.customerId}
+                    label={f.documentNo || f.invoiceNo}
+                    vendor={cust?.name || ""}
+                    vendorEmail={cust?.email || cust?.email_address || ""}
+                    pdf={pdf}
+                    onClose={() => setSending(false)}
+                />
             )}
             {showAudit && (
                 <AuditModal
@@ -1878,6 +1891,302 @@ function ReasonModal({ title, onClose, onSubmit }) {
             <Field label="Reason">
                 <textarea className="input" rows={4} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
             </Field>
+        </Modal>
+    );
+}
+
+
+/* =========================================================
+   "Send via" — Email · Viber · Messenger · WeChat · WhatsApp · Telegram (tick several at once)
+   Email: sent by the server with the PDF attached, to every address typed.
+   Chat apps: a download link of the PDF (valid 7 days) is made once; each app opens with the message,
+   where you pick one or more contacts. WeChat has no web link → the link is copied, paste it in WeChat.
+   ========================================================= */
+const SEND_APPS = [
+    { key: "email", label: "Email", color: "#2563eb" },
+    { key: "viber", label: "Viber", color: "#7360f2" },
+    { key: "messenger", label: "Messenger", color: "#0084ff" },
+    { key: "wechat", label: "WeChat", color: "#07c160" },
+    { key: "whatsapp", label: "WhatsApp", color: "#25d366" },
+    { key: "telegram", label: "Telegram", color: "#229ed9" },
+];
+const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+const appLink = (key, text, url) => {
+    const t = encodeURIComponent(`${text}\n${url}`);
+    switch (key) {
+        case "viber": return `viber://forward?text=${t}`;
+        case "messenger": return isMobile() ? `fb-messenger://share/?link=${encodeURIComponent(url)}` : "https://www.messenger.com/";
+        case "wechat": return "weixin://";
+        case "whatsapp": return `https://wa.me/?text=${t}`;
+        case "telegram": return `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+        default: return "";
+    }
+};
+
+// a saved contact of the vendor → a direct chat link (the message is copied first where the app can't take it)
+const phoneDigits = (v) => {
+    let d = String(v || "").replace(/\D/g, "");
+    if (d.startsWith("0") && d.length === 11) d = "63" + d.slice(1);       // 09171234567 → 639171234567
+    return d;
+};
+const contactLink = (key, value, text) => {
+    const v = String(value || "").trim();
+    const t = encodeURIComponent(text);
+    if (key === "whatsapp") return { href: `https://wa.me/${phoneDigits(v)}?text=${t}`, copy: false };
+    if (key === "telegram") return /^\+?\d[\d\s-]+$/.test(v) ? { href: `https://t.me/+${phoneDigits(v)}`, copy: true } : { href: `https://t.me/${v.replace(/^@/, "")}`, copy: true };
+    if (key === "viber") return { href: `viber://chat?number=%2B${phoneDigits(v)}`, copy: true };
+    if (key === "messenger") return { href: /^https?:/i.test(v) ? v.replace(/facebook\.com/i, "m.me").replace(/www\./i, "") : `https://m.me/${v.replace(/^@/, "")}`, copy: true };
+    if (key === "wechat") return { href: "weixin://", copy: true };
+    return null;
+};
+
+function SendPoModal({ poNumber, vendorId, label, vendor, vendorEmail, pdf, onClose }) {
+    const notify = useToast();
+    const [picked, setPicked] = useState(["email"]);
+    const [emails, setEmails] = useState(vendorEmail ? [vendorEmail] : []);
+    const [typed, setTyped] = useState("");
+    const [subject, setSubject] = useState(`Purchase Order ${label}`);
+    const [message, setMessage] = useState(`Good day${vendor ? ` ${vendor}` : ""},\n\nPlease see the attached Purchase Order ${label}.\n\nThank you.`);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+    const [link, setLink] = useState(null);           // { url, expires } after Send
+    const [sentEmail, setSentEmail] = useState("");
+    // the vendor's saved Email / Viber / … (Setup → Vendors → Contact channels)
+    const [saved, setSaved] = useState([]);
+    useEffect(() => {
+        if (!vendorId) return;
+        apiFetch(`/contacts-socials/${vendorId}`).then((list) => {
+            const rows = Array.isArray(list) ? list : [];
+            setSaved(rows);
+            const mails = rows.filter((x) => String(x.name).toLowerCase() === "email").map((x) => x.value);
+            if (mails.length) setEmails((e) => [...new Set([...e, ...mails])]);
+        }).catch(() => { });
+    }, [vendorId]);
+    const savedFor = (key) => saved.filter((x) => String(x.name).toLowerCase() === key);
+    const chats = picked.filter((k) => k !== "email");
+    const canShareFile = typeof navigator !== "undefined" && !!navigator.canShare;
+
+    const toggle = (k) => setPicked((x) => (x.includes(k) ? x.filter((y) => y !== k) : [...x, k]));
+    // "a@x.com, b@y.com" / Enter → chips
+    const addEmails = (txt) => {
+        const list = String(txt).split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+        if (!list.length) return;
+        setEmails((x) => [...new Set([...x, ...list])]);
+        setTyped("");
+    };
+    const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
+    const send = async () => {
+        setError("");
+        const all = [...new Set([...emails, ...String(typed).split(/[\s,;]+/).filter(Boolean)])];
+        if (!picked.length) return setError("Pick at least one: Email, Viber, Messenger, WeChat, WhatsApp or Telegram.");
+        if (picked.includes("email")) {
+            if (!all.length) return setError("Type at least one email address.");
+            const bad = all.find((e) => !validEmail(e));
+            if (bad) return setError(`Not a valid email: ${bad}`);
+        }
+        setBusy(true);
+        try {
+            if (picked.includes("email")) {
+                const r = await apiFetch(`/print/purchase-order/${encodeURIComponent(poNumber)}/email`, {
+                    method: "POST", body: JSON.stringify({ to: all, subject, message }),
+                });
+                setEmails(all);
+                setTyped("");
+                setSentEmail(r.message || `Sent to ${all.length} email address(es).`);
+                notify(r.message || "Email sent.");
+            }
+            if (chats.length && !link) {
+                setLink(await apiFetch(`/print/purchase-order/${encodeURIComponent(poNumber)}/link`, { method: "POST" }));
+            }
+        } catch (e) {
+            setError(e.message || "Couldn't send.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const chatText = `Purchase Order ${label}${vendor ? ` – ${vendor}` : ""}`;
+    const copy = async (txt) => {
+        try { await navigator.clipboard.writeText(txt); notify("Link copied"); } catch { notify("Couldn't copy – select the link and copy it."); }
+    };
+    const openApp = async (key) => {
+        if (key === "wechat" || (key === "messenger" && !isMobile())) await copy(`${chatText}\n${link.url}`);
+        window.open(appLink(key, chatText, link.url), "_blank", "noopener");
+    };
+    // the PDF itself through the device share sheet (phones / Windows 11): Viber, WeChat, Messenger … with the file
+    const shareFile = async () => {
+        try {
+            const blob = await (await fetch(pdf.url)).blob();
+            const file = new File([blob], pdf.name, { type: "application/pdf" });
+            if (!navigator.canShare({ files: [file] })) return notify("This browser can't share files – use the buttons below.");
+            await navigator.share({ files: [file], title: chatText, text: chatText });
+        } catch (e) {
+            if (e?.name !== "AbortError") notify("Couldn't share the file.");
+        }
+    };
+
+    const box = { border: "1px solid var(--border, #e2e8f0)", borderRadius: 14, padding: 16, background: "var(--surface, transparent)" };
+    const step = (n, title, sub) => (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+            <span style={{ width: 22, height: 22, borderRadius: 99, background: "var(--primary, #2563eb)", color: "#fff", fontSize: 12, fontWeight: 700, display: "grid", placeItems: "center", flex: "0 0 auto" }}>{n}</span>
+            <span style={{ fontWeight: 700 }}>{title}</span>
+            {sub && <span className="muted small">{sub}</span>}
+        </div>
+    );
+    const glyph = (a, size = 40) => (
+        <span aria-hidden="true" style={{ width: size, height: size, borderRadius: 12, background: a.color, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: size * 0.42, flex: "0 0 auto" }}>
+            {a.key === "email"
+                ? <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+                : a.label.slice(0, 1)}
+        </span>
+    );
+    const picks = SEND_APPS.filter((a) => chats.includes(a.key));
+
+    return (
+        <Modal
+            title="Send Purchase Order"
+            onClose={() => !busy && onClose()}
+            size="lg"
+            footer={
+                <>
+                    {canShareFile && (
+                        <button className="btn" style={{ marginRight: "auto" }} onClick={shareFile} title="Send the PDF file itself with any app on this device">
+                            Share PDF file…
+                        </button>
+                    )}
+                    <button className="btn" onClick={onClose} disabled={busy}>Close</button>
+                    <button className="btn btn-primary" onClick={send} disabled={busy || !picked.length}>
+                        {busy ? "Sending…" : picked.length ? `Send (${picked.length})` : "Send"}
+                    </button>
+                </>
+            }
+        >
+            {/* what is sent */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 12, background: "var(--surface-2, #f1f5f9)", marginBottom: 16 }}>
+                <span aria-hidden="true" style={{ width: 36, height: 44, borderRadius: 6, background: "#dc2626", color: "#fff", fontSize: 11, fontWeight: 800, display: "grid", placeItems: "center" }}>PDF</span>
+                <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pdf.name}</div>
+                    <div className="muted small">Purchase Order {label}{vendor ? ` · ${vendor}` : ""}</div>
+                </div>
+            </div>
+
+            {error && <div className="alert-error" role="alert" style={{ marginBottom: 12 }}>{error}</div>}
+
+            {/* 1. apps */}
+            {step(1, "Send via", "pick one or more")}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 18 }}>
+                {SEND_APPS.map((a) => {
+                    const on = picked.includes(a.key);
+                    return (
+                        <button key={a.key} type="button" onClick={() => toggle(a.key)} aria-pressed={on}
+                            style={{
+                                position: "relative", display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 14, cursor: "pointer", textAlign: "left",
+                                border: `2px solid ${on ? a.color : "var(--border, #e2e8f0)"}`, background: on ? `${a.color}12` : "var(--surface, #fff)",
+                                color: "inherit", font: "inherit", transition: "border-color .15s, background .15s, transform .15s",
+                                transform: on ? "translateY(-1px)" : "none", boxShadow: on ? `0 6px 16px ${a.color}33` : "none",
+                            }}>
+                            {glyph(a)}
+                            <span style={{ fontWeight: 700 }}>{a.label}</span>
+                            <span aria-hidden="true" style={{
+                                position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: 99, display: "grid", placeItems: "center",
+                                fontSize: 11, fontWeight: 900, color: "#fff", background: on ? a.color : "transparent",
+                                border: on ? "none" : "1.5px solid var(--border, #cbd5e1)",
+                            }}>{on ? "✓" : ""}</span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* 2. email */}
+            {picked.includes("email") && (
+                <div style={{ ...box, marginBottom: 14 }}>
+                    {step(2, "Email", "the PDF is attached")}
+                    <div style={{ display: "grid", gap: 10 }}>
+                        <div>
+                            <span className="field-label">To</span>
+                            <div className="input" style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", minHeight: 42, height: "auto", padding: 6 }}>
+                                {emails.map((e) => (
+                                    <span key={e} style={{
+                                        display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, fontSize: 13, fontWeight: 600,
+                                        background: validEmail(e) ? "rgba(37,99,235,.12)" : "rgba(220,38,38,.14)", color: validEmail(e) ? "#1d4ed8" : "#b91c1c"
+                                    }}>
+                                        {e}
+                                        <button type="button" onClick={() => setEmails((x) => x.filter((y) => y !== e))} aria-label={`Remove ${e}`}
+                                            style={{ border: 0, background: "none", cursor: "pointer", padding: 0, lineHeight: 1, color: "inherit", fontSize: 15 }}>×</button>
+                                    </span>
+                                ))}
+                                <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={emails.length ? "Add another…" : "name@company.com"}
+                                    onKeyDown={(e) => { if (["Enter", ",", ";", " "].includes(e.key)) { e.preventDefault(); addEmails(typed); } else if (e.key === "Backspace" && !typed && emails.length) setEmails((x) => x.slice(0, -1)); }}
+                                    onBlur={() => addEmails(typed)} onPaste={(e) => { e.preventDefault(); addEmails(e.clipboardData.getData("text")); }}
+                                    style={{ flex: 1, minWidth: 180, border: 0, outline: 0, background: "transparent", font: "inherit", color: "inherit" }} />
+                            </div>
+                            <span className="muted small">Press Enter or comma after each address.</span>
+                        </div>
+                        <label><span className="field-label">Subject</span>
+                            <input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} /></label>
+                        <label><span className="field-label">Message</span>
+                            <textarea className="input" rows={4} value={message} onChange={(e) => setMessage(e.target.value)} maxLength={5000} /></label>
+                        {sentEmail && (
+                            <div style={{ padding: "8px 12px", borderRadius: 10, background: "rgba(22,163,74,.12)", color: "#15803d", fontWeight: 600 }}>✓ {sentEmail}</div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* 3. chat apps */}
+            {picks.length > 0 && (
+                <div style={box}>
+                    {step(picked.includes("email") ? 3 : 2, "Chat apps", link ? `link valid until ${link.expires}` : "a link to the PDF is made when you press Send")}
+                    {link ? (
+                        <>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 12 }}>
+                                {picks.map((a) => {
+                                    const pasted = a.key === "wechat" || (a.key === "messenger" && !isMobile());
+                                    return (
+                                        <div key={a.key} style={{ display: "grid", gap: 6, alignContent: "start" }}>
+                                            <button type="button" onClick={() => openApp(a.key)}
+                                                style={{
+                                                    display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, border: 0, cursor: "pointer",
+                                                    background: a.color, color: "#fff", font: "inherit", textAlign: "left", boxShadow: `0 6px 16px ${a.color}40`
+                                                }}>
+                                                {glyph({ ...a, color: "rgba(255,255,255,.22)" }, 32)}
+                                                <span style={{ display: "grid" }}>
+                                                    <b>Open {a.label}</b>
+                                                    <small style={{ opacity: 0.85 }}>{pasted ? "link copied · paste it in the chat" : "pick one or more contacts"}</small>
+                                                </span>
+                                            </button>
+                                            {savedFor(a.key).map((c) => {
+                                                const l = contactLink(a.key, c.value, `${chatText}\n${link.url}`);
+                                                if (!l) return null;
+                                                return (
+                                                    <button key={c.value} type="button" className="btn btn-sm" title={l.copy ? "The message is copied – paste it in the chat" : "Opens the chat with the message"}
+                                                        onClick={async () => { if (l.copy) await copy(`${chatText}\n${link.url}`); window.open(l.href, "_blank", "noopener"); }}
+                                                        style={{ justifyContent: "flex-start", gap: 6, borderColor: a.color, color: a.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                        → {c.value}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div style={{ display: "flex", gap: 8 }}>
+                                <input className="input mono" readOnly value={link.url} onFocus={(e) => e.target.select()} style={{ flex: 1, fontSize: 12 }} aria-label="PDF link" />
+                                <button type="button" className="btn" onClick={() => copy(`${chatText}\n${link.url}`)}>Copy link</button>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                            {picks.map((a) => (
+                                <span key={a.key} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 10, background: `${a.color}14`, fontWeight: 600 }}>
+                                    {glyph(a, 22)} {a.label}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </Modal>
     );
 }
