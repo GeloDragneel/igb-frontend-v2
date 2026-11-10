@@ -10,6 +10,7 @@ import { apiFetch, apiBlob } from "../../context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ClientPopup } from "../client/ClientPopups";
 import { ManualBillModal } from "./GenerateBilling";
+import { SendRequestModal } from "./SendRequestModal";
 import "./BillingDashboard.css";
 
 const PAID = 1, VOID = 5, CANCELLED = 9;
@@ -1006,27 +1007,39 @@ function LogsModal({ service, onClose }) {
 /* ---------- print preview (old modal_PrintPDF) ---------- */
 function PrintModal({ transNumber, job, onClose }) {
   const [url, setUrl] = useState("");
+  const [blob, setBlob] = useState(null);
   const [error, setError] = useState("");
+  const [send, setSend] = useState(false);
 
   useEffect(() => {
     let alive = true;
     let objectUrl = "";
     const qs = job.serviceId ? `?service_id=${job.serviceId}` : "";
     apiBlob(`/billing/soa/${encodeURIComponent(transNumber)}/print/${job.type}${qs}`)
-      .then((blob) => { if (!alive) return; objectUrl = URL.createObjectURL(blob); setUrl(objectUrl); })
+      .then((b) => { if (!alive) return; objectUrl = URL.createObjectURL(b); setBlob(b); setUrl(objectUrl); })
       .catch((e) => alive && setError(e.message || "Couldn't create the report."));
     return () => { alive = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [transNumber, job]);
 
   return (
-    <Modal title={`Print Preview · ${job.label}`} onClose={onClose} size="xlg"
-      footer={<>
-        {url && <a className="btn" href={url} download={`${job.type}-${transNumber}.pdf`}>Download</a>}
-      </>}>
-      {error && <div className="alert-error" role="alert">{error}</div>}
-      {!url && !error && <div className="bd-pdf-wait">Preparing {job.label}…</div>}
-      {url && <iframe className="bd-pdf" src={url} title={job.label} />}
-    </Modal>
+    <>
+      <Modal title={`Print Preview · ${job.label}`} onClose={onClose} size="xlg"
+        footer={<>
+          {url && <a className="btn" href={url} download={`${job.type}-${transNumber}.pdf`}>Download</a>}
+          {url && <button className="btn btn-primary" onClick={() => setSend(true)}>Send via…</button>}
+        </>}>
+        {error && <div className="alert-error" role="alert">{error}</div>}
+        {!url && !error && <div className="bd-pdf-wait">Preparing {job.label}…</div>}
+        {url && <iframe className="bd-pdf" src={url} title={job.label} />}
+      </Modal>
+      {send && blob && (
+        <SendRequestModal
+          meta={{ docType: "SOA", referenceNo: transNumber, printType: job.type, serviceId: job.serviceId || null, label: job.label }}
+          pdf={{ blob, name: `${job.type}-${transNumber}.pdf` }}
+          onClose={() => setSend(false)}
+        />
+      )}
+    </>
   );
 }
 /* ---------- Type: PF / EO / Return, pick any (none = all) ---------- */
