@@ -102,17 +102,20 @@ export function SendRequestModal({ meta, pdf, request, onClose, onSaved }) {
     const [message, setMessage] = useState(request?.message ?? "");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
+    const [found, setFound] = useState(null);           // { emails: n } after loading · { error } if it failed
 
     // the client's emails + saved Viber / WhatsApp … (Client → Socials)
     useEffect(() => {
         apiFetch(`/send-requests/contacts?trans=${encodeURIComponent(ref)}`).then((r) => {
             setSaved(r.socials || []);
+            setFound({ emails: (r.emails || []).length, party: r.party || "" });
             if (r.party && !party) setParty(r.party);
             if (!isEdit) {
                 if (r.emails?.length) setEmails((e) => [...new Set([...e, ...r.emails])]);
                 setMessage((m) => m || `Good day${r.party ? ` ${r.party}` : ""},\n\nPlease see the attached ${label || "Statement of Account"} (${ref}).\n\nThank you.`);
             }
-        }).catch(() => {
+        }).catch((e) => {
+            setFound({ error: e.message || "Couldn't load the client's contacts." });
             if (!isEdit) setMessage((m) => m || `Good day,\n\nPlease see the attached ${label || "Statement of Account"} (${ref}).\n\nThank you.`);
         });
     }, [ref]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -241,6 +244,12 @@ export function SendRequestModal({ meta, pdf, request, onClose, onSaved }) {
                                     style={{ flex: 1, minWidth: 180, border: 0, outline: 0, background: "transparent", font: "inherit", color: "inherit" }} />
                             </div>
                             <span className="muted small">Press Enter or comma after each address.</span>
+                            {found?.error && <div className="field-error" style={{ marginTop: 4 }}>Client contacts not loaded: {found.error}</div>}
+                            {found && !found.error && !found.emails && (
+                                <div className="muted small" style={{ marginTop: 4, color: "#d97706" }}>
+                                    No email saved for {found.party || "this client"} – add it in Clients → Masterlist → Contact / Socials (business account email also counts).
+                                </div>
+                            )}
                         </div>
                         <label><span className="field-label">Subject</span>
                             <input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} /></label>

@@ -210,19 +210,15 @@ export default function Header({ onMenu }) {
       <button className="icon-btn ghost" onClick={onMenu} aria-label="Toggle menu">
         <Icon name="menu" size={22} />
       </button>
-
       <div className="hd-greet">
         <span className="hd-hello">{greeting()},</span>
         {businessArea}
       </div>
-
       <div className="topbar-right">
         {/* birthday today: animated cake (click = celebrants) · pops up by itself once after login */}
         <BirthdayPopup />
-
         {/* AI Assistant: messenger-style chat (bottom right) */}
-        <AiAssistant />
-
+        {/* <AiAssistant /> */}
         {/* dark mode: on phones it's only in the user menu (less crowded) */}
         <button
           className="icon-btn round hd-theme-btn"
@@ -231,13 +227,10 @@ export default function Header({ onMenu }) {
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
-
         {/* Messenger: employees only (Staff / ClientStaff) */}
         <Messenger />
-
         {/* Notifications: Staff / ClientStaff → NotificationController · Client → the alerts above */}
         <NotificationBell alerts={alerts} open={notifOpen} setOpen={setNotifOpen} onOpen={() => setUserOpen(false)} />
-
         {/* User menu */}
         <div className="pop-wrap" ref={userRef}>
           <button

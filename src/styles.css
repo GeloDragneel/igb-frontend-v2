@@ -2,7 +2,7 @@
    Theme tokens
    ========================================================= */
 :root {
-  --font: "Lexend Deca", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   --bg: #eef2f8;
   --card: #ffffff;
@@ -38,7 +38,7 @@
   --bg: #0f1526;
   --card: #172036;
   --card-2: #1c2640;
-  --ink: #e6ebf5;
+  --ink: #a2a7be;
   --muted: #95a0ba;
   --line: #28334f;
   --brand: #4f86ff;

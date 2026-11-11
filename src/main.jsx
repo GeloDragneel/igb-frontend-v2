@@ -6,13 +6,14 @@ import { ToastProvider } from "./components/Toast";
 import { PeriodProvider } from "./context/PeriodContext";
 import { AuthProvider } from "./context/AuthContext";
 import { LookupsProvider } from "./context/LookupsContext";
-// Lexend Deca font (bundled, works offline)
-import "@fontsource/lexend-deca/300.css";
-import "@fontsource/lexend-deca/400.css";
-import "@fontsource/lexend-deca/500.css";
-import "@fontsource/lexend-deca/600.css";
-import "@fontsource/lexend-deca/700.css";
-import "@fontsource/lexend-deca/800.css";
+// Nunito font (bundled, works offline)
+import "@fontsource/nunito/300.css";
+import "@fontsource/nunito/400.css";
+import "@fontsource/nunito/500.css";
+import "@fontsource/nunito/600.css";
+import "@fontsource/nunito/700.css";
+import "@fontsource/nunito/800.css";
+import "@fontsource/nunito/900.css";
 import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
