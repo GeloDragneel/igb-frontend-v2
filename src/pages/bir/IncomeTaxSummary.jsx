@@ -684,7 +684,8 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
                 <div className="its-split">{left}{right !== undefined && <span className="mono">{right}</span>}</div>
             </td>
             {empty()}
-            <td /><td />
+            <td className={`ta-right mono ${bold && value < 0 ? "vs-neg" : ""}`}>{value === null ? "" : n2(value)}</td>
+            <td />
             <td className={`ta-right mono ${bold ? "strong" : ""} ${bold && value < 0 ? "vs-neg" : ""}`}>{value === null ? "" : n2(value)}</td>
         </tr>
     );
