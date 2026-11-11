@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useOutlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import * as routes from "./routesMeta";
 import "./OpenTabs.css";
-
+import Icon from "./Icons";
 /*
  * Browser-like page tabs.
  *  - Opening a sidebar menu adds a tab (or switches to it if it is already open).
@@ -55,7 +55,22 @@ function sideOf(pathname) {
 }
 const metaFor = (path) => (typeof routes.metaFor === "function" ? routes.metaFor(path) : null);
 const ALL_PAGES = listPages();
-
+// sidebar icon of every page: the item's own icon, else its group's icon (Billing → wallet …)
+const ICON_OF = (() => {
+    const m = {};
+    (Array.isArray(routes.NAV) ? routes.NAV : []).forEach((s) =>
+        (s?.entries || []).forEach((e) => {
+            if (Array.isArray(e?.items)) e.items.forEach((i) => { if (i?.to) m[i.to] = i.icon || e.icon; });
+            else if (e?.to) m[e.to] = e.icon;
+        })
+    );
+    return m;
+})();
+const iconOf = (path) => {
+    if (ICON_OF[path]) return ICON_OF[path];
+    const hit = Object.keys(ICON_OF).filter((to) => to !== HOME && path.startsWith(to + "/")).sort((a, b) => b.length - a.length)[0];
+    return (hit && ICON_OF[hit]) || "fileText";
+};
 // longest sidebar path that matches the current url → that is the tab
 const PAGES = [...ALL_PAGES].sort((a, b) => b.to.length - a.to.length);
 function pageOf(pathname) {
@@ -417,7 +432,7 @@ export default function OpenTabs({ ready = true }) {
                             onAuxClick={(e) => { if (e.button === 1 && !only) close([t.key]); }}
                             onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, key: t.key }); }}
                         >
-                            <span className="ptab-dot" aria-hidden="true" />
+                            <span className="ptab-icon" aria-hidden="true"><Icon name={iconOf(t.key)} size={15} /></span>
                             <span className="ptab-text">
                                 {(() => {
                                     // one line, without the side name (Accounting / Admin / Staff)
