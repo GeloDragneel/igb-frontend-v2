@@ -4,7 +4,7 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 import Modal from "../../components/Modal";
 import SearchSelect from "../../components/SearchSelect";
 import { useToast } from "../../components/Toast";
-import { apiFetch } from "../../context/AuthContext";
+import { apiFetch, apiBlob } from "../../context/AuthContext";
 import "./ClientCoa.css";
 import AccountLogo from "./AccountLogo";
 
@@ -173,6 +173,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
     const [saving, setSaving] = useState(false);
     const [askSave, setAskSave] = useState(false);
     const [askClose, setAskClose] = useState(false);
+    const [letter, setLetter] = useState(null);      // { kind: "engagement" | "disengagement", date }
     const [openDetail, setOpenDetail] = useState(null);
 
     const [acct, setAcct] = useState(null);
@@ -629,11 +630,28 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                                             <span className="field-label">Industry</span>
                                             <SearchSelect value={form.industries_id} options={opts(L.industries)} onChange={(v) => set({ industries_id: v })} aria-label="Industry" />
                                         </div>
-                                        {[["date_of_engagement", "Date of engagement"], ["date_of_disengagement", "Date of disengagement"], ["date_started", "Date started"], ["date_registered", "Date registered"]].map(([k, l]) => (
-                                            <label key={k} className="field">
-                                                <span className="field-label">{l}</span>
-                                                <input type="date" className="input" value={form[k]} onChange={(e) => set({ [k]: e.target.value })} />
-                                            </label>
+                                        {[["date_of_engagement", "Date of engagement", "engagement"], ["date_of_disengagement", "Date of disengagement", "disengagement"], ["date_started", "Date started"], ["date_registered", "Date registered"]].map(([k, l, letterKind]) => (
+                                            <div key={k} className="field">
+                                                <span className="field-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                                    <label htmlFor={`cp-${k}`}>{l}</label>
+                                                    {letterKind && !isNew && (
+                                                        <button type="button" onClick={() => setLetter({ kind: letterKind, date: form[k] })} disabled={!form[k]}
+                                                            title={form[k] ? `Print ${l.replace("Date of ", "")} letter` : `Set the ${l.toLowerCase()} first`}
+                                                            style={{
+                                                                display: "inline-flex", alignItems: "center", gap: 5, height: 24, padding: "0 10px", borderRadius: 999,
+                                                                border: "1px solid var(--line)", background: form[k] ? "var(--brand-soft)" : "transparent",
+                                                                color: form[k] ? "var(--brand)" : "var(--muted)", fontSize: 12, fontWeight: 700,
+                                                                cursor: form[k] ? "pointer" : "not-allowed", font: "inherit"
+                                                            }}>
+                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                                <path d="M6 9V3h12v6" /><rect x="6" y="14" width="12" height="7" rx="1" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                                            </svg>
+                                                            Print letter
+                                                        </button>
+                                                    )}
+                                                </span>
+                                                <input id={`cp-${k}`} type="date" className="input" value={form[k]} onChange={(e) => set({ [k]: e.target.value })} />
+                                            </div>
                                         ))}
                                     </div>
                                 </>
@@ -768,6 +786,9 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
             {askClose && (
                 <ConfirmDialog title="Discard unsaved changes?" message="Your changes to this client haven't been saved." confirmLabel="Discard"
                     onCancel={() => setAskClose(false)} onConfirm={() => { setAskClose(false); onClose(); }} />
+            )}
+            {letter && (
+                <LetterModal kind={letter.kind} date={letter.date} clientNum={num} accounts={data?.accounts || []} onClose={() => setLetter(null)} />
             )}
             {acct && (
                 <AccountPopup account={acct} clientNum={num} L={L} hasRdo={hasRdo} onClose={() => setAcct(null)}
@@ -1329,5 +1350,112 @@ function StaffPick({ title, list, value, onChange, current }) {
                 })}
             </div>
         </div>
+    );
+}
+/* =========================================================
+   Engagement / Disengagement letter → PDF preview (GET /clients/{num}/letter/{kind})
+   ========================================================= */
+const todayIso = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+function LetterModal({ kind, date, clientNum, accounts, onClose }) {
+    const notify = useToast();
+    const title = kind === "engagement" ? "Engagement Letter" : "Disengagement Letter";
+    const main = accounts.find((a) => isMain(a)) || accounts[0];
+    const [accountId, setAccountId] = useState(main?.id ? String(main.id) : "");
+    const [letterDate, setLetterDate] = useState(todayIso());
+    const [effective, setEffective] = useState(date || "");
+    const [balance, setBalance] = useState("");          // "" → server uses unpaid PF + EO from Billing
+    const [unpaid, setUnpaid] = useState(null);          // { pf, eo, total }
+    const [url, setUrl] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+    const urlRef = useRef("");
+
+    const make = async () => {
+        setBusy(true);
+        setError("");
+        try {
+            const q = new URLSearchParams({ date: effective, letter_date: letterDate });
+            if (accountId) q.set("account_id", accountId);
+            if (kind === "disengagement" && String(balance).trim() !== "") q.set("balance", String(Number(String(balance).replace(/,/g, "")) || 0));
+            const blob = await apiBlob(`/clients/${encodeURIComponent(clientNum)}/letter/${kind}?${q}`);
+            const u = URL.createObjectURL(blob);
+            if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+            urlRef.current = u;
+            setUrl(u);
+        } catch (e) {
+            setError(e.message || "Couldn't make the letter.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    useEffect(() => { make(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // disengagement: unpaid PF + EO of the business account (Billing)
+    useEffect(() => {
+        if (kind !== "disengagement") return;
+        let alive = true;
+        setUnpaid(null);
+        apiFetch(`/clients/${encodeURIComponent(clientNum)}/outstanding?${new URLSearchParams(accountId ? { account_id: accountId } : {})}`)
+            .then((r) => {
+                if (!alive) return;
+                setUnpaid(r);
+                setBalance((Number(r.total) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            })
+            .catch(() => alive && setUnpaid({ error: true }));
+        return () => { alive = false; };
+    }, [kind, clientNum, accountId]);
+    const peso = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
+
+    const trade = accounts.find((a) => String(a.id) === accountId)?.trade_name || "";
+    const fileName = `${kind.toUpperCase()}-LETTER-${(trade || clientNum).replace(/[^A-Za-z0-9_-]+/g, "_")}.pdf`;
+
+    return (
+        <Modal title={`Print Preview · ${title}`} onClose={onClose} size="xlg"
+            footer={<>
+                <button className="btn" onClick={onClose}>Close</button>
+                {url && <a className="btn btn-primary" href={url} download={fileName} onClick={() => notify(`Downloaded ${fileName}`)}>Download</a>}
+            </>}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 12 }}>
+                {accounts.length > 1 && (
+                    <div className="field" style={{ minWidth: 240, flex: "1 1 240px" }}>
+                        <span className="field-label">Business account</span>
+                        <SearchSelect value={accountId} onChange={setAccountId} aria-label="Business account"
+                            options={accounts.map((a) => ({ value: String(a.id), label: `${a.trade_name || "Untitled account"}${a.branch_code ? ` · ${a.branch_code}` : ""}` }))} />
+                    </div>
+                )}
+                <label className="field" style={{ width: 170 }}>
+                    <span className="field-label">{kind === "engagement" ? "Effective (engaged)" : "Effective (ended)"}</span>
+                    <input type="date" className="input" value={effective} onChange={(e) => setEffective(e.target.value)} />
+                </label>
+                <label className="field" style={{ width: 170 }}>
+                    <span className="field-label">Letter date</span>
+                    <input type="date" className="input" value={letterDate} onChange={(e) => setLetterDate(e.target.value)} />
+                </label>
+                {kind === "disengagement" && (
+                    <label className="field" style={{ width: 170 }}>
+                        <span className="field-label">Outstanding balance (₱)</span>
+                        <input className="input mono" inputMode="decimal" placeholder={unpaid ? "0.00" : "Loading…"} value={balance}
+                            title={unpaid && !unpaid.error ? `Unpaid PF ${peso(unpaid.pf)} + EO ${peso(unpaid.eo)}` : ""}
+                            onChange={(e) => setBalance(e.target.value.replace(/[^\d.,]/g, ""))} />
+                    </label>
+                )}
+                <button className="btn" onClick={make} disabled={busy || !effective}>{busy ? "Preparing…" : "Update preview"}</button>
+            </div>
+
+            {error && <div className="alert-error" role="alert">{error}</div>}
+            {!url && !error && (
+                <div style={{ display: "grid", placeItems: "center", height: "40vh", color: "var(--muted)" }}>Preparing {title}…</div>
+            )}
+            {url && (
+                <iframe src={url} title={title}
+                    style={{ display: "block", width: "100%", height: "70vh", border: "1px solid var(--line)", borderRadius: 8, opacity: busy ? 0.5 : 1 }} />
+            )}
+        </Modal>
     );
 }

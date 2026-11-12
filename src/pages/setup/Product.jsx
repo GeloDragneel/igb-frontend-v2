@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SearchCard from "../../components/SearchCard";
 import DataTable from "../../components/DataTable";
 import TableSkeleton from "../../components/TableSkeleton";
@@ -164,7 +164,11 @@ export default function Products() {
    ========================================================= */
 let unitKey = 0;
 const newUnit = () => ({ key: `n${unitKey++}`, id: null, unit_type_id: "", value: "", price: "", cost: "" });
-
+// default VAT accounts for new products: [field, code prefix, name match]
+const VAT_DEFAULTS = [
+  ["input_vat_account", "1", /^input\s*(tax|vat)\b/i],
+  ["output_vat_account", "2", /^output\s*(tax|vat)\b/i],
+];
 export function ProductForm({ record, opts: optsProp, accounts, defaultName = "", onClose, onSaved }) {
   // dropdowns: passed in (Products page) or loaded here (invoice page)
   const [opts, setOpts] = useState(optsProp || { item_classes: [], tax_types: [], unit_types: [] });
@@ -199,6 +203,26 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  // new product → preselect Input Tax / Input VAT and Output Tax / Output VAT
+  const vatDefaulted = useRef(false);
+  useEffect(() => {
+    if (record || vatDefaulted.current || !accounts?.length) return;
+    vatDefaulted.current = true;
+    setF((x) => {
+      const next = { ...x };
+      VAT_DEFAULTS.forEach(([key, prefix, re]) => {
+        if (next[key]) return;
+        const hit = accounts.find(
+          (a) =>
+            String(a.account_code).startsWith(prefix) &&
+            a.root_name && String(a.root_name) !== "0" &&
+            re.test(String(a.account_name || "").trim())
+        );
+        if (hit) next[key] = String(hit.account_code);
+      });
+      return next;
+    });
+  }, [accounts, record]);
   const { refresh: refreshLookups } = useLookups();
   const [newAccts, setNewAccts] = useState([]);   // accounts added from this popup (shown right away)
   const [addAcct, setAddAcct] = useState(null);   // { key, label, prefix, name }
