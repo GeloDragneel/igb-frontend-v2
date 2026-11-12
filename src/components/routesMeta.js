@@ -19,6 +19,7 @@ export const NAV = [
           { to: "/task/general-journal", label: "General Journal" },
           { to: "/task/fixed-assets", label: "Fixed Asset Management" },
           { to: "/task/loans", label: "Loan Management" },
+          { to: "/pos", label: "POS", newTab: true },
         ],
       },
       {

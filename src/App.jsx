@@ -130,6 +130,8 @@ import Notifications from "./pages/Notifications";
 import HelpSupport from "./pages/HelpSupport";
 import BranchEmployees from "./pages/BranchEmployees";
 import Calendar from "./pages/Calendar";
+
+import Pos from "./pages/pos/Pos";
 // Built pages. Add new ones here as you make them;
 // everything else in the sidebar shows "Coming soon".
 const PAGES = {
@@ -275,12 +277,14 @@ const PAGES = {
 };
 
 // Routes that are not in the sidebar (page tabs)
-const EXTRA_ROUTES = Object.keys(PAGES).filter((to) => !ALL_PAGES.some((p) => p.to === to));
+const EXTRA_ROUTES = Object.keys(PAGES).filter((to) => to !== "/pos" && !ALL_PAGES.some((p) => p.to === to));
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* POS: full screen, no sidebar / top bar (opens in its own browser tab) */}
+      <Route path="/pos" element={<RequireAuth><Pos /></RequireAuth>} />
       {/* Everything else needs a login */}
       <Route
         element={
@@ -289,7 +293,7 @@ export default function App() {
           </RequireAuth>
         }
       >
-        {ALL_PAGES.map(({ to }) => {
+        {ALL_PAGES.filter(({ to }) => to !== "/pos").map(({ to }) => {
           const Page = PAGES[to] || ComingSoon;
           return <Route key={to} path={to} element={<Page />} />;
         })}
