@@ -1804,3 +1804,146 @@ textarea.pos-input {
         max-width: 40vw;
     }
 }
+
+/* ---------- on-screen keyboard (device keyboard never opens) ---------- */
+.pos-osk {
+    position: fixed;
+    z-index: 90;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: min(1000px, 100vw);
+    padding: 10px 10px 14px;
+    border-radius: 22px 22px 0 0;
+    background: color-mix(in srgb, var(--p-card) 92%, transparent);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--p-line);
+    border-bottom: 0;
+    box-shadow: 0 -18px 50px rgba(16, 24, 40, .22);
+    animation: pos-osk-up .18s ease-out;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.pos-osk.is-num {
+    width: min(380px, 100vw);
+}
+
+@keyframes pos-osk-up {
+    from {
+        transform: translate(-50%, 100%);
+    }
+}
+
+.pos-osk button {
+    height: 54px;
+    border-radius: 12px;
+    border: 1px solid var(--p-line);
+    background: var(--p-card);
+    font-size: 20px;
+    font-weight: 700;
+    box-shadow: 0 1px 0 var(--p-line);
+}
+
+.pos-osk button:active {
+    transform: scale(.96);
+    background: var(--p-brand-soft);
+    color: var(--p-brand);
+}
+
+.pos-osk .is-muted {
+    background: var(--p-card-2);
+    font-size: 15px;
+    color: var(--p-muted);
+}
+
+.pos-osk .is-muted.is-on {
+    color: var(--p-brand);
+    border-color: var(--p-brand);
+}
+
+.pos-osk .is-go {
+    border: 0;
+    color: #fff !important;
+    background: linear-gradient(135deg, var(--p-brand), var(--p-brand-2));
+    font-size: 16px;
+}
+
+.pos-osk-text {
+    display: grid;
+    gap: 7px;
+}
+
+.pos-osk-text>div {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 7px;
+}
+
+.pos-osk-text>div:last-child {
+    grid-template-columns: 1.3fr 5fr 1.3fr 1.6fr;
+}
+
+.pos-osk-num {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.pos-osk-num button {
+    height: 60px;
+    font-size: 24px;
+}
+
+/* keep things visible above the keyboard */
+.pos.osk-open .pos-main {
+    padding-bottom: 300px;
+}
+
+.pos.osk-open .pos-dlg-back {
+    align-items: start;
+    padding-bottom: 320px;
+    overflow-y: auto;
+}
+
+/* keypad target (payment amount / reference) */
+.pos-money.is-target {
+    border-color: var(--p-brand);
+    box-shadow: 0 0 0 4px var(--p-brand-soft);
+}
+
+.pos-money em {
+    white-space: nowrap;
+}
+
+/* start shift card with its keypad */
+.pos-gate .pos-keypad button {
+    height: 56px;
+}
+
+.pos-gate .pos-quick button {
+    flex: 1 1 60px;
+    height: 40px;
+    font-size: 13px;
+}
+
+@media (max-width: 820px) {
+    .pos-osk button {
+        height: 46px;
+        font-size: 17px;
+    }
+}
+
+.pos-gate {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(440px, 100%);
+}
+
+.pos-gate>* {
+    min-width: 0;
+}
+
+.pos-gate .pos-quick button {
+    min-width: 0;
+    padding: 0 4px;
+}

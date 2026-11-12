@@ -114,6 +114,136 @@ function Dialog({ title, onClose, children, footer, wide, tone }) {
     );
 }
 
+/* =========================================================
+   On-screen keyboard (the device keyboard never opens)
+   Every input has inputMode="none" + data-osk="text" | "num".
+   Focus one → this keyboard slides up; keys type into it (React onChange still fires).
+   ========================================================= */
+function typeInto(el, key) {
+    if (!el) return;
+    if (key === "enter") {
+        el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        return;
+    }
+    const v = el.value ?? "";
+    let a = el.selectionStart ?? v.length;
+    let b = el.selectionEnd ?? v.length;
+    let next;
+    if (key === "⌫") {
+        if (a === b && a > 0) a -= 1;
+        next = v.slice(0, a) + v.slice(b);
+    } else if (key === "clear") {
+        next = ""; a = 0;
+    } else {
+        next = v.slice(0, a) + key + v.slice(b);
+        a += key.length;
+    }
+    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(el, next);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    requestAnimationFrame(() => { try { el.setSelectionRange(a, a); } catch { /* number-like inputs */ } });
+}
+
+const ROWS = [
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l", "-"],
+    ["shift", "z", "x", "c", "v", "b", "n", "m", ".", "⌫"],
+];
+
+function Osk({ onOpenChange }) {
+    const [target, setTarget] = useState(null);       // focused input
+    const [mode, setMode] = useState("text");
+    const [caps, setCaps] = useState(true);
+    useEffect(() => {
+        let lastTap = 0;
+        const onTap = () => { lastTap = Date.now(); };
+        const onIn = (e) => {
+            const el = e.target;
+            const m = el?.getAttribute?.("data-osk");
+            // search box keeps the focus for the barcode scanner: its keyboard opens only when tapped
+            if (el?.getAttribute?.("data-osk-tap") && Date.now() - lastTap > 800) return;
+            if (m === "text" || m === "num") { setTarget(el); setMode(m); }
+        };
+        const onTapIn = (e) => {
+            const el = e.target;
+            if (el?.getAttribute?.("data-osk-tap") && document.activeElement === el) { setTarget(el); setMode("text"); }
+        };
+        document.addEventListener("pointerdown", onTap, true);
+        document.addEventListener("click", onTapIn);
+        const onOut = () => setTimeout(() => {
+            const a = document.activeElement;
+            const m = a?.getAttribute?.("data-osk");
+            if (m !== "text" && m !== "num") setTarget(null);
+        }, 0);
+        document.addEventListener("focusin", onIn);
+        document.addEventListener("focusout", onOut);
+        return () => {
+            document.removeEventListener("focusin", onIn); document.removeEventListener("focusout", onOut);
+            document.removeEventListener("pointerdown", onTap, true); document.removeEventListener("click", onTapIn);
+        };
+    }, []);
+    useEffect(() => { onOpenChange?.(!!target); }, [target, onOpenChange]);
+    if (!target) return null;
+
+    const press = (k) => (e) => {
+        e.preventDefault();                           // keep the focus in the input
+        if (k === "shift") return setCaps((c) => !c);
+        if (k === "done") { target.blur(); return; }
+        typeInto(target, k.length === 1 && caps ? k.toUpperCase() : k);
+    };
+    const keyProps = (k) => ({ onPointerDown: press(k), onMouseDown: (e) => e.preventDefault(), type: "button" });
+
+    return (
+        <div className={`pos-osk is-${mode}`} role="group" aria-label="On-screen keyboard" onMouseDown={(e) => e.preventDefault()}>
+            {mode === "num" ? (
+                <div className="pos-osk-num">
+                    {["7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0", "⌫"].map((k) => <button key={k} {...keyProps(k)}>{k}</button>)}
+                    <button className="is-muted" {...keyProps("clear")}>Clear</button>
+                    <button className="is-go" {...keyProps("done")}>Done</button>
+                </div>
+            ) : (
+                <div className="pos-osk-text">
+                    {ROWS.map((r, i) => (
+                        <div key={i}>
+                            {r.map((k) => (
+                                <button key={k} {...keyProps(k)} className={k === "shift" ? `is-muted ${caps ? "is-on" : ""}` : k === "⌫" ? "is-muted" : ""}>
+                                    {k === "shift" ? "⇧" : k.length === 1 && caps ? k.toUpperCase() : k}
+                                </button>
+                            ))}
+                        </div>
+                    ))}
+                    <div>
+                        <button className="is-muted" {...keyProps("clear")}>Clear</button>
+                        <button className="is-space" {...keyProps(" ")}>space</button>
+                        <button className="is-muted" {...keyProps("enter")}>Enter</button>
+                        <button className="is-go" {...keyProps("done")}>Done</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/* number pad that edits a string value (Start shift) */
+const numKey = (v, k) => {
+    if (k === "clear") return "";
+    if (k === "⌫") return v.slice(0, -1);
+    if (k === "." && v.includes(".")) return v;
+    if (/\.\d\d$/.test(v)) return v;
+    return (v === "0" && k !== "." ? "" : v) + k;
+};
+function NumPad({ onKey }) {
+    return (
+        <div className="pos-keypad">
+            {["7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0", "⌫"].map((k) => (
+                <button key={k} type="button" onPointerDown={(e) => { e.preventDefault(); onKey(k); }}>{k}</button>
+            ))}
+            <button type="button" className="is-wide" onPointerDown={(e) => { e.preventDefault(); onKey("clear"); }}>Clear</button>
+        </div>
+    );
+}
+
 function Toast({ msg }) {
     if (!msg) return null;
     return <div className={`pos-toast ${msg.type === "error" ? "is-err" : ""}`} role="status">{msg.text}</div>;
@@ -135,6 +265,7 @@ export default function Pos() {
     useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t); }, [toast]);
 
     const [dark, setDark] = useState(() => store.get("pos-dark", false));
+    const [oskOpen, setOskOpen] = useState(false);
     useEffect(() => store.set("pos-dark", dark), [dark]);
 
     const [query, setQuery] = useState("");
@@ -296,7 +427,7 @@ export default function Pos() {
     const customers = boot?.customers || [];
 
     return (
-        <div className={`pos ${dark ? "pos-dark" : ""}`}>
+        <div className={`pos ${dark ? "pos-dark" : ""} ${oskOpen ? "osk-open" : ""}`}>
             {/* ===== top bar ===== */}
             <header className="pos-top">
                 <div className="pos-brand">
@@ -337,7 +468,8 @@ export default function Pos() {
                     <section className="pos-left">
                         <div className="pos-search">
                             <span className="pos-search-ico"><Ico n="search" /></span>
-                            <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} autoFocus
+                            <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey}
+                                inputMode="none" data-osk="text" data-osk-tap="1" autoComplete="off" autoFocus
                                 placeholder="Search item or scan barcode…" aria-label="Search item or scan barcode" />
                             <span className="pos-kbd">F2</span>
                             <span className="pos-search-scan" title="Scan a barcode then press Enter"><Ico n="scan" /></span>
@@ -408,7 +540,7 @@ export default function Pos() {
                                     </div>
                                     <div className="pos-qty">
                                         <button onClick={() => setQty(l.item.id, l.qty - 1)} aria-label="Less"><Ico n="minus" s={14} /></button>
-                                        <input value={qtyText(l.qty)} inputMode="decimal" onChange={(e) => setQty(l.item.id, e.target.value.replace(/[^\d.]/g, ""))} aria-label="Quantity" />
+                                        <input value={qtyText(l.qty)} inputMode="none" data-osk="num" onFocus={(e) => e.target.select()} onChange={(e) => setQty(l.item.id, e.target.value.replace(/[^\d.]/g, ""))} aria-label="Quantity" />
                                         <button onClick={() => setQty(l.item.id, l.qty + 1)} aria-label="More"><Ico n="plus" s={14} /></button>
                                     </div>
                                     <strong className="pos-line-amt">{n2(lineAmt(l))}</strong>
@@ -496,6 +628,7 @@ export default function Pos() {
                 {printSale?.z ? <ZReport data={printSale.z} settings={settings} /> : printSale ? <ReceiptPaper sale={printSale} settings={settings} /> : null}
             </div>
             <Toast msg={toast} />
+            <Osk onOpenChange={setOskOpen} />
         </div>
     );
 }
@@ -509,7 +642,7 @@ function CustomerPick({ customers, value, onChange }) {
     const box = useRef(null);
     useEffect(() => {
         if (!open) return;
-        const h = (e) => { if (!box.current?.contains(e.target)) setOpen(false); };
+        const h = (e) => { if (!box.current?.contains(e.target) && !e.target.closest?.(".pos-osk")) setOpen(false); };
         document.addEventListener("mousedown", h);
         return () => document.removeEventListener("mousedown", h);
     }, [open]);
@@ -524,7 +657,7 @@ function CustomerPick({ customers, value, onChange }) {
             </button>
             {open && (
                 <div className="pos-pop">
-                    <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search customer…" aria-label="Search customer" />
+                    <input autoFocus inputMode="none" data-osk="text" autoComplete="off" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search customer…" aria-label="Search customer" />
                     <ul>
                         <li><button className={!value ? "is-on" : ""} onClick={() => { onChange(""); setOpen(false); }}>Walk-in customer</button></li>
                         {list.map((c) => (
@@ -563,9 +696,13 @@ function OpenShift({ cashier, onOpened }) {
                 <p className="pos-muted">Hi {cashier}. Count the cash in the drawer before your first sale.</p>
                 <label className="pos-field">
                     <span>Opening cash</span>
-                    <div className="pos-money"><em>₱</em><input autoFocus inputMode="decimal" value={cash} placeholder="0.00"
-                        onChange={(e) => setCash(e.target.value.replace(/[^\d.,]/g, ""))} onKeyDown={(e) => e.key === "Enter" && open()} /></div>
+                    <div className="pos-money pos-money-xl"><em>₱</em><input inputMode="none" value={cash} placeholder="0.00" autoComplete="off"
+                        onChange={(e) => setCash(e.target.value.replace(/[^\d.]/g, ""))} onKeyDown={(e) => e.key === "Enter" && open()} /></div>
                 </label>
+                <div className="pos-quick">
+                    {[500, 1000, 2000, 3000, 5000].map((v) => <button key={v} type="button" onClick={() => setCash(String(v))}>{n2(v)}</button>)}
+                </div>
+                <NumPad onKey={(k) => setCash((v) => numKey(v, k))} />
                 {err && <div className="pos-err">{err}</div>}
                 <button className="pos-btn pos-btn-primary pos-btn-lg" onClick={open} disabled={busy}>{busy ? "Opening…" : "Open shift"}</button>
             </div>
@@ -582,6 +719,7 @@ function PayDialog({ total, shift, customerId, lines, methods, onClose, onPaid }
     const [entry, setEntry] = useState(String(total.toFixed(2)));
     const fresh = useRef(true);                           // first key replaces the pre-filled amount
     const [ref, setRef] = useState("");
+    const [target, setTarget] = useState("amt");         // keypad types into: amt | ref
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState("");
     const paid = r2(pays.reduce((a, p) => a + p.amount, 0));
@@ -589,7 +727,7 @@ function PayDialog({ total, shift, customerId, lines, methods, onClose, onPaid }
     const change = r2(Math.max(0, paid - total));
     const typed = Number(String(entry).replace(/,/g, "")) || 0;
 
-    useEffect(() => { setEntry(due ? due.toFixed(2) : ""); setRef(""); fresh.current = true; }, [due, method]);
+    useEffect(() => { setEntry(due ? due.toFixed(2) : ""); setRef(""); setTarget("amt"); fresh.current = true; }, [due, method]);
 
     const addPay = (amt = typed) => {
         setErr("");
@@ -599,6 +737,10 @@ function PayDialog({ total, shift, customerId, lines, methods, onClose, onPaid }
         setPays((p) => [...p, { method, amount: r2(amt), reference: ref.trim() }]);
     };
     const key = (k) => {
+        if (target === "ref") {
+            setRef((r) => (k === "C" ? "" : k === "⌫" ? r.slice(0, -1) : k === "." ? r : (r + k).slice(0, 60)));
+            return;
+        }
         const first = fresh.current;
         fresh.current = false;
         setEntry((prev) => {
@@ -648,13 +790,16 @@ function PayDialog({ total, shift, customerId, lines, methods, onClose, onPaid }
                     </div>
                     {!ready && (
                         <>
-                            <div className="pos-money pos-money-xl"><em>₱</em>
-                                <input value={entry} inputMode="decimal" onChange={(e) => { fresh.current = false; setEntry(e.target.value.replace(/[^\d.]/g, "")); }} onFocus={(e) => e.target.select()}
-                                    onKeyDown={(e) => e.key === "Enter" && addPay()} aria-label="Amount" autoFocus />
+                            <div className={`pos-money pos-money-xl ${target === "amt" ? "is-target" : ""}`} onClick={() => setTarget("amt")}><em>₱</em>
+                                <input value={entry} inputMode="none" autoComplete="off" onChange={(e) => { fresh.current = false; setEntry(e.target.value.replace(/[^\d.]/g, "")); }}
+                                    onFocus={() => setTarget("amt")} onKeyDown={(e) => e.key === "Enter" && addPay()} aria-label="Amount" />
                             </div>
                             {method !== "cash" && (
-                                <input className="pos-input" value={ref} onChange={(e) => setRef(e.target.value)} placeholder={`${methodOf(method).label} reference no.`}
-                                    onKeyDown={(e) => e.key === "Enter" && addPay()} aria-label="Reference no." />
+                                <div className={`pos-money ${target === "ref" ? "is-target" : ""}`} onClick={() => setTarget("ref")}><em>Ref</em>
+                                    <input value={ref} inputMode="none" autoComplete="off" onChange={(e) => setRef(e.target.value)} onFocus={() => setTarget("ref")}
+                                        placeholder={`${methodOf(method).label} reference no. (tap, then use the keypad)`} style={{ fontSize: 16 }}
+                                        onKeyDown={(e) => e.key === "Enter" && addPay()} aria-label="Reference no." />
+                                </div>
                             )}
                             {method === "cash" && (
                                 <div className="pos-quick">
@@ -723,7 +868,7 @@ function DiscountDialog({ value, max, onClose, onSave }) {
                 {(type === "pct" ? [5, 10, 20] : [10, 20, 50, 100]).map((x) => <button key={x} onClick={() => setV(String(x))}>{type === "pct" ? `${x}%` : n2(x)}</button>)}
             </div>
             <div className="pos-money"><em>{type === "pct" ? "%" : "₱"}</em>
-                <input autoFocus inputMode="decimal" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d.]/g, ""))} onKeyDown={(e) => e.key === "Enter" && onSave(num > 0 ? { type, value: num } : null)} />
+                <input autoFocus inputMode="none" data-osk="num" autoComplete="off" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d.]/g, ""))} onKeyDown={(e) => e.key === "Enter" && onSave(num > 0 ? { type, value: num } : null)} />
             </div>
             <p className="pos-muted" style={{ marginTop: 10 }}>Discount: <b>{peso(amt)}</b> · 20% for Senior / PWD if applicable.</p>
         </Dialog>
@@ -742,10 +887,10 @@ function LineDialog({ line, onClose, onSave, onRemove }) {
             </>}>
             <div className="pos-two">
                 <label className="pos-field"><span>Price</span>
-                    <div className="pos-money"><em>₱</em><input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ""))} /></div>
+                    <div className="pos-money"><em>₱</em><input inputMode="none" data-osk="num" autoComplete="off" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ""))} /></div>
                 </label>
                 <label className="pos-field"><span>Discount (₱, this line)</span>
-                    <div className="pos-money"><em>₱</em><input autoFocus inputMode="decimal" value={disc} placeholder="0.00" onChange={(e) => setDisc(e.target.value.replace(/[^\d.]/g, ""))} /></div>
+                    <div className="pos-money"><em>₱</em><input autoFocus inputMode="none" data-osk="num" autoComplete="off" value={disc} placeholder="0.00" onChange={(e) => setDisc(e.target.value.replace(/[^\d.]/g, ""))} /></div>
                 </label>
             </div>
             <p className="pos-muted" style={{ marginTop: 10 }}>{qtyText(line.qty)} × {n2(Number(price) || 0)} = {n2(gross)} · Line total <b>{peso(gross - Math.min(gross, Number(disc) || 0))}</b></p>
@@ -806,7 +951,7 @@ function SalesDialog({ shift, settings, onClose, onPrint, notify, onVoided }) {
                                 <p className="pos-err">Voided: {sel.void_reason}</p>
                             ) : voiding ? (
                                 <div className="pos-void">
-                                    <input className="pos-input" autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for voiding" />
+                                    <input className="pos-input" autoFocus inputMode="none" data-osk="text" autoComplete="off" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for voiding" />
                                     <button className="pos-btn" onClick={() => setVoiding(false)} disabled={busy}>Cancel</button>
                                     <button className="pos-btn pos-btn-danger" onClick={doVoid} disabled={busy || !reason.trim()}>{busy ? "Voiding…" : "Void sale"}</button>
                                 </div>
@@ -875,10 +1020,10 @@ function CloseShiftDialog({ shift, onClose, onClosed, onPrint, notify }) {
                         <>
                             <label className="pos-field" style={{ marginTop: 14 }}>
                                 <span>Counted cash</span>
-                                <div className="pos-money"><em>₱</em><input autoFocus inputMode="decimal" value={counted} placeholder="0.00" onChange={(e) => setCounted(e.target.value.replace(/[^\d.,]/g, ""))} /></div>
+                                <div className="pos-money"><em>₱</em><input autoFocus inputMode="none" data-osk="num" autoComplete="off" value={counted} placeholder="0.00" onChange={(e) => setCounted(e.target.value.replace(/[^\d.,]/g, ""))} /></div>
                             </label>
                             {counted !== "" && <p className={`pos-over ${diff < 0 ? "is-short" : diff > 0 ? "is-over" : "is-even"}`}>{diff === 0 ? "Drawer is balanced" : diff < 0 ? `Short ${peso(-diff)}` : `Over ${peso(diff)}`}</p>}
-                            <label className="pos-field"><span>Notes</span><textarea className="pos-input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
+                            <label className="pos-field"><span>Notes</span><textarea className="pos-input" rows={2} inputMode="none" data-osk="text" value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
                         </>
                     ) : (
                         <p className={`pos-over ${done.shift.over_short < 0 ? "is-short" : done.shift.over_short > 0 ? "is-over" : "is-even"}`}>
@@ -929,16 +1074,16 @@ function SettingsDialog({ settings, accounts, onClose, onSaved, notify }) {
             {err && <div className="pos-err" style={{ marginBottom: 10 }}>{err}</div>}
             <h4 className="pos-h">Receipt</h4>
             <div className="pos-two">
-                <label className="pos-field"><span>Store name</span><input className="pos-input" value={f.store_name} onChange={(e) => set("store_name", e.target.value)} /></label>
-                <label className="pos-field"><span>TIN</span><input className="pos-input" value={f.tin} onChange={(e) => set("tin", e.target.value)} /></label>
-                <label className="pos-field"><span>Address</span><input className="pos-input" value={f.address} onChange={(e) => set("address", e.target.value)} /></label>
+                <label className="pos-field"><span>Store name</span><input className="pos-input" inputMode="none" data-osk="text" autoComplete="off" value={f.store_name} onChange={(e) => set("store_name", e.target.value)} /></label>
+                <label className="pos-field"><span>TIN</span><input className="pos-input" inputMode="none" data-osk="text" autoComplete="off" value={f.tin} onChange={(e) => set("tin", e.target.value)} /></label>
+                <label className="pos-field"><span>Address</span><input className="pos-input" inputMode="none" data-osk="text" autoComplete="off" value={f.address} onChange={(e) => set("address", e.target.value)} /></label>
                 <label className="pos-field"><span>Paper</span>
                     <div className="pos-seg">
                         {["58", "80"].map((p) => <button key={p} type="button" className={f.paper === p ? "is-on" : ""} onClick={() => set("paper", p)}>{p} mm</button>)}
                     </div>
                 </label>
             </div>
-            <label className="pos-field"><span>Footer</span><input className="pos-input" value={f.footer} onChange={(e) => set("footer", e.target.value)} /></label>
+            <label className="pos-field"><span>Footer</span><input className="pos-input" inputMode="none" data-osk="text" autoComplete="off" value={f.footer} onChange={(e) => set("footer", e.target.value)} /></label>
             <h4 className="pos-h">Accounts</h4>
             <div className="pos-two">
                 {acct("ar_account", "Sales invoice debit (Accounts Receivable)", true)}
