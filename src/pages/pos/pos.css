@@ -539,6 +539,56 @@
     font-size: 13px;
 }
 
+/* few items → bigger cards */
+.pos-grid.is-few {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 300px));
+    gap: 16px;
+}
+
+.pos-grid.is-few .pos-item {
+    padding: 10px;
+    gap: 10px;
+    border-radius: 20px;
+}
+
+.pos-grid.is-few .pos-thumb-lg {
+    border-radius: 14px;
+    font-size: 40px;
+}
+
+.pos-grid.is-few .pos-item-body {
+    padding: 2px 6px 6px;
+    gap: 4px;
+}
+
+.pos-grid.is-few .pos-item-body b {
+    font-size: 18px;
+    min-height: 0;
+}
+
+.pos-grid.is-few .pos-item-body small {
+    font-size: 13px;
+}
+
+.pos-grid.is-few .pos-item-body strong {
+    font-size: 22px;
+}
+
+.pos-grid.is-few .pos-stock {
+    top: 18px;
+    right: 18px;
+    font-size: 12.5px;
+    padding: 4px 10px;
+}
+
+.pos-grid.is-few .pos-item-n {
+    top: 18px;
+    left: 18px;
+    min-width: 34px;
+    height: 34px;
+    font-size: 15px;
+}
+
 .pos-empty {
     grid-column: 1 / -1;
     display: grid;

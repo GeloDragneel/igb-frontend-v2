@@ -350,7 +350,7 @@ export default function Pos() {
                             ))}
                             <button className="pos-refresh" onClick={loadItems} title="Refresh items">↻</button>
                         </div>
-                        <div className="pos-grid">
+                        <div className={`pos-grid ${shown.length <= 12 ? "is-few" : ""}`}>
                             {shown.map((i) => {
                                 const out = i.stock <= 0 && !settings?.allow_negative;
                                 const n = inCart[i.id];
@@ -358,7 +358,7 @@ export default function Pos() {
                                     <button key={i.id} className={`pos-item ${out ? "is-out" : ""} ${n ? "is-in" : ""}`} onClick={() => add(i)} disabled={out} title={i.name}>
                                         <Thumb item={i} />
                                         {n ? <span className="pos-item-n">{qtyText(n)}</span> : null}
-                                        <span className={`pos-stock ${i.stock <= 0 ? "is-zero" : i.stock <= 5 ? "is-low" : ""}`}>{i.stock <= 0 ? "Out" : `${qtyText(i.stock)} left`}</span>
+                                        <span className={`pos-stock ${i.stock <= 0 ? "is-zero" : i.stock <= 5 ? "is-low" : ""}`}>{i.stock <= 0 ? "Out" : `${(Math.round(i.stock * 100) / 100).toLocaleString("en-PH")} left`}</span>
                                         <div className="pos-item-body">
                                             <b>{i.name}</b>
                                             <small>{i.code}</small>
