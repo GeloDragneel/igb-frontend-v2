@@ -14,7 +14,8 @@ function useAnimatedClose(onClose) {
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reduced) return onClose();
     setClosing(true);
-    timer.current = setTimeout(onClose, ANIM_MS);
+    // still open after onClose (e.g. "Discard unsaved changes?" asked) → show it again, no invisible backdrop left over the page
+    timer.current = setTimeout(() => { onClose(); setClosing(false); }, ANIM_MS);
   }, [closing, onClose]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
