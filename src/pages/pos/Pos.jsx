@@ -14,7 +14,13 @@ const METHODS = [
     { key: "gcash", label: "GCash", color: "#0a6cff" },
     { key: "card", label: "Card", color: "#7c3aed" },
 ];
-const methodOf = (k) => METHODS.find((m) => m.key === k) || METHODS[0];
+// employee as customer
+const EMP_TYPES = [
+    { key: "charge", label: "Charge", long: "Employee Charge", color: "#ea580c", hint: "Deducted from the employee later" },
+    { key: "allowance", label: "Allowance", long: "Employee Allowance", color: "#0d9488", hint: "Company benefit, no payment" },
+];
+const ALL_METHODS = [...METHODS, ...EMP_TYPES.map((t) => ({ key: t.key, label: t.long, color: t.color }))];
+const methodOf = (k) => ALL_METHODS.find((m) => m.key === k) || METHODS[0];
 const HUES = [212, 262, 152, 24, 340, 190, 45, 290];
 const hueOf = (s) => HUES[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
 const fmtTime = (v) => {
@@ -117,7 +123,7 @@ function Dialog({ title, onClose, children, footer, wide, tone }) {
 /* =========================================================
    On-screen keyboard (the device keyboard never opens)
    Every input has inputMode="none" + data-osk="text" | "num".
-   Focus one → this keyboard slides up; keys type into it (React onChange still fires).
+   Tap one → this keyboard slides up (only when tapped, never on its own); keys type into it (React onChange still fires).
    ========================================================= */
 function typeInto(el, key) {
     if (!el) return;
@@ -156,31 +162,22 @@ function Osk({ onOpenChange }) {
     const [mode, setMode] = useState("text");
     const [caps, setCaps] = useState(true);
     useEffect(() => {
-        let lastTap = 0;
-        const onTap = () => { lastTap = Date.now(); };
-        const onIn = (e) => {
-            const el = e.target;
-            const m = el?.getAttribute?.("data-osk");
-            // search box keeps the focus for the barcode scanner: its keyboard opens only when tapped
-            if (el?.getAttribute?.("data-osk-tap") && Date.now() - lastTap > 800) return;
+        // opens ONLY when a field is tapped / clicked (never on auto-focus, never for the barcode scanner)
+        const onTap = (e) => {
+            const el = e.target?.closest?.("[data-osk]");
+            const m = el?.getAttribute("data-osk");
             if (m === "text" || m === "num") { setTarget(el); setMode(m); }
         };
-        const onTapIn = (e) => {
-            const el = e.target;
-            if (el?.getAttribute?.("data-osk-tap") && document.activeElement === el) { setTarget(el); setMode("text"); }
-        };
-        document.addEventListener("pointerdown", onTap, true);
-        document.addEventListener("click", onTapIn);
         const onOut = () => setTimeout(() => {
             const a = document.activeElement;
             const m = a?.getAttribute?.("data-osk");
             if (m !== "text" && m !== "num") setTarget(null);
         }, 0);
-        document.addEventListener("focusin", onIn);
+        document.addEventListener("pointerdown", onTap, true);
         document.addEventListener("focusout", onOut);
         return () => {
-            document.removeEventListener("focusin", onIn); document.removeEventListener("focusout", onOut);
-            document.removeEventListener("pointerdown", onTap, true); document.removeEventListener("click", onTapIn);
+            document.removeEventListener("pointerdown", onTap, true);
+            document.removeEventListener("focusout", onOut);
         };
     }, []);
     useEffect(() => { onOpenChange?.(!!target); }, [target, onOpenChange]);
@@ -226,11 +223,11 @@ function Osk({ onOpenChange }) {
 }
 
 /* number pad that edits a string value (Start shift) */
-const numKey = (v, k) => {
+const numKey = (v, k, dec = 2) => {
     if (k === "clear") return "";
     if (k === "⌫") return v.slice(0, -1);
     if (k === "." && v.includes(".")) return v;
-    if (/\.\d\d$/.test(v)) return v;
+    if (new RegExp(`\\.\\d{${dec}}$`).test(v)) return v;
     return (v === "0" && k !== "." ? "" : v) + k;
 };
 function NumPad({ onKey }) {
@@ -266,12 +263,16 @@ export default function Pos() {
 
     const [dark, setDark] = useState(() => store.get("pos-dark", false));
     const [oskOpen, setOskOpen] = useState(false);
+    // fuel: tapping an item asks for ₱ amount or liters (this device)
+    const [askQty, setAskQty] = useState(() => store.get("pos-ask-qty", true));
+    useEffect(() => store.set("pos-ask-qty", askQty), [askQty]);
     useEffect(() => store.set("pos-dark", dark), [dark]);
 
     const [query, setQuery] = useState("");
     const [filter, setFilter] = useState("all");      // all · stock · low
     const [cart, setCart] = useState([]);             // [{ item, qty, price, discount }]
-    const [customerId, setCustomerId] = useState("");
+    const [customerId, setCustomerId] = useState("");    // "" walk-in · "12" customer · "e:5" employee
+    const [empType, setEmpType] = useState("charge");      // charge · allowance
     const [orderDisc, setOrderDisc] = useState(null); // { type: "pct"|"amt", value }
     const [dlg, setDlg] = useState(null);             // pay · receipt · shift · sales · settings · disc · close
     const [receipt, setReceipt] = useState(null);     // sale to show / print
@@ -381,7 +382,7 @@ export default function Pos() {
     const vat = r2(lines.filter((l) => l.item.vat_type === "vatable").reduce((a, l) => a + (lineAmt(l) - l.extra) * 12 / 112, 0));
     const itemCount = cart.reduce((a, l) => a + l.qty, 0);
 
-    const clearSale = () => { setCart([]); setOrderDisc(null); setCustomerId(""); };
+    const clearSale = () => { setCart([]); setOrderDisc(null); setCustomerId(""); setEmpType("charge"); };
 
     /* ---------- keyboard ---------- */
     useEffect(() => {
@@ -425,6 +426,9 @@ export default function Pos() {
     }
 
     const customers = boot?.customers || [];
+    const employees = boot?.employees || [];
+    const employee = String(customerId).startsWith("e:") ? employees.find((e) => `e:${e.id}` === customerId) || null : null;
+    const empInfo = employee ? EMP_TYPES.find((t) => t.key === empType) : null;
 
     return (
         <div className={`pos ${dark ? "pos-dark" : ""} ${oskOpen ? "osk-open" : ""}`}>
@@ -469,7 +473,7 @@ export default function Pos() {
                         <div className="pos-search">
                             <span className="pos-search-ico"><Ico n="search" /></span>
                             <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey}
-                                inputMode="none" data-osk="text" data-osk-tap="1" autoComplete="off" autoFocus
+                                inputMode="none" data-osk="text" autoComplete="off" autoFocus
                                 placeholder="Search item or scan barcode…" aria-label="Search item or scan barcode" />
                             <span className="pos-kbd">F2</span>
                             <span className="pos-search-scan" title="Scan a barcode then press Enter"><Ico n="scan" /></span>
@@ -487,7 +491,7 @@ export default function Pos() {
                                 const out = i.stock <= 0 && !settings?.allow_negative;
                                 const n = inCart[i.id];
                                 return (
-                                    <button key={i.id} className={`pos-item ${out ? "is-out" : ""} ${n ? "is-in" : ""}`} onClick={() => add(i)} disabled={out} title={i.name}>
+                                    <button key={i.id} className={`pos-item ${out ? "is-out" : ""} ${n ? "is-in" : ""}`} onClick={() => (askQty ? setDlg({ kind: "qty", id: i.id }) : add(i))} disabled={out} title={i.name}>
                                         <Thumb item={i} />
                                         {n ? <span className="pos-item-n">{qtyText(n)}</span> : null}
                                         <span className={`pos-stock ${i.stock <= 0 ? "is-zero" : i.stock <= 5 ? "is-low" : ""}`}>{i.stock <= 0 ? "Out" : `${(Math.round(i.stock * 100) / 100).toLocaleString("en-PH")} left`}</span>
@@ -518,7 +522,16 @@ export default function Pos() {
                             {cart.length > 0 && <button className="pos-link-danger" onClick={clearSale}><Ico n="trash" s={15} />Clear</button>}
                         </div>
 
-                        <CustomerPick customers={customers} value={customerId} onChange={setCustomerId} />
+                        <CustomerPick customers={customers} employees={employees} value={customerId} onChange={setCustomerId} />
+                        {employee && (
+                            <div className="pos-emp-type">
+                                {EMP_TYPES.map((t) => (
+                                    <button key={t.key} className={empType === t.key ? "is-on" : ""} style={{ "--m": t.color }} onClick={() => setEmpType(t.key)}>
+                                        <b>{t.label}</b><small>{t.hint}</small>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         <div className="pos-lines">
                             {!cart.length && (
@@ -540,7 +553,7 @@ export default function Pos() {
                                     </div>
                                     <div className="pos-qty">
                                         <button onClick={() => setQty(l.item.id, l.qty - 1)} aria-label="Less"><Ico n="minus" s={14} /></button>
-                                        <input value={qtyText(l.qty)} inputMode="none" data-osk="num" onFocus={(e) => e.target.select()} onChange={(e) => setQty(l.item.id, e.target.value.replace(/[^\d.]/g, ""))} aria-label="Quantity" />
+                                        <button className="pos-qty-val" onClick={() => setDlg({ kind: "qty", id: l.item.id, edit: true })} aria-label="Quantity">{qtyText(l.qty)}</button>
                                         <button onClick={() => setQty(l.item.id, l.qty + 1)} aria-label="More"><Ico n="plus" s={14} /></button>
                                     </div>
                                     <strong className="pos-line-amt">{n2(lineAmt(l))}</strong>
@@ -561,8 +574,9 @@ export default function Pos() {
                             <div className="pos-total"><span>Total</span><span>{peso(total)}</span></div>
                         </div>
 
-                        <button className="pos-charge" disabled={!cart.length} onClick={() => setDlg("pay")}>
-                            <span>Charge</span><b>{peso(total)}</b><em>F9</em>
+                        <button className="pos-charge" disabled={!cart.length} onClick={() => setDlg("pay")}
+                            style={empInfo ? { background: `linear-gradient(135deg, ${empInfo.color}, ${empInfo.color}cc)` } : undefined}>
+                            <span>{empInfo ? empInfo.label : "Charge"}</span><b>{peso(total)}</b><em>F9</em>
                         </button>
                     </aside>
                 </main>
@@ -570,7 +584,7 @@ export default function Pos() {
 
             {/* ===== dialogs ===== */}
             {dlg === "pay" && (
-                <PayDialog total={total} shift={shift} customerId={customerId} lines={lines} methods={METHODS.filter((m) => m.key === "cash" || settings?.[`${m.key}_account`])}
+                <PayDialog total={total} shift={shift} customerId={employee ? "" : customerId} employee={employee} empType={empType} lines={lines} methods={METHODS}
                     onClose={() => setDlg(null)}
                     onPaid={(sale) => {
                         setDlg("receipt");
@@ -602,6 +616,19 @@ export default function Pos() {
             {dlg === "disc" && (
                 <DiscountDialog value={orderDisc} max={beforeOrder} onClose={() => setDlg(null)} onSave={(v) => { setOrderDisc(v); setDlg(null); }} />
             )}
+            {dlg?.kind === "qty" && (() => {
+                const it = items.find((x) => x.id === dlg.id) || cart.find((l) => l.item.id === dlg.id)?.item;
+                const line = cart.find((l) => l.item.id === dlg.id);
+                return it ? (
+                    <QtyDialog item={it} price={line?.price ?? it.price} current={dlg.edit ? line?.qty || 0 : 0} edit={!!dlg.edit}
+                        onClose={() => setDlg(null)}
+                        onSave={(q) => {
+                            if (dlg.edit) setQty(it.id, q);
+                            else add(it, q);
+                            setDlg(null);
+                        }} />
+                ) : null;
+            })()}
             {dlg?.kind === "line" && (() => {
                 const l = cart.find((x) => x.item.id === dlg.id);
                 return l ? (
@@ -620,6 +647,7 @@ export default function Pos() {
             )}
             {dlg === "settings" && (
                 <SettingsDialog settings={settings} accounts={boot?.accounts || []} onClose={() => setDlg(null)} notify={notify}
+                    askQty={askQty} setAskQty={setAskQty}
                     onSaved={(s) => { setBoot((b) => ({ ...b, settings: s })); setDlg(null); }} />
             )}
 
@@ -636,9 +664,10 @@ export default function Pos() {
 /* =========================================================
    Customer picker (Walk-in by default)
    ========================================================= */
-function CustomerPick({ customers, value, onChange }) {
+function CustomerPick({ customers, employees = [], value, onChange }) {
     const [open, setOpen] = useState(false);
     const [q, setQ] = useState("");
+    const [tab, setTab] = useState(String(value).startsWith("e:") ? "emp" : "cust");
     const box = useRef(null);
     useEffect(() => {
         if (!open) return;
@@ -646,26 +675,42 @@ function CustomerPick({ customers, value, onChange }) {
         document.addEventListener("mousedown", h);
         return () => document.removeEventListener("mousedown", h);
     }, [open]);
-    const cur = customers.find((c) => String(c.id) === String(value));
-    const list = customers.filter((c) => !q || `${c.name} ${c.tin || ""}`.toLowerCase().includes(q.toLowerCase())).slice(0, 60);
+    const isEmp = String(value).startsWith("e:");
+    const cur = isEmp ? employees.find((e) => `e:${e.id}` === value) : customers.find((c) => String(c.id) === String(value));
+    const src = tab === "emp" ? employees.map((e) => ({ ...e, key: `e:${e.id}` })) : customers.map((c) => ({ ...c, key: String(c.id) }));
+    const list = src.filter((c) => !q || `${c.name} ${c.tin || ""} ${c.branch || ""}`.toLowerCase().includes(q.toLowerCase())).slice(0, 60);
     return (
         <div className="pos-cust" ref={box}>
             <button className="pos-cust-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
                 <span className="pos-cust-av"><Ico n="user" s={16} /></span>
-                <span><small>Customer</small><b>{cur ? cur.name : "Walk-in customer"}</b></span>
+                <span><small>{isEmp ? "Employee" : "Customer"}</small><b>{cur ? cur.name : "Walk-in customer"}</b></span>
                 <span className="pos-caret">▾</span>
             </button>
             {open && (
                 <div className="pos-pop">
-                    <input autoFocus inputMode="none" data-osk="text" autoComplete="off" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search customer…" aria-label="Search customer" />
+                    <div className="pos-seg" style={{ marginBottom: 6 }}>
+                        <button className={tab === "cust" ? "is-on" : ""} onClick={() => setTab("cust")}>Customers</button>
+                        <button className={tab === "emp" ? "is-on" : ""} onClick={() => setTab("emp")}>Employees{employees.length ? ` (${employees.length})` : ""}</button>
+                    </div>
+                    <input autoFocus inputMode="none" data-osk="text" autoComplete="off" value={q} onChange={(e) => setQ(e.target.value)}
+                        placeholder={tab === "emp" ? "Search employee…" : "Search customer…"} aria-label="Search" />
                     <ul>
-                        <li><button className={!value ? "is-on" : ""} onClick={() => { onChange(""); setOpen(false); }}>Walk-in customer</button></li>
-                        {list.map((c) => (
-                            <li key={c.id}><button className={String(c.id) === String(value) ? "is-on" : ""} onClick={() => { onChange(String(c.id)); setOpen(false); setQ(""); }}>
-                                {c.name}{c.tin ? <small>{c.tin}</small> : null}
-                            </button></li>
-                        ))}
-                        {!list.length && <li className="pos-muted" style={{ padding: 10 }}>No customer found.</li>}
+                        {tab === "cust" && <li><button className={!value ? "is-on" : ""} onClick={() => { onChange(""); setOpen(false); }}>Walk-in customer</button></li>}
+                        {list.map((c, i) => {
+                            const head = tab === "emp" && c.branch !== list[i - 1]?.branch;
+                            const ini = c.name.split(/[\s,]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("");
+                            return [
+                                head ? <li key={`h${c.key}`} className="pos-pop-group">{c.branch || "Other"}</li> : null,
+                                <li key={c.key}>
+                                    <button className={`pos-pop-row ${c.key === String(value) ? "is-on" : ""}`} onClick={() => { onChange(c.key); setOpen(false); setQ(""); }}>
+                                        {tab === "emp" && <span className="pos-pop-av">{ini}</span>}
+                                        <span className="pos-pop-name">{c.name}</span>
+                                        {tab === "cust" && c.tin ? <small>{c.tin}</small> : null}
+                                    </button>
+                                </li>,
+                            ];
+                        })}
+                        {!list.length && <li className="pos-muted" style={{ padding: 10 }}>{tab === "emp" ? "No employee found (HR → Employees of this client)." : "No customer found."}</li>}
                     </ul>
                 </div>
             )}
@@ -713,7 +758,7 @@ function OpenShift({ cashier, onOpened }) {
 /* =========================================================
    Payment
    ========================================================= */
-function PayDialog({ total, shift, customerId, lines, methods, onClose, onPaid }) {
+function PayDialog({ total, shift, customerId, employee, empType, lines, methods, onClose, onPaid }) {
     const [pays, setPays] = useState([]);                 // [{ method, amount, reference }]
     const [method, setMethod] = useState("cash");
     const [entry, setEntry] = useState(String(total.toFixed(2)));
@@ -763,8 +808,9 @@ function PayDialog({ total, shift, customerId, lines, methods, onClose, onPaid }
                 body: JSON.stringify({
                     shift_id: shift.id,
                     customer_id: customerId ? Number(customerId) : null,
+                    ...(employee ? { employee_id: employee.id, employee_type: empType } : {}),
                     lines: lines.map((l) => ({ item_id: l.item.id, qty: l.qty, price: l.price, discount: r2((Number(l.discount) || 0) + (l.extra || 0)) })),
-                    payments: pays,
+                    payments: employee ? [] : pays,
                 }),
             });
             onPaid(r.sale);
@@ -772,6 +818,24 @@ function PayDialog({ total, shift, customerId, lines, methods, onClose, onPaid }
     };
 
     const ready = paid + 0.001 >= total;
+    if (employee) {
+        const t = EMP_TYPES.find((x) => x.key === empType) || EMP_TYPES[0];
+        return (
+            <Dialog title={t.long} onClose={busy ? undefined : onClose}>
+                <div className="pos-emp-pay" style={{ "--m": t.color }}>
+                    <span className="pos-emp-av"><Ico n="user" s={26} /></span>
+                    <small>{t.key === "charge" ? "Charge to" : "Allowance for"}</small>
+                    <b>{employee.name}</b>
+                    <strong>{peso(total)}</strong>
+                    <p className="pos-muted">{t.hint}. No cash is collected.</p>
+                </div>
+                {err && <div className="pos-err" style={{ marginTop: 12 }}>{err}</div>}
+                <button className="pos-charge" style={{ marginTop: 14, background: `linear-gradient(135deg, ${t.color}, ${t.color}cc)` }} disabled={busy} onClick={finish}>
+                    <span>{busy ? "Saving…" : `Confirm ${t.label.toLowerCase()}`}</span><b>{peso(total)}</b>
+                </button>
+            </Dialog>
+        );
+    }
     return (
         <Dialog title="Payment" wide onClose={busy ? undefined : onClose}>
             <div className="pos-pay">
@@ -875,6 +939,63 @@ function DiscountDialog({ value, max, onClose, onSave }) {
     );
 }
 
+/* =========================================================
+   Fuel: enter ₱ amount or liters (decimals) for an item
+   ========================================================= */
+function QtyDialog({ item, price, current, edit, onClose, onSave }) {
+    const [mode, setMode] = useState("amt");                       // amt · qty
+    const [v, setV] = useState(edit && current ? String(r2(current * price)) : "");
+    const num = Number(v) || 0;
+    const p = Number(price) || 0;
+    const qty = mode === "amt" ? (p ? Math.round((num / p) * 10000) / 10000 : 0) : Math.round(num * 10000) / 10000;
+    const amt = mode === "amt" ? num : r2(num * p);
+    const switchTo = (m) => {
+        if (m === mode) return;
+        setV(num ? (m === "amt" ? String(r2(qty * p)) : String(qty)) : "");
+        setMode(m);
+    };
+    const save = () => { if (qty > 0) onSave(qty); };
+    useEffect(() => {
+        const k = (e) => {
+            if (/^[0-9.]$/.test(e.key)) setV((x) => numKey(x, e.key, mode === "amt" ? 2 : 3));
+            else if (e.key === "Backspace") setV((x) => x.slice(0, -1));
+            else if (e.key === "Enter") save();
+        };
+        window.addEventListener("keydown", k);
+        return () => window.removeEventListener("keydown", k);
+    });
+    const presets = mode === "amt" ? [100, 200, 300, 500, 1000] : [1, 2, 5, 10, 20];
+    return (
+        <Dialog title={item.name} onClose={onClose}
+            footer={<>
+                <button className="pos-btn" onClick={onClose}>Cancel</button>
+                <button className="pos-btn pos-btn-primary" onClick={save} disabled={qty <= 0}>{edit ? "Update" : "Add to sale"}</button>
+            </>}>
+            <div className="pos-qd">
+                <div className="pos-qd-price"><span>{peso(p)}</span> per liter</div>
+                <div className="pos-seg">
+                    <button className={mode === "amt" ? "is-on" : ""} onClick={() => switchTo("amt")}>Amount ₱</button>
+                    <button className={mode === "qty" ? "is-on" : ""} onClick={() => switchTo("qty")}>Liters / Qty</button>
+                </div>
+                <div className="pos-money pos-money-xl is-target">
+                    <em>{mode === "amt" ? "₱" : "L"}</em>
+                    <span className="pos-qd-val">{v || <i>0{mode === "amt" ? ".00" : ""}</i>}</span>
+                </div>
+                <div className="pos-qd-conv">
+                    {mode === "amt"
+                        ? <>= <b>{qtyText(Math.round(qty * 1000) / 1000)}</b> liters</>
+                        : <>= <b>{peso(amt)}</b></>}
+                    {item.stock > 0 && <span> · {qtyText(item.stock)} left</span>}
+                </div>
+                <div className="pos-quick">
+                    {presets.map((x) => <button key={x} type="button" onClick={() => setV(String(x))}>{mode === "amt" ? `₱${x.toLocaleString()}` : `${x} L`}</button>)}
+                </div>
+                <NumPad onKey={(k) => setV((x) => numKey(x, k, mode === "amt" ? 2 : 3))} />
+            </div>
+        </Dialog>
+    );
+}
+
 function LineDialog({ line, onClose, onSave, onRemove }) {
     const [price, setPrice] = useState(String(line.price));
     const [disc, setDisc] = useState(line.discount ? String(line.discount) : "");
@@ -930,7 +1051,25 @@ function SalesDialog({ shift, settings, onClose, onPrint, notify, onVoided }) {
     const paid = (rows || []).filter((r) => r.status === "PAID");
 
     return (
-        <Dialog title={shift ? `Sales · ${shift.shift_no}` : "Today's sales"} wide onClose={onClose}>
+        <Dialog title={shift ? `Sales · ${shift.shift_no}` : "Today's sales"} wide onClose={onClose}
+            footer={sel ? (
+                sel.status === "VOID" ? (
+                    <><span className="pos-foot-note is-bad">Voided · {sel.void_reason}</span><button className="pos-btn" onClick={onClose}>Close</button></>
+                ) : voiding ? (
+                    <>
+                        <input className="pos-input pos-foot-input" autoFocus inputMode="none" data-osk="text" autoComplete="off" value={reason}
+                            onChange={(e) => setReason(e.target.value)} placeholder={`Reason for voiding ${sel.receipt_no}`} aria-label="Reason for voiding" />
+                        <button className="pos-btn" onClick={() => { setVoiding(false); setReason(""); }} disabled={busy}>Cancel</button>
+                        <button className="pos-btn pos-btn-danger" onClick={doVoid} disabled={busy || !reason.trim()}>{busy ? "Voiding…" : "Confirm void"}</button>
+                    </>
+                ) : (
+                    <>
+                        <button className="pos-btn pos-btn-danger" style={{ marginRight: "auto" }} onClick={() => setVoiding(true)}><Ico n="x" s={15} />Void sale</button>
+                        <button className="pos-btn" onClick={onClose}>Close</button>
+                        <button className="pos-btn pos-btn-primary" onClick={() => onPrint(sel)}><Ico n="print" s={15} />Reprint receipt</button>
+                    </>
+                )
+            ) : null}>
             <div className="pos-sales">
                 <div className="pos-sales-list">
                     <div className="pos-sales-sum"><span>{paid.length} sale{paid.length === 1 ? "" : "s"}</span><b>{peso(paid.reduce((a, r) => a + r.total, 0))}</b></div>
@@ -947,20 +1086,6 @@ function SalesDialog({ shift, settings, onClose, onPrint, notify, onVoided }) {
                     {sel ? (
                         <>
                             <ReceiptPaper sale={sel} settings={settings} />
-                            {sel.status === "VOID" ? (
-                                <p className="pos-err">Voided: {sel.void_reason}</p>
-                            ) : voiding ? (
-                                <div className="pos-void">
-                                    <input className="pos-input" autoFocus inputMode="none" data-osk="text" autoComplete="off" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for voiding" />
-                                    <button className="pos-btn" onClick={() => setVoiding(false)} disabled={busy}>Cancel</button>
-                                    <button className="pos-btn pos-btn-danger" onClick={doVoid} disabled={busy || !reason.trim()}>{busy ? "Voiding…" : "Void sale"}</button>
-                                </div>
-                            ) : (
-                                <div className="pos-void">
-                                    <button className="pos-btn pos-btn-danger" onClick={() => setVoiding(true)}><Ico n="x" s={15} />Void</button>
-                                    <button className="pos-btn pos-btn-primary" onClick={() => onPrint(sel)}><Ico n="print" s={15} />Reprint</button>
-                                </div>
-                            )}
                         </>
                     ) : <p className="pos-muted">Pick a sale.</p>}
                 </div>
@@ -1012,7 +1137,7 @@ function CloseShiftDialog({ shift, onClose, onClosed, onPrint, notify }) {
                     </div>
                     <div className="pos-zlist">
                         <div><span>Opening cash</span><b>{n2(data.shift.opening_cash)}</b></div>
-                        {METHODS.map((m) => <div key={m.key}><span><i style={{ background: m.color }} />{m.label}</span><b>{n2(data.by_method[m.key])}</b></div>)}
+                        {ALL_METHODS.map((m) => <div key={m.key}><span><i style={{ background: m.color }} />{m.label}</span><b>{n2(data.by_method[m.key])}</b></div>)}
                         <div><span>Discounts</span><b>{n2(data.discount)}</b></div>
                         <div className="is-strong"><span>Expected cash in drawer</span><b>{n2(data.expected_cash)}</b></div>
                     </div>
@@ -1039,7 +1164,7 @@ function CloseShiftDialog({ shift, onClose, onClosed, onPrint, notify }) {
 /* =========================================================
    Settings
    ========================================================= */
-function SettingsDialog({ settings, accounts, onClose, onSaved, notify }) {
+function SettingsDialog({ settings, accounts, onClose, onSaved, notify, askQty, setAskQty }) {
     const [f, setF] = useState({
         store_name: settings?.store_name || "", address: settings?.address || "", tin: settings?.tin || "", footer: settings?.footer || "",
         paper: String(settings?.paper || 80), ar_account: settings?.ar_account || "", cash_account: settings?.cash_account || "",
@@ -1095,6 +1220,10 @@ function SettingsDialog({ settings, accounts, onClose, onSaved, notify }) {
                 <input type="checkbox" checked={f.allow_negative} onChange={(e) => set("allow_negative", e.target.checked)} />
                 <span>Allow selling items with no stock</span>
             </label>
+            <label className="pos-check">
+                <input type="checkbox" checked={!!askQty} onChange={(e) => setAskQty(e.target.checked)} />
+                <span>Ask amount (₱) or liters when an item is tapped <small className="pos-muted">(fuel · this device)</small></span>
+            </label>
         </Dialog>
     );
 }
@@ -1114,7 +1243,7 @@ function ReceiptPaper({ sale, settings }) {
             <div className="pp-row"><span>Receipt</span><span>{sale.receipt_no}</span></div>
             <div className="pp-row"><span>Date</span><span>{fmtTime(sale.date)}</span></div>
             <div className="pp-row"><span>Cashier</span><span>{sale.cashier}</span></div>
-            <div className="pp-row"><span>Customer</span><span>{sale.customer}</span></div>
+            <div className="pp-row"><span>{sale.employee_id ? "Employee" : "Customer"}</span><span>{sale.customer}</span></div>
             {sale.customer_tin && <div className="pp-row"><span>TIN</span><span>{sale.customer_tin}</span></div>}
             <div className="pp-hr" />
             {sale.lines.map((l, i) => (
@@ -1137,6 +1266,10 @@ function ReceiptPaper({ sale, settings }) {
             <div className="pp-row"><span>VAT-exempt</span><span>{n2(sale.lines.filter((l) => l.vat_type === "exempt").reduce((a, l) => a + l.amount, 0))}</span></div>
             <div className="pp-row"><span>Zero-rated</span><span>{n2(sale.lines.filter((l) => l.vat_type === "zero").reduce((a, l) => a + l.amount, 0))}</span></div>
             <div className="pp-hr" />
+            {sale.sale_type === "CHARGE" && (
+                <div className="pp-sign"><div className="pp-c pp-void">EMPLOYEE CHARGE</div><div className="pp-line-sig" /><div className="pp-c">{sale.customer}</div><div className="pp-c pp-small">Signature over printed name</div></div>
+            )}
+            {sale.sale_type === "ALLOWANCE" && <div className="pp-c pp-void">EMPLOYEE ALLOWANCE</div>}
             {sale.status === "VOID" && <div className="pp-c pp-void">*** VOID ***</div>}
             <div className="pp-c">{settings?.footer || "Thank you!"}</div>
             <div className="pp-c pp-small">{sale.invoice_no}</div>
@@ -1161,7 +1294,7 @@ function ZReport({ data, settings }) {
             <div className="pp-row"><span>VAT</span><span>{n2(data.vat)}</span></div>
             <div className="pp-row"><span>Voids ({data.void_count})</span><span>{n2(data.void_total)}</span></div>
             <div className="pp-hr" />
-            {METHODS.map((m) => <div key={m.key} className="pp-row"><span>{m.label}</span><span>{n2(data.by_method[m.key])}</span></div>)}
+            {ALL_METHODS.map((m) => <div key={m.key} className="pp-row"><span>{m.label}</span><span>{n2(data.by_method[m.key])}</span></div>)}
             <div className="pp-hr" />
             <div className="pp-row"><span>Opening cash</span><span>{n2(data.shift.opening_cash)}</span></div>
             <div className="pp-row"><span>Expected cash</span><span>{n2(data.expected_cash)}</span></div>

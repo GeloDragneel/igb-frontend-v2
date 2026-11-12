@@ -1947,3 +1947,235 @@ textarea.pos-input {
     min-width: 0;
     padding: 0 4px;
 }
+
+/* ---------- employee as customer: Charge / Allowance ---------- */
+.pos-emp-type {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.pos-emp-type button {
+    display: grid;
+    gap: 1px;
+    padding: 8px 10px;
+    text-align: left;
+    border-radius: 12px;
+    border: 1.5px solid var(--p-line);
+    background: var(--p-card);
+}
+
+.pos-emp-type b {
+    font-size: 14px;
+}
+
+.pos-emp-type small {
+    font-size: 11px;
+    color: var(--p-muted);
+}
+
+.pos-emp-type button.is-on {
+    border-color: var(--m);
+    background: color-mix(in srgb, var(--m) 10%, var(--p-card));
+}
+
+.pos-emp-type button.is-on b {
+    color: var(--m);
+}
+
+.pos-emp-pay {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    text-align: center;
+    padding: 18px;
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--m) 8%, var(--p-card));
+    border: 1px solid color-mix(in srgb, var(--m) 30%, var(--p-line));
+}
+
+.pos-emp-av {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: var(--m);
+    margin-bottom: 6px;
+}
+
+.pos-emp-pay small {
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--p-muted);
+    font-size: 12px;
+}
+
+.pos-emp-pay b {
+    font-size: 18px;
+}
+
+.pos-emp-pay strong {
+    font-size: 34px;
+    font-weight: 900;
+    color: var(--m);
+    margin-top: 4px;
+}
+
+.pos-emp-pay p {
+    margin: 6px 0 0;
+    font-size: 13px;
+}
+
+.pp-sign {
+    margin: 6px 0 8px;
+}
+
+.pp-line-sig {
+    border-top: 1px solid #111;
+    margin: 26px 12px 2px;
+}
+
+/* ---------- customer / employee list ---------- */
+.pos-pop {
+    padding: 10px;
+}
+
+.pos-pop ul {
+    max-height: 340px;
+}
+
+.pos-pop-group {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px 10px 6px;
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--p-muted);
+    background: var(--p-card);
+    border-bottom: 1px solid var(--p-line);
+}
+
+.pos-pop li button.pos-pop-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 44px;
+}
+
+.pos-pop-av {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--p-brand);
+    background: var(--p-brand-soft);
+}
+
+.pos-pop-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pos-pop-row small {
+    flex: none;
+}
+
+/* ---------- sales dialog: actions stay in the footer ---------- */
+.pos-sales-view {
+    justify-content: flex-start;
+}
+
+.pos-dlg>footer {
+    align-items: center;
+}
+
+.pos-foot-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 42px;
+}
+
+.pos-foot-note {
+    margin-right: auto;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.pos-foot-note.is-bad {
+    color: var(--p-bad);
+}
+
+/* ---------- fuel: amount / liters ---------- */
+.pos-qd {
+    display: grid;
+    gap: 12px;
+}
+
+.pos-qd-price {
+    text-align: center;
+    color: var(--p-muted);
+    font-weight: 600;
+}
+
+.pos-qd-price span {
+    color: var(--p-brand);
+    font-weight: 900;
+    font-size: 18px;
+}
+
+.pos-qd-val {
+    flex: 1;
+    font-size: 30px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+}
+
+.pos-qd-val i {
+    font-style: normal;
+    color: var(--p-muted);
+    opacity: .6;
+}
+
+.pos-qd-conv {
+    text-align: center;
+    font-size: 15px;
+    color: var(--p-muted);
+}
+
+.pos-qd-conv b {
+    color: var(--p-ink);
+    font-size: 18px;
+}
+
+.pos-qd .pos-quick button {
+    flex: 1 1 60px;
+}
+
+.pos-qty-val {
+    width: 52px;
+    height: 30px;
+    border: 0;
+    background: transparent;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+}
+
+.pos-qty-val:hover {
+    color: var(--p-brand);
+}
