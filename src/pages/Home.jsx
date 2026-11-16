@@ -380,7 +380,7 @@ export default function Home() {
             <section className="hd-tiles">
                 {tiles.map((t, i) => (
                     <button type="button" key={t.label} className={`hd-tile ${t.g}`} style={{ textAlign: "left", border: 0, cursor: "pointer", font: "inherit", width: "100%" }}
-                        onClick={() => setDetail({ kind: ["sales", "buy", "ar", "ap"][i], label: t.label, to: t.to, value: t.value })}>
+                        onClick={() => { const kind = ["sales", "buy", "ar", "ap"][i]; setDetail({ kind, label: t.label, to: t.to, value: t.value, flow: data?.detail?.[kind] }); }}>
                         <div className="hd-tile-top">
                             <span className="hd-tile-icon"><Icon name={t.icon} size={18} /></span>
                             <span className="hd-tile-label">{t.label}</span>
@@ -591,12 +591,14 @@ function TileDetail({ tile, from, to, onClose }) {
     const isFlow = tile.kind === "sales" || tile.kind === "buy";      // no BIR filing here – just the numbers
 
     useEffect(() => {
+        // Sales / Purchases & expenses: per month + invoices come with /dashboard (net, Main = all branches, this period)
+        if (isFlow && tile.flow) { setD({ months: tile.flow.months || [], branches: tile.flow.branches || [], rows: tile.flow.rows || [], returns: [], summary: {} }); return undefined; }
         let alive = true;
         apiFetch(`/bir/payables/detail?${new URLSearchParams({ kind: tile.kind, from, to })}`)
             .then((r) => alive && setD(r))
             .catch((e) => alive && setError(e.message || "Couldn't load the details."));
         return () => { alive = false; };
-    }, [tile.kind, from, to]);
+    }, [tile.kind, tile.flow, isFlow, from, to]);
 
     // income tax "books" per MONTH = Income Tax Summary: year-to-date payable at month end − at the previous month end
     const [itq, setItq] = useState({});              // { "2026-09": 2310.12 }
@@ -735,6 +737,47 @@ function TileDetail({ tile, from, to, onClose }) {
                         </section>
                     )}
 
+                    {/* Sales / Purchases & expenses: per branch (Main = every branch, a branch = itself) */}
+                    {isFlow && d.branches?.length > 0 && (
+                        <section style={card}>
+                            <b style={{ display: "block", marginBottom: 8 }}>{d.branches.length > 1 ? "Per branch" : "Branch"}</b>
+                            <div className="table-scroll" style={{ maxHeight: 280 }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                    <thead><tr>
+                                        <th style={th}>Branch</th>
+                                        <th style={{ ...th, textAlign: "right" }}>{tile.kind === "sales" ? "Invoices" : "Records"}</th>
+                                        {tile.kind === "buy" && <><th style={{ ...th, textAlign: "right" }}>Purchases</th><th style={{ ...th, textAlign: "right" }}>Expenses</th></>}
+                                        <th style={{ ...th, textAlign: "right" }}>Total</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {d.branches.map((b) => (
+                                            <tr key={b.caid}>
+                                                <td style={{ ...td, fontWeight: 700 }}>
+                                                    {[b.branch_code, b.trade_name].filter(Boolean).join(" - ")}
+                                                    {b.main && <> {pill("gray", "Main")}</>}
+                                                </td>
+                                                <td style={num}>{b.count}</td>
+                                                {tile.kind === "buy" && <><td style={num}>{money(b.purchases)}</td><td style={num}>{money(b.expenses)}</td></>}
+                                                <td style={{ ...num, fontWeight: 700 }}>{money(b.books)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    {d.branches.length > 1 && (
+                                        <tfoot><tr>
+                                            <td style={{ ...td, fontWeight: 800 }}>Total</td>
+                                            <td style={{ ...num, fontWeight: 800 }}>{d.branches.reduce((n, b) => n + b.count, 0)}</td>
+                                            {tile.kind === "buy" && <>
+                                                <td style={{ ...num, fontWeight: 800 }}>{money(d.branches.reduce((n, b) => n + b.purchases, 0))}</td>
+                                                <td style={{ ...num, fontWeight: 800 }}>{money(d.branches.reduce((n, b) => n + b.expenses, 0))}</td>
+                                            </>}
+                                            <td style={{ ...num, fontWeight: 800 }}>{money(d.branches.reduce((n, b) => n + b.books, 0))}</td>
+                                        </tr></tfoot>
+                                    )}
+                                </table>
+                            </div>
+                        </section>
+                    )}
+
                     {/* CURRENT: what still needs action */}
                     {isTax && (
                         <section style={card}>
@@ -791,10 +834,15 @@ function TileDetail({ tile, from, to, onClose }) {
                                     </tr></thead>
                                     <tbody>
                                         {d.rows.map((r) => (
-                                            <tr key={r.invoice_no}>
+                                            <tr key={`${r.invoice_no}-${r.branch || ""}`}>
                                                 <td style={td}>{fmtDate(r.date)}</td>
-                                                <td style={{ ...td, fontWeight: 600, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }} title={r.party}>{r.party}</td>
-                                                <td style={td}><Link to={r.link} onClick={onClose} className="mono">{r.document_no || r.invoice_no}</Link></td>
+                                                <td style={{ ...td, fontWeight: 600, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }} title={r.branch ? `${r.party} · ${r.branch}` : r.party}>
+                                                    {r.party}
+                                                    {r.branch && isFlow && <small className="muted" style={{ display: "block", fontWeight: 400 }}>{r.branch}</small>}
+                                                </td>
+                                                <td style={td}>{r.link
+                                                    ? <Link to={r.link} onClick={onClose} className="mono">{r.document_no || r.invoice_no}</Link>
+                                                    : <span className="mono" title="Open it from that branch's login">{r.document_no || r.invoice_no}</span>}</td>
                                                 {isOpen && <td style={{ ...num, color: r.days > 90 ? "#b91c1c" : r.days > 30 ? "#b45309" : undefined, fontWeight: 700 }}>{r.days ?? "—"}</td>}
                                                 <td style={{ ...num, fontWeight: 700 }}>{money(r.amount)}</td>
                                                 <td style={td}>{/UNPAID/i.test(r.status) ? pill("amber", r.status) : /PAID/i.test(r.status) ? pill("green", r.status) : pill("gray", r.status || "—")}</td>
