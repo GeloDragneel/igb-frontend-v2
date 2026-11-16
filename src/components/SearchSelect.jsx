@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Icon from "./Icons";
 
@@ -14,6 +14,7 @@ import Icon from "./Icons";
     onAddNew={(typedText) => ...} // optional: shows an "Add new" button at the bottom
     addNewLabel="Add new account"
     rememberKey="hd-branch-search" // optional: keeps the last search (this browser) – shown again, selected, on the next open
+    // options may carry group: "Data Analyst" → a heading over each group (sort the options by group first)
     multiple                       // optional: value is an array, a click ticks/unticks (popup stays open);
                                    //           an option with value "" means "All" and clears the list
   />
@@ -88,7 +89,7 @@ export default function SearchSelect({
         const words = normalize(query).split(" ").filter(Boolean);
         if (!words.length) return unique;
         return unique.filter((o) => {
-            const text = normalize(`${o.label} ${o.hint || ""} ${o.value}`);
+            const text = normalize(`${o.label} ${o.hint || ""} ${o.value} ${o.group || ""}`);
             return words.every((w) => text.includes(w)); // every word, any order
         });
     }, [unique, query]);
@@ -270,23 +271,29 @@ export default function SearchSelect({
                         <ul className="ss-list" role="listbox" aria-multiselectable={multiple || undefined} id={listId} ref={list} style={{ flex: "1 1 auto", minHeight: 0 }}>
                             {filtered.length === 0 && <li className="ss-empty">No results for “{query}”</li>}
                             {filtered.map((o, i) => (
-                                <li
-                                    key={`${o.value}::${i}`}
-                                    id={`${listId}-${i}`}
-                                    data-i={i}
-                                    role="option"
-                                    aria-selected={isSel(o)}
-                                    className={`ss-opt ${i === active ? "active" : ""} ${isSel(o) ? "selected" : ""}`}
-                                    onMouseEnter={() => setActive(i)}
-                                    onMouseDown={(e) => e.preventDefault()} // keep focus in the search box
-                                    onClick={() => choose(o)}
-                                >
-                                    <span className="ss-opt-text">
-                                        <span className="ss-opt-label"><Highlight text={o.label} query={query} /></span>
-                                        {o.hint && <span className="ss-opt-hint"><Highlight text={o.hint} query={query} /></span>}
-                                    </span>
-                                    {isSel(o) && <Icon name="check" size={14} className="ss-check" />}
-                                </li>
+                                <Fragment key={`${o.value}::${i}`}>
+                                    {o.group && o.group !== filtered[i - 1]?.group && (
+                                        <li className="ss-group" role="presentation" style={GROUP_STYLE}>{o.group}</li>
+                                    )}
+                                    <li
+                                        key={`${o.value}::${i}`}
+                                        id={`${listId}-${i}`}
+                                        data-i={i}
+                                        role="option"
+                                        aria-selected={isSel(o)}
+                                        className={`ss-opt ${i === active ? "active" : ""} ${isSel(o) ? "selected" : ""}`}
+                                        style={o.group ? { paddingLeft: 20 } : undefined}
+                                        onMouseEnter={() => setActive(i)}
+                                        onMouseDown={(e) => e.preventDefault()} // keep focus in the search box
+                                        onClick={() => choose(o)}
+                                    >
+                                        <span className="ss-opt-text">
+                                            <span className="ss-opt-label"><Highlight text={o.label} query={query} /></span>
+                                            {o.hint && <span className="ss-opt-hint"><Highlight text={o.hint} query={query} /></span>}
+                                        </span>
+                                        {isSel(o) && <Icon name="check" size={14} className="ss-check" />}
+                                    </li>
+                                </Fragment>
                             ))}
                         </ul>
                         {onAddNew && (
@@ -311,6 +318,18 @@ export default function SearchSelect({
         </>
     );
 }
+
+// group heading in the list (options with group: "…")
+const GROUP_STYLE = {
+    padding: "8px 10px 4px",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: ".04em",
+    textTransform: "uppercase",
+    color: "var(--muted)",
+    cursor: "default",
+    userSelect: "none",
+};
 
 // Bold the part that matches the search
 // lower-case, remove accents (Ñ -> n), squeeze spaces

@@ -1,0 +1,842 @@
+/* Monitoring → Employee Performance (dashboard of one employee) */
+.ep {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+}
+
+/* ---------- top bar ---------- */
+.ep-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 16px;
+}
+
+.ep-title h4 {
+    margin: 0;
+    font-size: 18px;
+    color: var(--ink);
+}
+
+.ep-title span {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.ep-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.ep-seg {
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card-2);
+}
+
+.ep-seg button {
+    min-width: 60px;
+    height: 30px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ep-seg button.is-on {
+    background: var(--card);
+    color: var(--brand);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+
+.ep-step-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ep-date {
+    width: 160px;
+}
+
+.ep-pick {
+    width: 300px;
+}
+
+.ep-pick> :nth-child(2) {
+    flex: 1;
+    min-width: 0;
+}
+
+.ep-step {
+    flex: none;
+    width: 32px;
+    height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ep-step:hover:not(:disabled) {
+    background: var(--card-2);
+}
+
+.ep-step:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+/* ---------- dashboard grid (profile left · KPIs on top · charts · lists) ---------- */
+.ep-dash {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 300px auto 340px auto;
+    grid-template-areas:
+        "profile kpis    kpis"
+        "profile work    hourly"
+        "clients clients clients"
+        "log     log     status"
+        "reverted reverted reverted";
+    gap: 14px;
+    transition: opacity .15s ease;
+}
+
+.ep-dash.is-busy {
+    opacity: .6;
+    pointer-events: none;
+}
+
+.ep-profile {
+    grid-area: profile;
+}
+
+.ep-kpis {
+    grid-area: kpis;
+}
+
+.ep-work {
+    grid-area: work;
+}
+
+.ep-hourly {
+    grid-area: hourly;
+}
+
+.ep-clients {
+    grid-area: clients;
+    max-height: 460px;
+}
+
+.ep-log {
+    grid-area: log;
+}
+
+.ep-reverted {
+    grid-area: reverted;
+    max-height: 420px;
+}
+
+.ep-status {
+    grid-area: status;
+}
+
+/* ---------- profile ---------- */
+.ep-profile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 24px 18px;
+    border-radius: 14px;
+    background: var(--brand);
+    color: #fff;
+    text-align: center;
+}
+
+.ep-profile .ep-av {
+    margin-bottom: 10px;
+    background: rgba(255, 255, 255, .18);
+    color: #fff;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, .25);
+}
+
+.ep-profile h3 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.ep-profile-role {
+    font-size: 14px;
+    font-weight: 600;
+    opacity: .9;
+}
+
+.ep-profile-sub {
+    font-size: 12px;
+    opacity: .75;
+}
+
+.ep-profile-facts {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    margin: 14px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, .2);
+    text-align: left;
+}
+
+.ep-profile-facts div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+.ep-profile-facts dt {
+    font-size: 12px;
+    opacity: .7;
+}
+
+.ep-profile-facts dd {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ep-view {
+    display: flex;
+    width: 100%;
+    margin-top: auto;
+    padding: 3px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, .18);
+}
+
+.ep-view button {
+    flex: 1;
+    height: 30px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(255, 255, 255, .8);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ep-view button.is-on {
+    background: #fff;
+    color: var(--brand);
+}
+
+.ep-av {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-weight: 700;
+}
+
+.ep-av img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ---------- KPI tiles ---------- */
+.ep-kpis {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.ep-kpi {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 18px 20px;
+}
+
+.ep-kpi-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.ep-kpi-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.ep-kpi strong {
+    font-size: 32px;
+    line-height: 1.1;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.ep-kpi.is-red strong,
+.ep-kpi.is-bad strong {
+    color: var(--red);
+}
+
+.ep-kpi.is-warn strong {
+    color: var(--orange);
+}
+
+.ep-kpi.is-good strong {
+    color: var(--green);
+}
+
+.ep-kpi small {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+/* work efficiency */
+.ep-note {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+}
+
+.ep-work-main {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.ep-work-big {
+    display: grid;
+    gap: 2px;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--card-2);
+    text-align: center;
+}
+
+.ep-work-big:first-child {
+    background: var(--brand-soft);
+}
+
+.ep-work-big:first-child strong {
+    color: var(--brand);
+}
+
+.ep-work-big strong {
+    font-size: 26px;
+    line-height: 1.1;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.ep-work-big span {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.ep-work-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 18px;
+    margin: 0;
+}
+
+.ep-work-facts div {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px dashed var(--line);
+}
+
+.ep-work-facts dt {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.ep-work-facts dd {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.ep-work-facts .is-total dd {
+    color: var(--brand);
+}
+
+/* ---------- panels ---------- */
+.ep-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px 16px;
+}
+
+.ep-panel>header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ep-panel h5 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--ink);
+}
+
+.ep-chart-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+}
+
+.ep-chart-empty {
+    display: grid;
+    flex: 1;
+    place-items: center;
+    height: 100%;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.ep-count {
+    min-width: 22px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.ep-count.is-red {
+    background: color-mix(in srgb, var(--red) 14%, transparent);
+    color: var(--red);
+}
+
+/* assigned clients list */
+.ep-client-list {
+    flex: 1;
+    min-height: 0;
+    margin: 0 -8px;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.ep-client {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ep-client:hover {
+    background: var(--card-2);
+}
+
+.ep-client.is-on {
+    background: var(--brand-soft);
+}
+
+.ep-client.is-on strong {
+    color: var(--brand);
+}
+
+.ep-client>span:first-child {
+    min-width: 0;
+}
+
+.ep-client strong {
+    display: block;
+    overflow: hidden;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ep-client small {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.ep-client-n {
+    display: grid;
+    flex: none;
+    justify-items: end;
+}
+
+.ep-client-n b {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.ep-client-n i {
+    font-size: 11px;
+    font-style: normal;
+    color: var(--red);
+}
+
+.ep-muted-li {
+    padding: 20px 8px;
+    font-size: 13px;
+    text-align: center;
+    color: var(--muted);
+}
+
+/* reverted table */
+.ep-scroll {
+    flex: 1;
+    min-height: 0;
+    margin: 0 -16px -14px;
+    overflow: auto;
+}
+
+.ep-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.ep-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px 12px;
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.ep-table td {
+    padding: 8px 12px;
+    color: var(--ink);
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+}
+
+.ep-table .nowrap {
+    white-space: nowrap;
+}
+
+.ep-table .c {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.ep-table .r {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ep-table .strong {
+    font-weight: 700;
+}
+
+.ep-table tfoot th {
+    position: sticky;
+    bottom: 0;
+    padding: 8px 12px;
+    background: var(--card-2);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    border-top: 1px solid var(--line);
+}
+
+.ep-table tfoot th.c {
+    text-align: center;
+}
+
+.ep-ctable thead tr.ep-group th {
+    top: 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.ep-ctable thead tr:not(.ep-group) th {
+    top: 33px;
+}
+
+.ep-ctable td {
+    vertical-align: middle;
+}
+
+.ep-click {
+    cursor: pointer;
+}
+
+.ep-click:hover td {
+    background: var(--card-2);
+}
+
+.ep-click.is-on td {
+    background: var(--brand-soft);
+}
+
+.ep-click:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: -2px;
+}
+
+.ep-red {
+    color: var(--red);
+    font-weight: 700;
+}
+
+.ep-orange {
+    color: var(--orange);
+    font-weight: 700;
+}
+
+.ep-green {
+    color: var(--green);
+    font-weight: 700;
+}
+
+.ep-muted {
+    color: var(--muted);
+}
+
+.ep-trunc {
+    display: block;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ep-sub {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.ep-remarks {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.ep-empty {
+    padding: 28px 12px !important;
+    text-align: center;
+    color: var(--muted) !important;
+}
+
+/* audit status donut + legend on the right */
+.ep-donut {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 18px;
+    min-height: 0;
+}
+
+.ep-donut-chart {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 140px;
+    max-width: 230px;
+    aspect-ratio: 1;
+}
+
+.ep-donut-center {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    pointer-events: none;
+}
+
+.ep-donut-center b {
+    font-size: 26px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.ep-donut-center small {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.ep-legend {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ep-legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.ep-legend i {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.ep-legend b {
+    min-width: 36px;
+    font-size: 18px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.ep-empty-card {
+    padding: 28px;
+    text-align: center;
+    color: var(--muted);
+}
+
+/* ---------- skeletons (app .sk shimmer) ---------- */
+.ep-sk-kpi {
+    display: block;
+    width: 60%;
+    height: 32px;
+}
+
+.ep-sk-chart {
+    display: block;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+}
+
+.ep-sk-row {
+    display: block;
+    width: 100%;
+    height: 18px;
+}
+
+.ep-sk-profile {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 260px;
+    background: rgba(255, 255, 255, .15);
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1200px) {
+    .ep-dash {
+        grid-template-columns: 260px minmax(0, 1fr);
+        grid-template-rows: auto auto 300px auto 340px 340px auto;
+        grid-template-areas:
+            "profile kpis"
+            "profile work"
+            "hourly hourly"
+            "clients clients"
+            "log log"
+            "status status"
+            "reverted reverted";
+    }
+
+    .ep-kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+
+    .ep-controls,
+    .ep-pick {
+        width: 100%;
+    }
+
+    .ep-step-group:not(.ep-pick) {
+        flex: 1;
+    }
+
+    .ep-date {
+        flex: 1;
+        width: auto;
+    }
+
+    .ep-dash {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
+        grid-auto-rows: auto;
+        grid-template-areas: "profile" "kpis" "work" "hourly" "clients" "log" "status" "reverted";
+    }
+
+    .ep-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ep-hourly,
+    .ep-status {
+        height: 300px;
+    }
+
+    .ep-log {
+        max-height: 420px;
+    }
+}
