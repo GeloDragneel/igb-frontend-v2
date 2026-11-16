@@ -228,7 +228,7 @@ function LedgerPanel({ kind }) {
     const [filterType, setFilterType] = useState("DM");
     const [from, setFrom] = useState(pFrom.slice(0, 7));
     const [to, setTo] = useState(pTo.slice(0, 7));
-    const [accountCode, setAccountCode] = useState("");
+    const [accountCodes, setAccountCodes] = useState([]);   // [] = All
     const [branch, setBranch] = useState("current");
 
     // customer / vendor list
@@ -265,7 +265,7 @@ function LedgerPanel({ kind }) {
         try {
             const params = { filter_type: filterType, from, to: to || from, branch };
             if (cfg.party) params[cfg.param] = partyId;
-            else params.account_code = accountCode;
+            else params.account_code = accountCodes.join(",");
 
             setData(await apiFetch(`${cfg.endpoint}?${new URLSearchParams(params)}`));
             setShown({
@@ -280,7 +280,7 @@ function LedgerPanel({ kind }) {
         } finally {
             setLoading(false);
         }
-    }, [cfg, filterType, from, to, accountCode, branch, partyId, parties]);
+    }, [cfg, filterType, from, to, accountCodes, branch, partyId, parties]);
 
     // General Ledger loads right away; Customer / Vendor wait for a choice (old behaviour)
     useEffect(() => {
@@ -347,7 +347,7 @@ function LedgerPanel({ kind }) {
                     <>
                         <div className="field rp-account">
                             <span className="field-label">Accounts</span>
-                            <SearchSelect value={accountCode} onChange={setAccountCode} options={accountOpts} searchPlaceholder="Search account..." aria-label="Accounts" />
+                            <SearchSelect multiple value={accountCodes} onChange={setAccountCodes} options={accountOpts} searchPlaceholder="Search account..." aria-label="Accounts" />
                         </div>
                         {branchOpts.length > 1 && (
                             <div className="field jr-branch">
@@ -394,7 +394,7 @@ function SummaryLedger() {
     const years = Array.from({ length: 10 }, (_, i) => String(thisYear - i));
 
     const [year, setYear] = useState(pTo.slice(0, 4));
-    const [accountCode, setAccountCode] = useState("");
+    const [accountCodes, setAccountCodes] = useState([]);   // [] = All
     const [branch, setBranch] = useState("current");
 
     const [data, setData] = useState(null);
@@ -408,7 +408,7 @@ function SummaryLedger() {
         setLoading(true);
         setError("");
         try {
-            const qs = new URLSearchParams({ year, account_code: accountCode, branch });
+            const qs = new URLSearchParams({ year, account_code: accountCodes.join(","), branch });
             setData(await apiFetch(`/ledgers/summary?${qs}`));
             setUsedBranch(branch);
         } catch (e) {
@@ -416,7 +416,7 @@ function SummaryLedger() {
         } finally {
             setLoading(false);
         }
-    }, [year, accountCode, branch]);
+    }, [year, accountCodes, branch]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { search(); }, [user?.id, user?.caid]);
@@ -455,7 +455,7 @@ function SummaryLedger() {
                 </div>
                 <div className="field rp-account">
                     <span className="field-label">Accounts</span>
-                    <SearchSelect value={accountCode} onChange={setAccountCode} options={accountOpts} searchPlaceholder="Search account..." aria-label="Accounts" />
+                    <SearchSelect multiple value={accountCodes} onChange={setAccountCodes} options={accountOpts} searchPlaceholder="Search account..." aria-label="Accounts" />
                 </div>
                 {branchOpts.length > 1 && (
                     <div className="field jr-branch">

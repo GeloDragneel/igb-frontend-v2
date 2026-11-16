@@ -14,7 +14,8 @@ import Icon from "./Icons";
     onAddNew={(typedText) => ...} // optional: shows an "Add new" button at the bottom
     addNewLabel="Add new account"
     rememberKey="hd-branch-search" // optional: keeps the last search (this browser) – shown again, selected, on the next open
-    stacked                         // optional: the hint goes on its own line under the label
+    multiple                       // optional: value is an array, a click ticks/unticks (popup stays open);
+                                   //           an option with value "" means "All" and clears the list
   />
 
   Any extra props (aria-label, data-*, onKeyDown...) go on the trigger button.
@@ -32,7 +33,7 @@ export default function SearchSelect({
     onAddNew,
     addNewLabel = "Add new",
     rememberKey,
-    stacked = false,
+    multiple = false,
     ...rest
 }) {
     const [open, setOpen] = useState(false);
@@ -66,7 +67,22 @@ export default function SearchSelect({
         });
     }, [options]);
 
-    const selected = unique.find((o) => String(o.value) === String(value));
+    // multiple: value = ["101", "102"] (empty = All)
+    const picked = useMemo(() => (multiple ? (Array.isArray(value) ? value : value ? [value] : []).map(String) : []), [multiple, value]);
+    const isSel = (o) => (multiple
+        ? (String(o.value) === "" ? picked.length === 0 : picked.includes(String(o.value)))
+        : String(o.value) === String(value));
+
+    const selected = multiple
+        ? (picked.length === 0
+            ? unique.find((o) => String(o.value) === "")
+            : picked.length === 1
+                ? unique.find((o) => String(o.value) === picked[0]) || { label: picked[0] }
+                : { label: `${picked.length} selected` })
+        : unique.find((o) => String(o.value) === String(value));
+    const selectedTitle = multiple && picked.length > 1
+        ? unique.filter((o) => picked.includes(String(o.value))).map((o) => o.label).join("\n")
+        : selected?.label;
 
     const filtered = useMemo(() => {
         const words = normalize(query).split(" ").filter(Boolean);
@@ -102,7 +118,7 @@ export default function SearchSelect({
         const remembered = !text ? recall() : "";
         if (text) keep(text);
         setQuery(text || remembered);
-        const idx = unique.findIndex((o) => String(o.value) === String(value));
+        const idx = multiple ? 0 : unique.findIndex((o) => String(o.value) === String(value));
         setActive(text || remembered ? 0 : Math.max(0, idx));
         place();
         setOpen(true);
@@ -124,6 +140,12 @@ export default function SearchSelect({
 
     const choose = (o) => {
         if (!o) return;
+        if (multiple) {
+            const v = String(o.value);
+            if (v === "") onChange([]);                                   // All
+            else onChange(picked.includes(v) ? picked.filter((x) => x !== v) : [...picked, v]);
+            return;                                                       // stays open to tick more
+        }
         onChange(o.value);
         close();
     };
@@ -158,7 +180,7 @@ export default function SearchSelect({
     useEffect(() => {
         if (!open) return;
         // keep the current account highlighted when it's in the (remembered) results
-        const idx = filtered.findIndex((o) => String(o.value) === String(value));
+        const idx = multiple ? -1 : filtered.findIndex((o) => String(o.value) === String(value));
         setActive(idx >= 0 ? idx : 0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [query]);
@@ -219,7 +241,7 @@ export default function SearchSelect({
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-controls={open ? listId : undefined}
-                title={selected?.label}
+                title={selectedTitle}
                 {...rest}
             >
                 <span className={`ss-value ${selected ? "" : "ss-placeholder"}`}>{selected ? selected.label : placeholder}</span>
@@ -245,7 +267,7 @@ export default function SearchSelect({
                                 aria-label="Search options"
                             />
                         </div>
-                        <ul className="ss-list" role="listbox" id={listId} ref={list} style={{ flex: "1 1 auto", minHeight: 0 }}>
+                        <ul className="ss-list" role="listbox" aria-multiselectable={multiple || undefined} id={listId} ref={list} style={{ flex: "1 1 auto", minHeight: 0 }}>
                             {filtered.length === 0 && <li className="ss-empty">No results for “{query}”</li>}
                             {filtered.map((o, i) => (
                                 <li
@@ -253,21 +275,17 @@ export default function SearchSelect({
                                     id={`${listId}-${i}`}
                                     data-i={i}
                                     role="option"
-                                    aria-selected={String(o.value) === String(value)}
-                                    className={`ss-opt ${i === active ? "active" : ""} ${String(o.value) === String(value) ? "selected" : ""}`}
+                                    aria-selected={isSel(o)}
+                                    className={`ss-opt ${i === active ? "active" : ""} ${isSel(o) ? "selected" : ""}`}
                                     onMouseEnter={() => setActive(i)}
                                     onMouseDown={(e) => e.preventDefault()} // keep focus in the search box
                                     onClick={() => choose(o)}
                                 >
-                                    <span className="ss-opt-text" style={stacked ? { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, minWidth: 0 } : undefined}>
-                                        <span className="ss-opt-label" style={stacked ? { fontWeight: 600 } : undefined}><Highlight text={o.label} query={query} /></span>
-                                        {o.hint && (
-                                            <span className="ss-opt-hint" style={stacked ? { fontSize: 12, opacity: 0.75, marginLeft: 0 } : undefined}>
-                                                <Highlight text={o.hint} query={query} />
-                                            </span>
-                                        )}
+                                    <span className="ss-opt-text">
+                                        <span className="ss-opt-label"><Highlight text={o.label} query={query} /></span>
+                                        {o.hint && <span className="ss-opt-hint"><Highlight text={o.hint} query={query} /></span>}
                                     </span>
-                                    {String(o.value) === String(value) && <Icon name="check" size={14} className="ss-check" />}
+                                    {isSel(o) && <Icon name="check" size={14} className="ss-check" />}
                                 </li>
                             ))}
                         </ul>
