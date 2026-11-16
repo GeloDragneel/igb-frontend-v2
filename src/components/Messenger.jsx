@@ -12,6 +12,7 @@ import { useAuth, apiFetch, apiForm } from "../context/AuthContext";
 import { useToast } from "./Toast";
 import { Sticker, StickerPicker } from "./Stickers";
 import { GifPicker } from "./Gifs";
+import MsPhotoViewer from "./MsPhotoViewer";
 import "./Messenger.css";
 
 const EMPLOYEE_TYPES = ["Staff", "ClientStaff"];
@@ -487,18 +488,7 @@ function MessengerInner() {
             )}
             {modal && createPortal(<PeopleModal mode={modal} onClose={() => setModal(null)} />, document.body)}
             {forwardMsg && createPortal(<ForwardModal msg={forwardMsg} onClose={() => setForwardMsg(null)} />, document.body)}
-            {lightbox && createPortal(
-                <div className="ms-lightbox" onClick={() => setLightbox(null)} role="dialog" aria-label="Photo">
-                    {typeof lightbox === "object"
-                        ? (
-                            <figure className="ms-lightbox-fig" onClick={(e) => e.stopPropagation()}>
-                                <img src={lightbox.src} alt={lightbox.caption || ""} />
-                                {lightbox.caption && <figcaption>{lightbox.caption}</figcaption>}
-                            </figure>
-                        )
-                        : <img src={lightbox} alt="" />}
-                    <button className="ms-lightbox-x" aria-label="Close"><Svg i="x" size={22} /></button>
-                </div>, document.body)}
+            {lightbox && <MsPhotoViewer value={lightbox} onClose={() => setLightbox(null)} />}
         </Ctx.Provider>
     );
 }
@@ -657,6 +647,13 @@ function ChatWindow({ win, page = false }) {
     const msgs = c?.messages || [];
     const lastId = msgs.filter((m) => typeof m.id === "number").slice(-1)[0]?.id || 0;
     const mine = (m) => m.sender_id === me;
+    // photos + GIFs of this chat → viewer with previous / next
+    const openPhoto = (m) => {
+        const list = msgs
+            .filter((x) => !x.unsent && ((x.type === "image" && x.image) || (x.type === "gif" && x.body)))
+            .map((x) => ({ id: x.id, src: x.type === "image" ? x.image : x.body, caption: `${x.sender || ""} · ${stamp(x.time)}` }));
+        setLightbox({ list, index: Math.max(0, list.findIndex((p) => p.id === m.id)) });
+    };
 
     // the new message to the other members right away (they see it before the server has saved it)
     const pushLive = (msg) => {
@@ -1033,9 +1030,9 @@ function ChatWindow({ win, page = false }) {
                                     {m.pinned && <span className="ms-pinned-mark" title="Pinned"><Svg i="pin" size={11} /></span>}
                                     <div className={`ms-msg${m.type === "image" && !m.unsent ? " is-img" : ""}${m.type === "sticker" && !m.unsent ? " is-sticker" : ""}${m.type === "gif" && !m.unsent ? " is-img is-gif" : ""}${m.unsent ? " is-unsent" : ""}${m.pending ? " is-pending" : ""}${m.failed ? " is-failed" : ""}${!m.unsent && /^(\p{Extended_Pictographic}|\uFE0F|\u200D|\s){1,8}$/u.test(m.body || "") && m.type === "text" ? " is-big" : ""}`} title={stamp(m.time)}>
                                         {m.unsent ? (own ? "You unsent a message" : `${firstName(m.sender)} unsent a message`)
-                                            : m.type === "image" ? <img src={m.image} alt={m.file_name || "Photo"} onClick={() => setLightbox(m.image)} onLoad={keepBottom} />
+                                            : m.type === "image" ? <img src={m.image} alt={m.file_name || "Photo"} onClick={() => openPhoto(m)} onLoad={keepBottom} />
                                                 : m.type === "sticker" ? <Sticker k={m.body} size={page ? 140 : 112} />
-                                                    : m.type === "gif" ? <img className="ms-gifmsg" src={m.body} alt="GIF" onClick={() => setLightbox(m.body)} onLoad={keepBottom} />
+                                                    : m.type === "gif" ? <img className="ms-gifmsg" src={m.body} alt="GIF" onClick={() => openPhoto(m)} onLoad={keepBottom} />
                                                         : m.type === "file" ? (
                                                             <a className="ms-filemsg" href={m.file || undefined} target="_blank" rel="noreferrer" download={m.file_name} onClick={(e) => !m.file && e.preventDefault()}>
                                                                 <FileBadge name={m.file_name} size={38} />
@@ -1312,8 +1309,8 @@ function SharedTabs({ conversationId, refreshKey }) {
             {cur && cur.items.length === 0 && <div className="ms-empty">{kind === "media" ? "No photos yet." : kind === "files" ? "No files yet." : "No links yet."}</div>}
             {cur && kind === "media" && cur.items.length > 0 && (
                 <div className="ms-media-grid">
-                    {cur.items.map((x) => (
-                        <button key={x.message_id} onClick={() => setLightbox(x.url)} title={`${x.sender} · ${stamp(x.time)}`}>
+                    {cur.items.map((x, i) => (
+                        <button key={x.message_id} onClick={() => setLightbox({ list: cur.items.map((p) => ({ src: p.url, caption: `${p.sender} · ${stamp(p.time)}` })), index: i })} title={`${x.sender} · ${stamp(x.time)}`}>
                             <img src={x.url} alt={x.name || "Photo"} loading="lazy" />
                         </button>
                     ))}

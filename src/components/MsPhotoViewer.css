@@ -1,0 +1,173 @@
+/* Messenger photo viewer (zoom + previous / next) */
+.mpv {
+    position: fixed;
+    inset: 0;
+    z-index: 1700;
+    background: rgba(0, 0, 0, .9);
+    color: #fff;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.mpv-stage {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 64px 72px 56px;
+    overflow: hidden;
+    touch-action: none;
+    cursor: zoom-out;
+}
+
+.mpv-stage img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 6px;
+    transform-origin: center center;
+    transition: transform .18s ease;
+    cursor: zoom-in;
+    will-change: transform;
+}
+
+.mpv-stage.is-zoomed img {
+    cursor: grab;
+    border-radius: 0;
+}
+
+.mpv-stage.is-dragging img {
+    cursor: grabbing;
+}
+
+/* top bar: counter · zoom tools · close */
+.mpv-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(rgba(0, 0, 0, .55), transparent);
+    pointer-events: none;
+}
+
+.mpv-top>* {
+    pointer-events: auto;
+}
+
+.mpv-count {
+    min-width: 60px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: .85;
+}
+
+.mpv-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mpv-tools button,
+.mpv-nav {
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .15);
+    color: #fff;
+    cursor: pointer;
+    transition: background .15s ease, opacity .15s ease;
+}
+
+.mpv-tools button {
+    width: 40px;
+    height: 40px;
+}
+
+.mpv-tools button:hover:not(:disabled),
+.mpv-nav:hover {
+    background: rgba(255, 255, 255, .28);
+}
+
+.mpv-tools button:disabled {
+    opacity: .35;
+    cursor: default;
+}
+
+.mpv-tools .mpv-close {
+    margin-left: 8px;
+}
+
+.mpv-zoom {
+    min-width: 48px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    opacity: .85;
+}
+
+/* previous / next */
+.mpv-nav {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    width: 48px;
+    height: 48px;
+    transform: translateY(-50%);
+}
+
+.mpv-prev {
+    left: 16px;
+}
+
+.mpv-next {
+    right: 16px;
+}
+
+.mpv-caption {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    z-index: 2;
+    max-width: min(90vw, 640px);
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .55);
+    font-size: 13px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+@media (max-width: 720px) {
+    .mpv-stage {
+        padding: 60px 8px 52px;
+    }
+
+    .mpv-nav {
+        width: 40px;
+        height: 40px;
+        background: rgba(0, 0, 0, .35);
+    }
+
+    .mpv-prev {
+        left: 6px;
+    }
+
+    .mpv-next {
+        right: 6px;
+    }
+
+    .mpv-tools button {
+        width: 36px;
+        height: 36px;
+    }
+}
