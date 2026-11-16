@@ -75,6 +75,23 @@ function useAccountOpts() {
             .map((a) => ({ value: a.account_code, label: `${a.account_code} - ${a.account_name}` })),
     ];
 }
+// where a ledger line's Reference opens (trans_type / jrnl from ReportController::ledgerEntries)
+//   INV, RV → Sales · AP + PJ → Purchases · AP + CDJ → Expenses · PO → Purchase Order
+//   GRN → Receive Inventory · GJ (JV, AJ, DEP, CE) → General Journal popup
+const refLink = (r) => {
+    const ref = encodeURIComponent(r.ref_data || r.reference || "");
+    if (!ref) return null;
+    switch (r.trans_type) {
+        case "INV":
+        case "RV": return `/task/sales/${ref}`;
+        case "AP": return r.jrnl === "CDJ" ? `/task/expenses/${ref}` : `/task/purchases/${ref}`;
+        case "PO": return `/task/purchases/purchase-orders/${ref}`;
+        case "GRN": return `/task/inventory/receive/${ref}`;
+        case "GJ": return `/task/general-journal?jv=${ref}`;
+        default: return null;
+    }
+};
+
 const branchOptsFrom = (data) => [
     { value: "current", label: "This branch" },
     ...(data?.branches?.length ? [{ value: "all", label: "All Branches" }] : []),
@@ -565,9 +582,8 @@ function LedgerTable({ groups, loading, loaded, beginDate }) {
     const location = useLocation();
 
     const openRef = (r) => {
-        if (r.trans_type === "INV" || r.trans_type === "RV") {
-            navigate(`/task/sales/${encodeURIComponent(r.ref_data)}`, { state: { from: location.pathname } });
-        }
+        const to = refLink(r);
+        if (to) navigate(to, { state: { from: location.pathname } });
     };
 
     return (
@@ -630,7 +646,7 @@ function GroupRows({ g, beginDate, onOpen }) {
                     <td>{r.account_name}</td>
                     <td>{r.date}</td>
                     <td>
-                        {r.trans_type === "INV" || r.trans_type === "RV" ? (
+                        {refLink(r) ? (
                             <button type="button" className="gl-ref" onClick={() => onOpen(r)} title={`Open ${r.ref_data}`}>
                                 {r.reference || r.ref_data}
                             </button>
