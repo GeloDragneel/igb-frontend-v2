@@ -788,7 +788,9 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                     onCancel={() => setAskClose(false)} onConfirm={() => { setAskClose(false); onClose(); }} />
             )}
             {letter && (
-                <LetterModal kind={letter.kind} date={letter.date} clientNum={num} accounts={data?.accounts || []} onClose={() => setLetter(null)} />
+                <LetterModal kind={letter.kind} date={letter.date} clientNum={num} accounts={data?.accounts || []} onClose={() => setLetter(null)}
+                    ownership={[bot?.label, bot?.details?.find((d) => String(d.id) === form?.business_ownership_type_detail_id)?.label].filter(Boolean).join(" ")}
+                    owner={[form?.first_name, form?.middle_name ? `${form.middle_name.trim()[0]}.` : "", form?.last_name, form?.suffix].filter(Boolean).join(" ")} />
             )}
             {acct && (
                 <AccountPopup account={acct} clientNum={num} L={L} hasRdo={hasRdo} onClose={() => setAcct(null)}
@@ -1360,15 +1362,61 @@ const todayIso = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-function LetterModal({ kind, date, clientNum, accounts, onClose }) {
+// Date of engagement → Audit engagement letter: template by Business Ownership type
+const AUDIT_TYPES = [
+    { value: "sole", label: "Sole Proprietorship" },
+    { value: "stock", label: "Stock Corporation" },
+    { value: "nonstock", label: "Non-Stock Corporation" },
+    { value: "coop", label: "Cooperative" },
+];
+const auditTypeOf = (ownership) => {
+    const s = String(ownership || "").toLowerCase();
+    if (s.includes("coop")) return "coop";
+    if (/non[\s-]?stock|foundation|association|non[\s-]?profit/.test(s)) return "nonstock";
+    if (s.includes("corp")) return "stock";
+    return "sole";
+};
+const FRAMEWORKS = [
+    "Philippine Financial Reporting Standards for Small Entities (PFRS for SEs)",
+    "Philippine Financial Reporting Standards for Small and Medium-sized Entities (PFRS for SMEs)",
+    "Philippine Financial Reporting Standards (PFRS)",
+    "Revised Philippine Financial Reporting Framework for Cooperatives",
+];
+const VAT_OPTS = [
+    { value: "exclusive", label: "VAT-exclusive" },
+    { value: "inclusive", label: "VAT-inclusive" },
+    { value: "nonvat", label: "Non-VAT" },
+];
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// year ended = Dec 31 of the year before the letter · target = Apr 15 after it (or 30 days after the letter when that is past)
+const auditDefaults = (letterDate) => {
+    const y = Number(String(letterDate || todayIso()).slice(0, 4)) || new Date().getFullYear();
+    const yearEnd = `${y - 1}-12-31`;
+    let target = `${y}-04-15`;
+    if (target <= letterDate) { const t = new Date(`${letterDate}T00:00:00`); t.setDate(t.getDate() + 30); target = iso(t); }
+    return { yearEnd, target };
+};
+
+function LetterModal({ kind, date, clientNum, accounts, onClose, ownership = "", owner = "" }) {
     const notify = useToast();
-    const title = kind === "engagement" ? "Engagement Letter" : "Disengagement Letter";
+    const audit = kind === "engagement";
+    const title = audit ? "Audit Engagement Letter" : "Disengagement Letter";
     const main = accounts.find((a) => isMain(a)) || accounts[0];
     const [accountId, setAccountId] = useState(main?.id ? String(main.id) : "");
-    const [letterDate, setLetterDate] = useState(todayIso());
+    const [letterDate, setLetterDate] = useState(audit && date ? date : todayIso());
     const [effective, setEffective] = useState(date || "");
     const [balance, setBalance] = useState("");          // "" → server uses unpaid PF + EO from Billing
     const [unpaid, setUnpaid] = useState(null);          // { pf, eo, total }
+    // audit engagement letter
+    const [a, setA] = useState(() => {
+        const type = auditTypeOf(ownership);
+        const dft = auditDefaults(audit && date ? date : todayIso());
+        return {
+            type, attention: owner.trim(), yearEnd: dft.yearEnd, target: dft.target,
+            framework: type === "coop" ? FRAMEWORKS[3] : FRAMEWORKS[0], fee: "", vat: "exclusive", terms: "",
+        };
+    });
+    const setAu = (k, v) => setA((x) => ({ ...x, [k]: v }));
     const [url, setUrl] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
@@ -1378,7 +1426,14 @@ function LetterModal({ kind, date, clientNum, accounts, onClose }) {
         setBusy(true);
         setError("");
         try {
-            const q = new URLSearchParams({ date: effective, letter_date: letterDate });
+            const q = new URLSearchParams(audit
+                ? {
+                    letter_date: letterDate, type: a.type, attention: a.attention.trim(), year_end: a.yearEnd,
+                    framework: a.framework.trim(), vat: a.vat, terms: a.terms.trim(), target_date: a.target,
+                    ...(String(a.fee).trim() !== "" ? { fee: String(Number(String(a.fee).replace(/,/g, "")) || 0) } : {}),
+                }
+                : { date: effective, letter_date: letterDate });
+            for (const [k, v] of [...q.entries()]) if (v === "") q.delete(k);   // empty → blank line on the letter
             if (accountId) q.set("account_id", accountId);
             if (kind === "disengagement" && String(balance).trim() !== "") q.set("balance", String(Number(String(balance).replace(/,/g, "")) || 0));
             const blob = await apiBlob(`/clients/${encodeURIComponent(clientNum)}/letter/${kind}?${q}`);
@@ -1413,7 +1468,7 @@ function LetterModal({ kind, date, clientNum, accounts, onClose }) {
     useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
 
     const trade = accounts.find((a) => String(a.id) === accountId)?.trade_name || "";
-    const fileName = `${kind.toUpperCase()}-LETTER-${(trade || clientNum).replace(/[^A-Za-z0-9_-]+/g, "_")}.pdf`;
+    const fileName = `${audit ? "AUDIT-ENGAGEMENT" : kind.toUpperCase()}-LETTER-${(trade || clientNum).replace(/[^A-Za-z0-9_-]+/g, "_")}.pdf`;
 
     return (
         <Modal title={`Print Preview · ${title}`} onClose={onClose} size="xlg"
@@ -1421,32 +1476,89 @@ function LetterModal({ kind, date, clientNum, accounts, onClose }) {
                 <button className="btn" onClick={onClose}>Close</button>
                 {url && <a className="btn btn-primary" href={url} download={fileName} onClick={() => notify(`Downloaded ${fileName}`)}>Download</a>}
             </>}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 12 }}>
-                {accounts.length > 1 && (
-                    <div className="field" style={{ minWidth: 240, flex: "1 1 240px" }}>
-                        <span className="field-label">Business account</span>
-                        <SearchSelect value={accountId} onChange={setAccountId} aria-label="Business account"
-                            options={accounts.map((a) => ({ value: String(a.id), label: `${a.trade_name || "Untitled account"}${a.branch_code ? ` · ${a.branch_code}` : ""}` }))} />
+            {audit ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px 12px", alignItems: "end", marginBottom: 12 }}>
+                    {accounts.length > 1 && (
+                        <div className="field" style={{ gridColumn: "span 2" }}>
+                            <span className="field-label">Business account</span>
+                            <SearchSelect value={accountId} onChange={setAccountId} aria-label="Business account"
+                                options={accounts.map((x) => ({ value: String(x.id), label: `${x.trade_name || "Untitled account"}${x.branch_code ? ` · ${x.branch_code}` : ""}` }))} />
+                        </div>
+                    )}
+                    <div className="field">
+                        <span className="field-label">Letter type</span>
+                        <SearchSelect value={a.type} aria-label="Letter type" options={AUDIT_TYPES}
+                            onChange={(v) => setA((x) => ({ ...x, type: v, framework: v === "coop" ? FRAMEWORKS[3] : x.framework === FRAMEWORKS[3] ? FRAMEWORKS[0] : x.framework }))} />
                     </div>
-                )}
-                <label className="field" style={{ width: 170 }}>
-                    <span className="field-label">{kind === "engagement" ? "Effective (engaged)" : "Effective (ended)"}</span>
-                    <input type="date" className="input" value={effective} onChange={(e) => setEffective(e.target.value)} />
-                </label>
-                <label className="field" style={{ width: 170 }}>
-                    <span className="field-label">Letter date</span>
-                    <input type="date" className="input" value={letterDate} onChange={(e) => setLetterDate(e.target.value)} />
-                </label>
-                {kind === "disengagement" && (
+                    <label className="field">
+                        <span className="field-label">Letter date</span>
+                        <input type="date" className="input" value={letterDate} onChange={(e) => setLetterDate(e.target.value)} />
+                    </label>
+                    <label className="field">
+                        <span className="field-label">Attention</span>
+                        <input className="input" value={a.attention} maxLength={150} onChange={(e) => setAu("attention", e.target.value)} placeholder="Authorized representative" />
+                    </label>
+                    <label className="field">
+                        <span className="field-label">FS for the year ended</span>
+                        <input type="date" className="input" value={a.yearEnd} onChange={(e) => setAu("yearEnd", e.target.value)} />
+                    </label>
+                    <label className="field" style={{ gridColumn: "span 2" }}>
+                        <span className="field-label">Financial reporting framework</span>
+                        <input className="input" value={a.framework} maxLength={200} list="lt-frameworks" onChange={(e) => setAu("framework", e.target.value)} />
+                        <datalist id="lt-frameworks">{FRAMEWORKS.map((x) => <option key={x} value={x} />)}</datalist>
+                    </label>
+                    <label className="field">
+                        <span className="field-label">Audit fee (₱)</span>
+                        <input className="input mono" inputMode="decimal" value={a.fee} placeholder="blank line if empty"
+                            onChange={(e) => setAu("fee", e.target.value.replace(/[^\d.,]/g, ""))} />
+                    </label>
+                    <div className="field">
+                        <span className="field-label">VAT</span>
+                        <SearchSelect value={a.vat} onChange={(v) => setAu("vat", v)} options={VAT_OPTS} aria-label="VAT" />
+                    </div>
+                    <label className="field" style={{ gridColumn: "span 2" }}>
+                        <span className="field-label">Billing terms</span>
+                        <input className="input" value={a.terms} maxLength={255} list="lt-terms" onChange={(e) => setAu("terms", e.target.value)} placeholder="blank line if empty" />
+                        <datalist id="lt-terms">
+                            <option value="50% upon signing of this letter, 50% upon release of the audited financial statements" />
+                            <option value="Full payment upon release of the audited financial statements" />
+                            <option value="Full payment upon signing of this letter" />
+                        </datalist>
+                    </label>
+                    <label className="field">
+                        <span className="field-label">Target completion</span>
+                        <input type="date" className="input" value={a.target} onChange={(e) => setAu("target", e.target.value)} />
+                    </label>
+                    <div className="field" style={{ justifyContent: "flex-end" }}>
+                        <button className="btn btn-primary" onClick={make} disabled={busy}>{busy ? "Preparing…" : "Update preview"}</button>
+                    </div>
+                </div>
+            ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 12 }}>
+                    {accounts.length > 1 && (
+                        <div className="field" style={{ minWidth: 240, flex: "1 1 240px" }}>
+                            <span className="field-label">Business account</span>
+                            <SearchSelect value={accountId} onChange={setAccountId} aria-label="Business account"
+                                options={accounts.map((x) => ({ value: String(x.id), label: `${x.trade_name || "Untitled account"}${x.branch_code ? ` · ${x.branch_code}` : ""}` }))} />
+                        </div>
+                    )}
+                    <label className="field" style={{ width: 170 }}>
+                        <span className="field-label">Effective (ended)</span>
+                        <input type="date" className="input" value={effective} onChange={(e) => setEffective(e.target.value)} />
+                    </label>
+                    <label className="field" style={{ width: 170 }}>
+                        <span className="field-label">Letter date</span>
+                        <input type="date" className="input" value={letterDate} onChange={(e) => setLetterDate(e.target.value)} />
+                    </label>
                     <label className="field" style={{ width: 170 }}>
                         <span className="field-label">Outstanding balance (₱)</span>
                         <input className="input mono" inputMode="decimal" placeholder={unpaid ? "0.00" : "Loading…"} value={balance}
                             title={unpaid && !unpaid.error ? `Unpaid PF ${peso(unpaid.pf)} + EO ${peso(unpaid.eo)}` : ""}
                             onChange={(e) => setBalance(e.target.value.replace(/[^\d.,]/g, ""))} />
                     </label>
-                )}
-                <button className="btn" onClick={make} disabled={busy || !effective}>{busy ? "Preparing…" : "Update preview"}</button>
-            </div>
+                    <button className="btn" onClick={make} disabled={busy || !effective}>{busy ? "Preparing…" : "Update preview"}</button>
+                </div>
+            )}
 
             {error && <div className="alert-error" role="alert">{error}</div>}
             {!url && !error && (
