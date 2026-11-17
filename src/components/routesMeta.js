@@ -162,6 +162,14 @@ export const NAV = [
         ],
       },
       {
+        group: "Task Management",
+        icon: "checkSquare",
+        items: [
+          { to: "/task-management/prepare-jo", label: "Prepare JO" },
+          { to: "/task-management/activity-list", label: "Activity List" },
+        ],
+      },
+      {
         group: "Administration",
         icon: "settings",
         items: [

@@ -131,6 +131,9 @@ import HelpSupport from "./pages/HelpSupport";
 import BranchEmployees from "./pages/BranchEmployees";
 import Calendar from "./pages/Calendar";
 
+import PrepareJO from "./pages/task-management/PrepareJO";
+import ActivityList from "./pages/task-management/ActivityList";
+
 import Pos from "./pages/pos/Pos";
 // Built pages. Add new ones here as you make them;
 // everything else in the sidebar shows "Coming soon".
@@ -274,6 +277,10 @@ const PAGES = {
 
   "/notifications": Notifications,
   "/help": HelpSupport,
+
+  "/task-management/prepare-jo": PrepareJO,
+  "/task-management/activity-list": ActivityList,
+
 };
 
 // Routes that are not in the sidebar (page tabs)

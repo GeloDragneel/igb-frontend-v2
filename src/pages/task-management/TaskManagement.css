@@ -1,0 +1,232 @@
+/* Staff → Task Management (Prepare JO · Activity List) */
+
+/* list filters */
+.tm-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 0 0 10px;
+    padding: 12px 14px;
+}
+
+.tm-date {
+    width: 170px;
+}
+
+.tm-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 10px;
+}
+
+.tm-seg {
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card-2);
+}
+
+.tm-seg button {
+    height: 32px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.tm-seg button.is-on {
+    background: var(--card);
+    color: var(--brand);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+
+.tm-seg button:disabled {
+    cursor: default;
+}
+
+/* list cells */
+.tm-trunc {
+    display: inline-block;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.tm-loc {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tm-loc-tag {
+    flex: none;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.tm-loc-tag.is-client {
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.tm-loc-tag.is-other {
+    background: var(--card-2);
+    color: var(--muted);
+    border: 1px solid var(--line);
+}
+
+.tm-acts {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tm-prog {
+    flex: none;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.tm-prog.is-done {
+    background: color-mix(in srgb, var(--green) 15%, transparent);
+    color: var(--green);
+}
+
+/* JO popup (xl-* grid comes from the invoice pages) */
+.tm-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px 16px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.tm-f {
+    min-width: 0;
+}
+
+.tm-f-span {
+    grid-column: 1 / -1;
+}
+
+.tm-time {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tm-time .input {
+    flex: 1;
+    min-width: 0;
+    padding-left: 8px;
+    padding-right: 4px;
+    font-size: 13px;
+}
+
+.tm-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.tm-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.tm-check input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+}
+
+.tm-status-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+}
+
+.tm-seg-full {
+    display: flex;
+    width: 100%;
+}
+
+.tm-seg-full button {
+    flex: 1;
+}
+
+.tm-xl-done td {
+    background: color-mix(in srgb, var(--green) 7%, transparent);
+}
+
+.tm-xl-other {
+    display: flex;
+    align-items: center;
+}
+
+.tm-xl-other .xl-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.tm-xl-back {
+    flex: none;
+    margin-right: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.tm-xl-back:hover {
+    color: var(--brand);
+    border-color: var(--brand);
+}
+
+@media (max-width: 1100px) {
+    .tm-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .tm-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .tm-date {
+        width: auto;
+        flex: 1;
+    }
+}
