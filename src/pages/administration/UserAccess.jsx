@@ -313,7 +313,44 @@ function ClientLogins({ staffId, empId }) {
     const [show, setShow] = useState("all");              // all | login | none | assigned
     const [busyId, setBusyId] = useState(0);
     const [made, setMade] = useState(null);               // { trade, username, password } just generated
+    const [picked, setPicked] = useState(() => new Set()); // caids ticked for "Generate selected"
+    const [bulk, setBulk] = useState(null);               // { done, total } while generating many
+    const [madeList, setMadeList] = useState(null);       // { list: [{ trade, username, password }], failed }
     const notify = useToast();
+
+    const tradeOf = (r) => `${r.trade_name}${r.branch_code ? ` - ${r.branch_code}` : ""}`;
+    const togglePick = (caid, on) => setPicked((cur) => {
+        const s = new Set(cur);
+        on ? s.add(caid) : s.delete(caid);
+        return s;
+    });
+
+    // one by one with the same endpoint as the Generate button
+    const generateMany = async () => {
+        const todo = (data?.rows || []).filter((r) => picked.has(r.caid) && !r.login);
+        if (!todo.length) return;
+        const list = [];
+        let failed = 0;
+        setBulk({ done: 0, total: todo.length });
+        for (const r of todo) {
+            try {
+                const res = await apiFetch(`${base}/clients/${r.caid}/login`, { method: "POST" });
+                list.push({ trade: tradeOf(r), username: res.login.username, password: res.password });
+                setData((d) => ({
+                    ...d,
+                    rows: d.rows.map((x) => (x.caid === r.caid ? { ...x, login: res.login } : x)),
+                    counts: { ...d.counts, login: (d.counts?.login || 0) + 1 },
+                }));
+            } catch {
+                failed++;
+            }
+            setBulk((b) => ({ ...b, done: b.done + 1 }));
+        }
+        setBulk(null);
+        setPicked(new Set());
+        if (list.length) setMadeList({ list, failed });
+        else notify("Couldn't generate the logins.", "error");
+    };
 
     const generate = async (r) => {
         setBusyId(r.caid);
@@ -324,7 +361,8 @@ function ClientLogins({ staffId, empId }) {
                 rows: d.rows.map((x) => (x.caid === r.caid ? { ...x, login: res.login } : x)),
                 counts: { ...d.counts, login: (d.counts?.login || 0) + 1 },
             }));
-            setMade({ trade: `${r.trade_name}${r.branch_code ? ` - ${r.branch_code}` : ""}`, username: res.login.username, password: res.password });
+            setPicked((cur) => { const s = new Set(cur); s.delete(r.caid); return s; });
+            setMade({ trade: tradeOf(r), username: res.login.username, password: res.password });
         } catch (e) {
             notify(e.message || "Couldn't generate the login.", "error");
         } finally {
@@ -352,12 +390,21 @@ function ClientLogins({ staffId, empId }) {
     if (error) return <div className="alert-error" role="alert">{error}</div>;
     if (!data) return <p className="ua-empty">Loading…</p>;
     const c = data.counts || {};
+    const selectable = rows.filter((r) => !r.login);
+    const allPicked = selectable.length > 0 && selectable.every((r) => picked.has(r.caid));
+    const somePicked = selectable.some((r) => picked.has(r.caid));
+    const canPick = !!data.employee_id && !bulk && !busyId;
 
     return (
         <div className="ucl">
             {!data.employee_id && <p className="ua-note">This staff login is not linked to an employee (m_user_staff.comid → m_employee.com_id), so it can't have client logins.</p>}
             <div className="ucl-bar">
                 <input className="input" placeholder="Search client, branch, username" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search client accounts" />
+                {picked.size > 0 && (
+                    <button className="btn btn-primary" onClick={generateMany} disabled={!canPick}>
+                        {bulk ? `Generating ${bulk.done}/${bulk.total}…` : `Generate selected (${picked.size})`}
+                    </button>
+                )}
                 <div className="ua-seg" role="tablist">
                     {[["all", "All", c.all], ["login", "Has login", c.login], ["none", "No login", (c.all || 0) - (c.login || 0)], ["assigned", "Assigned", c.assigned]].map(([v, l, n]) => (
                         <button key={v} role="tab" aria-selected={show === v} className={show === v ? "is-on" : ""} onClick={() => setShow(v)}>
@@ -369,12 +416,25 @@ function ClientLogins({ staffId, empId }) {
             <div className="ucl-scroll">
                 <table className="table ucl-table">
                     <thead>
-                        <tr><th>Client account</th><th>Login (user client staff)</th><th className="ucl-act">Login</th></tr>
+                        <tr>
+                            <th style={{ width: 40 }}>
+                                <input type="checkbox" checked={allPicked} disabled={!canPick || !selectable.length}
+                                    ref={(el) => el && (el.indeterminate = somePicked && !allPicked)}
+                                    onChange={(e) => selectable.forEach((r) => togglePick(r.caid, e.target.checked))}
+                                    aria-label="Select all without login" />
+                            </th>
+                            <th>Client account</th><th>Login (user client staff)</th><th className="ucl-act">Login</th></tr>
                     </thead>
                     <tbody>
-                        {!rows.length && <tr><td colSpan={3} className="ua-empty">No client account matches.</td></tr>}
+                        {!rows.length && <tr><td colSpan={4} className="ua-empty">No client account matches.</td></tr>}
                         {rows.map((r) => (
                             <tr key={r.caid} className={r.login ? "has-login" : ""}>
+                                <td>
+                                    {!r.login && (
+                                        <input type="checkbox" checked={picked.has(r.caid)} disabled={!canPick}
+                                            onChange={(e) => togglePick(r.caid, e.target.checked)} aria-label={`Select ${tradeOf(r)}`} />
+                                    )}
+                                </td>
                                 <td>
                                     <b>{r.trade_name || "—"}{r.branch_code ? ` - ${r.branch_code}` : ""}</b>
                                     <small>{r.client_num}{r.client_name ? ` · ${r.client_name}` : ""}{!r.active ? " · inactive account" : ""}</small>
@@ -391,7 +451,7 @@ function ClientLogins({ staffId, empId }) {
                                 <td className="ucl-act">
                                     {r.login
                                         ? <span className="ucl-done">✓ Generated</span>
-                                        : <button className="btn btn-sm btn-primary" onClick={() => generate(r)} disabled={!!busyId || !data.employee_id}>
+                                        : <button className="btn btn-sm btn-primary" onClick={() => generate(r)} disabled={!!busyId || !!bulk || !data.employee_id}>
                                             {busyId === r.caid ? "Generating…" : "Generate"}
                                         </button>}
                                 </td>
@@ -401,6 +461,30 @@ function ClientLogins({ staffId, empId }) {
                 </table>
             </div>
             <p className="muted small" style={{ marginTop: 8 }}>{rows.length} of {data.rows.length} client account(s)</p>
+
+            {madeList && createPortal(
+                <div className="ucl-made" role="dialog" aria-label="Logins generated">
+                    <div className="ucl-made-box" style={{ width: "min(720px, 94vw)" }}>
+                        <h4>{madeList.list.length} login{madeList.list.length === 1 ? "" : "s"} generated</h4>
+                        <p className="muted small">Give these to the employee. The passwords are shown only now.{madeList.failed ? ` ${madeList.failed} failed – try those again.` : ""}</p>
+                        <div style={{ maxHeight: "50vh", overflow: "auto", border: "1px solid var(--line)", borderRadius: 8 }}>
+                            <table className="table">
+                                <thead><tr><th>Client account</th><th>Username</th><th>Password</th></tr></thead>
+                                <tbody>
+                                    {madeList.list.map((m) => (
+                                        <tr key={m.username}><td>{m.trade}</td><td className="mono">{m.username}</td><td className="mono">{m.password}</td></tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="ucl-made-foot">
+                            <button className="btn" onClick={() => copy(madeList.list.map((m) => `${m.trade}\tUsername: ${m.username}\tPassword: ${m.password}`).join("\n"))}>Copy all</button>
+                            <button className="btn btn-primary" onClick={() => setMadeList(null)}>Done</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {made && createPortal(
                 <div className="ucl-made" role="dialog" aria-label="Login generated">

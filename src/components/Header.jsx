@@ -7,6 +7,7 @@ import SearchSelect from "./SearchSelect";
 import { useToast } from "./Toast";
 import { useAuth, apiFetch } from "../context/AuthContext";
 import BirthdayPopup from "./BirthdayPopup";
+import WorkReminder from "./WorkReminder";
 import NotificationBell from "./NotificationBell";
 import AiAssistant from "./AiAssistant";
 import Messenger from "./Messenger";
@@ -173,7 +174,7 @@ export default function Header({ onMenu }) {
   const signOut = async () => {
     setConfirmSignOut(false);
     // the next login sees the birthday popup again
-    try { Object.keys(sessionStorage).filter((k) => k.startsWith("bday-popup:")).forEach((k) => sessionStorage.removeItem(k)); } catch { /* ignore */ }
+    try { Object.keys(sessionStorage).filter((k) => k.startsWith("bday-popup:") || k.startsWith("work-popup:")).forEach((k) => sessionStorage.removeItem(k)); } catch { /* ignore */ }
     await logout();
     navigate("/login", { replace: true });
   };
@@ -217,6 +218,8 @@ export default function Header({ onMenu }) {
       <div className="topbar-right">
         {/* birthday today: animated cake (click = celebrants) · pops up by itself once after login */}
         <BirthdayPopup />
+        {/* pending scans / for audit / reverted, aged · pops up once after login · Confirm = not again today */}
+        <WorkReminder />
         {/* AI Assistant: messenger-style chat (bottom right) */}
         {/* <AiAssistant /> */}
         {/* dark mode: on phones it's only in the user menu (less crowded) */}
