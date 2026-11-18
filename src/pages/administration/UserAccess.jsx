@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Modal from "../../components/Modal";
+import SearchSelect from "../../components/SearchSelect";
 import { useToast } from "../../components/Toast";
 import { apiFetch } from "../../context/AuthContext";
 import { NAV } from "../../components/routesMeta";
@@ -37,6 +38,8 @@ export default function UserAccess() {
     const [error, setError] = useState("");
     const [q, setQ] = useState("");
     const [status, setStatus] = useState("active");
+    const [desig, setDesig] = useState("");            // "" = all designations
+    const [empStat, setEmpStat] = useState("");        // "" = all employment statuses
     const [sel, setSel] = useState(null);              // the card that is open
     const [detail, setDetail] = useState(null);        // { user, paths, saved }
     const [paths, setPaths] = useState([]);
@@ -48,7 +51,11 @@ export default function UserAccess() {
         setLoading(true);
         setError("");
         try {
-            setUsers(await apiFetch("/admin/user-access"));
+            const [list, stat] = await Promise.all([
+                apiFetch("/admin/user-access"),
+                apiFetch("/admin/user-access/employment-status").catch(() => ({})),
+            ]);
+            setUsers(list.map((u) => ({ ...u, employment_status: u.employment_status || stat?.[u.employee_id] || "" })));
         } catch (e) {
             setError(e.message || "Couldn't load the staff logins.");
         } finally {
@@ -67,12 +74,18 @@ export default function UserAccess() {
         return () => { alive = false; };
     }, [sel?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const desigOf = (u) => u.designation || u.user_type || "";
+    const designations = useMemo(() => [...new Set(users.map(desigOf).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [users]);
+    const empStats = useMemo(() => [...new Set(users.map((u) => u.employment_status).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [users]);
+    const inDesig = useMemo(() => users.filter((u) =>
+        (!desig || desigOf(u) === desig) && (!empStat || u.employment_status === empStat)), [users, desig, empStat]);
+
     const shown = useMemo(() => {
         const s = q.trim().toLowerCase();
-        return users.filter((u) =>
+        return inDesig.filter((u) =>
             (status === "all" || (status === "nologin" ? !u.has_login : status === "active" ? u.is_active : !u.is_active)) &&
             (!s || [u.name, u.username, u.designation, u.user_type].some((v) => (v || "").toLowerCase().includes(s))));
-    }, [users, q, status]);
+    }, [inDesig, q, status]);
 
     const has = (p) => paths.includes(p);
     const setMany = (list, on) => setPaths((cur) => {
@@ -101,11 +114,11 @@ export default function UserAccess() {
     };
 
     const counts = useMemo(() => ({
-        active: users.filter((u) => u.is_active).length,
-        inactive: users.filter((u) => !u.is_active).length,
-        nologin: users.filter((u) => !u.has_login).length,
-        all: users.length,
-    }), [users]);
+        active: inDesig.filter((u) => u.is_active).length,
+        inactive: inDesig.filter((u) => !u.is_active).length,
+        nologin: inDesig.filter((u) => !u.has_login).length,
+        all: inDesig.length,
+    }), [inDesig]);
 
     const openCard = (u) => { setSel(u); setTab(u.has_login ? "pages" : "login"); };
     // Login tab created / changed the m_user_staff row → update the card and the popup
@@ -122,6 +135,15 @@ export default function UserAccess() {
             {/* ---------- toolbar ---------- */}
             <section className="card uac-bar">
                 <input className="input" placeholder="Search name, username, designation" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search staff" />
+                <div style={{ width: 220 }}>
+                    <SearchSelect value={desig} onChange={(v) => setDesig(v || "")} aria-label="Filter by designation"
+                        options={[{ value: "", label: "All designations" }, ...designations.map((d) => ({ value: d, label: d }))]} />
+                </div>
+                <div style={{ width: 220 }}>
+                    <SearchSelect value={empStat} onChange={(v) => setEmpStat(v || "")} aria-label="Filter by employment status"
+                        options={[{ value: "", label: "All employment status" }, ...empStats.map((d) => ({ value: d, label: d }))]} />
+                </div>
+                <button type="button" className="btn" onClick={() => { setQ(""); setDesig(""); setEmpStat(""); }} disabled={!q && !desig && !empStat}>Clear</button>
                 <div className="ua-seg" role="tablist">
                     {[["active", "Active"], ["inactive", "Inactive"], ["nologin", "No login"], ["all", "All"]].map(([v, l]) => (
                         <button key={v} role="tab" aria-selected={status === v} className={status === v ? "is-on" : ""} onClick={() => setStatus(v)}>
