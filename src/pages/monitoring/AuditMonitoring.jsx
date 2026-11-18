@@ -180,10 +180,14 @@ function Names({ list }) {
     return <ul className="aum-names">{list.map((n) => <li key={n}>{n}</li>)}</ul>;
 }
 
-/* the day's audits per trade name (old modal_Day_Summary) */
+/* the day's work per trade name (old modal_Day_Summary): summary on top + one compact table */
+const TYPES = [["sales", "Sales"], ["purchases", "Purchases"], ["expenses", "Expenses"]];
+const ST_TONE = { Pending: "is-pend", Confirmed: "is-pend", Audited: "is-ok", Reverted: "is-bad" };
+
 function DayDetail({ row, day, auditorId, auditStatus, onClose }) {
     const [items, setItems] = useState(null);
     const [error, setError] = useState("");
+    const [showEmpty, setShowEmpty] = useState(false);
 
     useEffect(() => {
         let alive = true;
@@ -194,45 +198,84 @@ function DayDetail({ row, day, auditorId, auditStatus, onClose }) {
         return () => { alive = false; };
     }, [day, row.client_num, auditorId, auditStatus]);
 
+    const rows = (items || []).map((t) => ({ ...t, total: t.sales + t.purchases + t.expenses }));
+    const withWork = rows.filter((t) => t.total > 0);
+    const shown = showEmpty ? rows : withWork;
+
+    // day totals by status (all trade names, all types)
+    const sum = { total: 0, Pending: 0, Audited: 0, Reverted: 0 };
+    rows.forEach((t) => TYPES.forEach(([k]) => (t[`${k}_status`] || []).forEach((s) => {
+        const key = s.status === "Confirmed" ? "Pending" : s.status;
+        if (key in sum) sum[key] += s.count;
+        sum.total += s.count;
+    })));
+    const typeTotal = (k) => rows.reduce((a, t) => a + (t[k] || 0), 0);
+
     return (
-        <Modal title={`${row.name} - ${dayLabel(day)}`} onClose={onClose} size="lg"
+        <Modal title={<span className="add-title"><b>{row.name}</b><small>{dayLabel(day)} · #{row.client_num}</small></span>} onClose={onClose} size="lg"
             footer={<button className="btn" onClick={onClose}>Close</button>}>
             {error && <div className="alert-error" role="alert">{error}</div>}
             {!items && !error && <div className="aum-detail-empty">Loading…</div>}
-            {items && !items.length && <div className="aum-detail-empty">No trade names found.</div>}
-            {items && items.map((t) => {
-                const total = t.sales + t.purchases + t.expenses;
-                return (
-                    <div key={t.trade_name} className="aum-trade">
-                        <div className="aum-trade-head">
-                            <span className="aum-avatar" aria-hidden="true">{t.trade_name.replace(/^[^:]*:\s*/, "").slice(0, 2).toUpperCase()}</span>
-                            <div>
-                                <div className="aum-trade-name">{t.trade_name}</div>
-                                <small className="aum-trade-num">#{row.client_num}</small>
-                            </div>
-                        </div>
-                        <div className="aum-tiles">
-                            <Tile label="Expenses" tone="is-red" n={t.expenses} total={total} status={t.expenses_status} />
-                            <Tile label="Purchases" tone="is-blue" n={t.purchases} total={total} status={t.purchases_status} />
-                            <Tile label="Sales" tone="is-green" n={t.sales} total={total} status={t.sales_status} />
-                        </div>
+            {items && (
+                <>
+                    <div className="add-sum">
+                        <div><span>Total</span><b>{sum.total}</b></div>
+                        <div className="is-pend"><span>Pending</span><b>{sum.Pending}</b></div>
+                        <div className="is-ok"><span>Audited</span><b>{sum.Audited}</b></div>
+                        <div className="is-bad"><span>Reverted</span><b>{sum.Reverted}</b></div>
                     </div>
-                );
-            })}
-        </Modal>
-    );
-}
 
-function Tile({ label, tone, n, total, status }) {
-    const pct = total ? Math.round((n / total) * 100) : 0;
-    return (
-        <div className={`aum-tile ${tone}`}>
-            <small>{label}</small>
-            <b>{n}</b>
-            <div className="aum-bar-track"><div className="aum-bar-fill" style={{ width: `${pct}%` }} /></div>
-            {status?.length ? status.map((s) => (
-                <div key={s.status} className="aum-status-line"><span>{s.status}</span><b>{s.count}</b></div>
-            )) : <small className="aum-muted">No data</small>}
-        </div>
+                    <div className="add-scroll">
+                        <table className="add-table">
+                            <thead>
+                                <tr>
+                                    <th>Trade name</th>
+                                    {TYPES.map(([k, l]) => <th key={k} className="c">{l}</th>)}
+                                    <th className="c">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {!shown.length && <tr><td colSpan={5} className="aum-detail-empty">Nothing on this day.</td></tr>}
+                                {shown.map((t) => (
+                                    <tr key={t.trade_name} className={t.total ? "" : "is-zero"}>
+                                        <td className="add-name" title={t.trade_name}>{t.trade_name}</td>
+                                        {TYPES.map(([k]) => (
+                                            <td key={k} className="c">
+                                                {t[k] ? (
+                                                    <>
+                                                        <b className="add-n">{t[k]}</b>
+                                                        <span className="add-chips">
+                                                            {(t[`${k}_status`] || []).map((s) => (
+                                                                <span key={s.status} className={`add-chip ${ST_TONE[s.status] || ""}`} title={s.status}>{s.status} {s.count}</span>
+                                                            ))}
+                                                        </span>
+                                                    </>
+                                                ) : <span className="aum-muted">–</span>}
+                                            </td>
+                                        ))}
+                                        <td className="c"><b>{t.total || "–"}</b></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            {withWork.length > 1 && (
+                                <tfoot>
+                                    <tr>
+                                        <th>Total</th>
+                                        {TYPES.map(([k]) => <th key={k} className="c">{typeTotal(k)}</th>)}
+                                        <th className="c">{sum.total}</th>
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                    </div>
+
+                    {rows.length > withWork.length && (
+                        <button type="button" className="add-toggle" onClick={() => setShowEmpty((v) => !v)}>
+                            {showEmpty ? "Hide" : "Show"} {rows.length - withWork.length} trade name{rows.length - withWork.length === 1 ? "" : "s"} with nothing this day
+                        </button>
+                    )}
+                </>
+            )}
+        </Modal>
     );
 }

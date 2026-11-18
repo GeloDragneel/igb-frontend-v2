@@ -3,6 +3,7 @@
 // Client name → E-BIR (2550M/Q) table: original / adjusted view, documents per cell, undeclare / undo, approve, print.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import ColumnFilter, { distinct } from "../../components/ColumnFilter";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import { apiFetch, apiBlob } from "../../context/AuthContext";
@@ -1015,12 +1016,51 @@ function EbirView({ state, range, busy, canEdit, onMode, onCell, onApprove, onPe
 /* =========================================================
    documents behind one E-BIR cell (old modal_View_Details)
    ========================================================= */
+// VATSummary.jsx – replace the whole `function CellList(...) { ... }` with this one,
+// and add at the top with the other imports:
+//   import ColumnFilter, { distinct } from "../../components/ColumnFilter";
+
 function CellList({ state, busy, canEdit, onUndeclare, onUndo }) {
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState([]);            // keys of ticked documents
+  const [filters, setFilters] = useState({});          // column → Set of allowed values
+  const [sort, setSort] = useState({ col: "", dir: null });
   const keyOf = (r) => `${r.trans_type}|${r.reference}`;
-  const list = state.rows.filter((r) => `${r.fullname} ${r.document_no} ${r.reference}`.toLowerCase().includes(q.trim().toLowerCase()));
   const sum = (rows) => rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+
+  // every column: value (for sort / filter) + what the filter list shows
+  const COLS = [
+    { k: "date", label: "Date", get: (r) => String(r.transaction_date || "").slice(0, 10), show: (v) => (v ? fullDate(v) : "N/A") },
+    { k: "doc", label: "Doc #", get: (r) => String(r.document_no || "") },
+    { k: "ref", label: "Reference", get: (r) => String(r.reference || "") },
+    { k: "name", label: "Customer / Vendor", get: (r) => r.fullname || "N/A" },
+    { k: "module", label: "Module", get: (r) => r.trans_type || "" },
+    { k: "itvt", label: "VT / IT", get: (r) => Number(r.itvt_amount) || 0, show: n2, num: true },
+    { k: "month", label: "VT / IT declared month", get: (r) => r.wh_declared_month || "", show: (v) => (v ? monthLabel(v) : "N/A") },
+    { k: "amount", label: "Amount", get: (r) => Number(r.amount) || 0, show: n2, num: true },
+    { k: "status", label: canEdit ? "Action" : "Status", get: (r) => (r.undeclared ? "Undeclared" : "Declared") },
+  ];
+  const colOf = (k) => COLS.find((c) => c.k === k);
+
+  // search → column filters → sort
+  const searched = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return state.rows.filter((r) => `${r.fullname} ${r.document_no} ${r.reference}`.toLowerCase().includes(s));
+  }, [state.rows, q]);
+  const passes = (r, skip) => Object.entries(filters).every(([k, set]) => k === skip || !set || set.has(colOf(k).get(r)));
+  const list = useMemo(() => {
+    const out = searched.filter((r) => passes(r));
+    if (sort.dir) {
+      const c = colOf(sort.col);
+      const m = sort.dir === "asc" ? 1 : -1;
+      out.sort((a, b) => {
+        const x = c.get(a), y = c.get(b);
+        return m * (c.num ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true }));
+      });
+    }
+    return out;
+  }, [searched, filters, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const total = sum(list);
   const undeclaredTotal = sum(list.filter((r) => r.undeclared));
 
@@ -1034,10 +1074,28 @@ function CellList({ state, busy, canEdit, onUndeclare, onUndo }) {
   const toggleAll = () => setPicked(allOn ? picked.filter((k) => !list.some((r) => keyOf(r) === k)) : [...new Set([...picked, ...list.map(keyOf)])]);
   const toggle = (k) => setPicked((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
 
+  const filtered = Object.values(filters).some(Boolean) || !!sort.dir;
+  const head = (k, cls = "") => {
+    const c = colOf(k);
+    // the list of one column follows the other filters (like Excel)
+    const values = distinct(searched.filter((r) => passes(r, k)), c.get, c.show || ((v) => v));
+    return (
+      <th className={cls}>
+        <ColumnFilter label={c.label} values={values} selected={filters[k] || null} align={c.num ? "right" : "left"}
+          onApply={(set) => setFilters((f) => ({ ...f, [k]: set }))}
+          sort={sort.col === k ? sort.dir : null}
+          onSort={(dir) => setSort({ col: dir ? k : "", dir })} />
+      </th>
+    );
+  };
+
   return (
     <div className="vs-docs">
       <div className="vs-docs-bar">
         <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, doc # or reference" />
+        {filtered && (
+          <button type="button" className="btn btn-sm" onClick={() => { setFilters({}); setSort({ col: "", dir: null }); }}>Clear filters</button>
+        )}
         {canEdit && ticked.length > 0 && (
           <div className="vs-bulk">
             <span className="vs-muted">{ticked.length} selected · <b>{n2(sum(ticked))}</b></span>
@@ -1055,7 +1113,7 @@ function CellList({ state, busy, canEdit, onUndeclare, onUndo }) {
           </div>
         )}
         <span className="vs-muted vs-docs-count">
-          {list.length} document{list.length === 1 ? "" : "s"}{state.refreshing ? " · updating…" : ""}
+          {list.length}{list.length !== state.rows.length ? ` of ${state.rows.length}` : ""} document{state.rows.length === 1 ? "" : "s"}{state.refreshing ? " · updating…" : ""}
         </span>
       </div>
       {state.error && <div className="alert-error" role="alert">{state.error}</div>}
@@ -1066,8 +1124,9 @@ function CellList({ state, busy, canEdit, onUndeclare, onUndo }) {
               <th className="vs-check">
                 {canEdit && <input type="checkbox" checked={allOn} onChange={toggleAll} disabled={!list.length} aria-label="Select all documents" />}
               </th>
-              <th>Date</th><th>Doc #</th><th>Reference</th><th>Customer / Vendor</th><th>Module</th>
-              <th className="vs-num">VT / IT</th><th>VT / IT declared month</th><th className="vs-num">Amount</th><th className="vs-c">{canEdit ? "Action" : "Status"}</th></tr>
+              {head("date")}{head("doc")}{head("ref")}{head("name")}{head("module")}
+              {head("itvt", "vs-num")}{head("month")}{head("amount", "vs-num")}{head("status", "vs-c")}
+            </tr>
           </thead>
           <tbody>
             {state.loading && !state.rows.length && <tr><td colSpan={10} className="vs-empty">Loading…</td></tr>}
