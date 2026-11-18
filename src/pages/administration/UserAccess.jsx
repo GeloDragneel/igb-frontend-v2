@@ -325,27 +325,34 @@ function ClientLogins({ staffId, empId }) {
         return s;
     });
 
-    // one by one with the same endpoint as the Generate button
+    // same endpoint as the Generate button, 6 at a time as the Generate button
     const generateMany = async () => {
         const todo = (data?.rows || []).filter((r) => picked.has(r.caid) && !r.login);
         if (!todo.length) return;
         const list = [];
         let failed = 0;
         setBulk({ done: 0, total: todo.length });
-        for (const r of todo) {
-            try {
-                const res = await apiFetch(`${base}/clients/${r.caid}/login`, { method: "POST" });
-                list.push({ trade: tradeOf(r), username: res.login.username, password: res.password });
-                setData((d) => ({
-                    ...d,
-                    rows: d.rows.map((x) => (x.caid === r.caid ? { ...x, login: res.login } : x)),
-                    counts: { ...d.counts, login: (d.counts?.login || 0) + 1 },
-                }));
-            } catch {
-                failed++;
+        // 6 at the same time instead of one by one
+        let next = 0;
+        const worker = async () => {
+            while (next < todo.length) {
+                const r = todo[next++];
+                try {
+                    const res = await apiFetch(`${base}/clients/${r.caid}/login`, { method: "POST" });
+                    list.push({ trade: tradeOf(r), username: res.login.username, password: res.password });
+                    setData((d) => ({
+                        ...d,
+                        rows: d.rows.map((x) => (x.caid === r.caid ? { ...x, login: res.login } : x)),
+                        counts: { ...d.counts, login: (d.counts?.login || 0) + 1 },
+                    }));
+                } catch {
+                    failed++;
+                }
+                setBulk((b) => (b ? { ...b, done: b.done + 1 } : b));
             }
-            setBulk((b) => ({ ...b, done: b.done + 1 }));
-        }
+        };
+        await Promise.all(Array.from({ length: Math.min(6, todo.length) }, worker));
+        list.sort((x, y) => x.trade.localeCompare(y.trade));
         setBulk(null);
         setPicked(new Set());
         if (list.length) setMadeList({ list, failed });
