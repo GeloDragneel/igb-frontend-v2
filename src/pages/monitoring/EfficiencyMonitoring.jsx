@@ -1,5 +1,5 @@
 // Monitoring → Efficiency → Employee Performance (dashboard of one employee)
-//   Top: Day / Week / Month · ‹ Employee › (active + Regular) · ‹ Client ›   (‹ › = previous / next)
+//   Top: Day / Week / Month · ‹ Employee › (active + Regular)   (‹ › = previous / next)
 //   Tiles: total scanned, pending, confirmed · sales, purchases, expenses typed in by hand (not from a scan)
 //   Work efficiency: first entry → last entry per day, minus the 2-hour break → entries per hour / minute
 //   Assigned clients: scans by status (pending, confirmed, invalid, partially invalid, cancel) + manual entries
@@ -9,6 +9,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
 import SearchSelect from "../../components/SearchSelect";
 import { apiFetch } from "../../context/AuthContext";
 import "./EmployeePerformance.css";
+import "./EmployeeLeaderboard.css";
 
 /* ---------------- dates (local, no UTC shift) ---------------- */
 const pad = (n) => String(n).padStart(2, "0");
@@ -66,8 +67,8 @@ export default function EfficiencyMonitoring() {
     const [mode, setMode] = useState("month");
     const [anchor, setAnchor] = useState(TODAY);
     const [empId, setEmpId] = useState("");
-    const [caid, setCaid] = useState("");
     const [view, setView] = useState("");                 // "da" | "au" ("" = by designation)
+    const [tab, setTab] = useState("employee");           // "employee" | "leaderboard"
 
     const [employees, setEmployees] = useState(null);
     const [roles, setRoles] = useState({ da: 3, au: 5 });  // designation ids from the server
@@ -97,7 +98,7 @@ export default function EfficiencyMonitoring() {
         setLoading(true);
         setError("");
         try {
-            const qs = new URLSearchParams({ from: period.from, to: period.to, ...(caid ? { caid } : {}) });
+            const qs = new URLSearchParams({ from: period.from, to: period.to });
             const res = await apiFetch(`/monitoring/performance/${empId}?${qs}`);
             if (id === reqId.current) setData(res);
         } catch (e) {
@@ -105,7 +106,7 @@ export default function EfficiencyMonitoring() {
         } finally {
             if (id === reqId.current) setLoading(false);
         }
-    }, [empId, caid, period.from, period.to]);
+    }, [empId, period.from, period.to]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -119,7 +120,8 @@ export default function EfficiencyMonitoring() {
                 || a.name.localeCompare(b.name))
             .map((e) => ({ value: String(e.id), label: e.name, hint: e.company || "", group: e.designation || "No designation" }));
     }, [employees, roles]);
-    const pickEmployee = (v) => { setEmpId(v); setCaid(""); setView(""); };
+    const pickEmployee = (v) => { setEmpId(v); setView(""); };
+    const openEmployee = (id) => { pickEmployee(String(id)); setTab("employee"); };
     const stepEmployee = (step) => {
         if (!employeeOpts.length) return;
         const i = employeeOpts.findIndex((o) => o.value === empId);
@@ -130,30 +132,35 @@ export default function EfficiencyMonitoring() {
     const hasDa = !!data && (data.da.clients > 0 || data.da.total > 0);
     const hasAu = !!data && (data.au.clients > 0 || data.au.total > 0 || data.au.actions > 0);
     const role = view || (data?.role === "auditor" ? "au" : data?.role === "da" ? "da" : hasAu && !hasDa ? "au" : "da");
-    const switchView = (v) => { setView(v); setCaid(""); };
+    const switchView = (v) => setView(v);
 
-    /* ---------- client ‹ › (assigned clients of the view) ---------- */
+    // employee ‹ dropdown › – shown at the top of the profile card
+    const picker = (
+        <div className="ep-step-group ep-pick ep-profile-pick">
+            <button type="button" className="ep-step" onClick={() => stepEmployee(-1)} disabled={!employeeOpts.length} aria-label="Previous employee">‹</button>
+            <SearchSelect value={empId} onChange={pickEmployee} options={employeeOpts} placeholder="Select employee" searchPlaceholder="Search employee..." aria-label="Employee" />
+            <button type="button" className="ep-step" onClick={() => stepEmployee(1)} disabled={!employeeOpts.length} aria-label="Next employee">›</button>
+        </div>
+    );
+
+    /* ---------- assigned clients of the view ---------- */
     const clients = useMemo(() => (role === "au" ? data?.au_clients : data?.da_clients) || [], [data, role]);
-    const clientOpts = useMemo(() => [
-        { value: "", label: "All clients" },
-        ...clients.map((c) => ({ value: String(c.id), label: c.trade_name || c.client_name || c.branch_code, hint: [c.branch_code, c.client_name].filter(Boolean).join(" · ") })),
-    ], [clients]);
-    const stepClient = (step) => {
-        if (clientOpts.length < 2) return;
-        const i = Math.max(0, clientOpts.findIndex((o) => o.value === caid));
-        setCaid(clientOpts[(i + step + clientOpts.length) % clientOpts.length].value);
-    };
-    const clientName = caid ? clientOpts.find((o) => o.value === caid)?.label : "";
 
     return (
         <div className="ep">
             <section className="card ep-bar">
                 <div className="ep-title">
                     <h4>Employee Performance</h4>
-                    <span>{period.label}{clientName ? ` · ${clientName}` : ""}</span>
+                    <span>{period.label}</span>
                 </div>
 
                 <div className="ep-controls">
+                    <div className="ep-seg" role="tablist" aria-label="View">
+                        {[["employee", "Employee"], ["leaderboard", "Leaderboard"]].map(([k, l]) => (
+                            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "is-on" : ""} onClick={() => setTab(k)}>{l}</button>
+                        ))}
+                    </div>
+
                     <div className="ep-seg" role="tablist" aria-label="Period">
                         {MODES.map((m) => (
                             <button key={m.key} type="button" role="tab" aria-selected={mode === m.key} className={mode === m.key ? "is-on" : ""} onClick={() => setMode(m.key)}>
@@ -170,35 +177,21 @@ export default function EfficiencyMonitoring() {
                         <button type="button" className="ep-step" onClick={() => setAnchor((a) => shift(mode, a, 1))} aria-label="Next period">›</button>
                     </div>
 
-                    <div className="field">
-                        <span className="field-label">Employee</span>
-                        <div className="ep-step-group ep-pick">
-                            <button type="button" className="ep-step" onClick={() => stepEmployee(-1)} disabled={!employeeOpts.length} aria-label="Previous employee">‹</button>
-                            <SearchSelect value={empId} onChange={pickEmployee} options={employeeOpts} placeholder="Select employee" searchPlaceholder="Search employee..." aria-label="Employee" />
-                            <button type="button" className="ep-step" onClick={() => stepEmployee(1)} disabled={!employeeOpts.length} aria-label="Next employee">›</button>
-                        </div>
-                    </div>
 
-                    <div className="field">
-                        <span className="field-label">Client</span>
-                        <div className="ep-step-group ep-pick">
-                            <button type="button" className="ep-step" onClick={() => stepClient(-1)} disabled={clientOpts.length < 2} aria-label="Previous client">‹</button>
-                            <SearchSelect value={caid} onChange={setCaid} options={clientOpts} searchPlaceholder="Search client..." aria-label="Client" disabled={!data} />
-                            <button type="button" className="ep-step" onClick={() => stepClient(1)} disabled={clientOpts.length < 2} aria-label="Next client">›</button>
-                        </div>
-                    </div>
                 </div>
             </section>
 
-            {error && <div className="alert-error" role="alert">{error} <button className="btn btn-sm" onClick={load}>Try again</button></div>}
+            {tab === "leaderboard" && <Leaderboard period={period} onPick={openEmployee} />}
 
-            {employees && !employees.length && !error && <section className="card ep-empty-card">No active Regular employees.</section>}
+            {tab === "employee" && error && <div className="alert-error" role="alert">{error} <button className="btn btn-sm" onClick={load}>Try again</button></div>}
 
-            {(data || loading) && (
+            {tab === "employee" && employees && !employees.length && !error && <section className="card ep-empty-card">No active Regular employees.</section>}
+
+            {tab === "employee" && (data || loading) && (
                 <Dashboard
-                    data={data} loading={loading} mode={mode} role={role}
+                    data={data} loading={loading} mode={mode} period={period} role={role}
                     canSwitch={hasDa && hasAu} onView={switchView}
-                    clients={clients} caid={caid} onClient={setCaid}
+                    clients={clients} picker={picker}
                 />
             )}
         </div>
@@ -208,7 +201,7 @@ export default function EfficiencyMonitoring() {
 /* =========================================================
    dashboard (one employee)
    ========================================================= */
-function Dashboard({ data, loading, role, canSwitch, onView, clients, caid, onClient }) {
+function Dashboard({ data, loading, mode, period, role, canSwitch, onView, clients, picker }) {
     const e = data?.employee;
     const isAu = role === "au";
     const first = !data;                                      // nothing yet → skeletons
@@ -217,15 +210,44 @@ function Dashboard({ data, loading, role, canSwitch, onView, clients, caid, onCl
     const wt = work?.totals;
     const s = isAu ? data?.au : data?.da;
 
+    // chart: Day → per hour · Week → per day (Mon–Sun) · Month → per week (Mon–Sun weeks of the month)
     const hourly = useMemo(() => {
-        const h = work?.hourly || [];
-        const used = h.filter((x) => x.entries > 0);
-        if (!used.length) return [];
-        // from the first to the last hour with entries (no empty night hours)
-        const a = h.indexOf(used[0]);
-        const b = h.indexOf(used[used.length - 1]);
-        return h.slice(a, b + 1);
-    }, [work]);
+        if (mode === "day") {
+            const h = (work?.hourly || []).map((x) => ({ ...x, k: x.h, label: hourText(x.h), tip: `${clock(`${x.h}:00`)} – ${clock(`${x.h}:59`)}` }));
+            const used = h.filter((x) => x.entries > 0);
+            if (!used.length) return [];
+            // from the first to the last hour with entries (no empty night hours)
+            return h.slice(h.indexOf(used[0]), h.indexOf(used[used.length - 1]) + 1);
+        }
+        const byDay = Object.fromEntries((work?.days || []).map((d) => [d.date, d.entries]));
+        const total = Object.values(byDay).reduce((a, n) => a + n, 0);
+        if (!total || !period) return [];
+        const pct = (n) => Math.round((n / total) * 1000) / 10;
+        const out = [];
+        if (mode === "week") {
+            for (let d = period.from; d <= period.to; d = addDays(d, 1)) {
+                const n = byDay[d] || 0;
+                out.push({ k: d, label: parse(d).toLocaleDateString("en-US", { weekday: "short" }), tip: dayText(d), entries: n, pct: pct(n) });
+            }
+            return out;
+        }
+        // month: weeks Monday – Sunday, cut at the month's first / last day
+        let start = period.from;
+        let w = 1;
+        while (start <= period.to) {
+            const dow = (parse(start).getDay() + 6) % 7;       // 0 = Monday
+            let end = addDays(start, 6 - dow);
+            if (end > period.to) end = period.to;
+            let n = 0;
+            for (let d = start; d <= end; d = addDays(d, 1)) n += byDay[d] || 0;
+            const f = (x) => parse(x).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+            out.push({ k: start, label: `Week ${w}`, tip: `Week ${w} · ${f(start)} – ${f(end)}`, entries: n, pct: pct(n) });
+            start = addDays(end, 1);
+            w++;
+        }
+        return out;
+    }, [work, mode, period]);
+    const per = mode === "day" ? "hour" : mode === "week" ? "day" : "week";
 
     const pie = !s ? [] : isAu
         ? [{ name: "Audited", value: s.audited, c: C.green }, { name: "Reverted", value: s.reverted, c: C.red }, { name: "Pending", value: s.pending, c: C.muted }]
@@ -248,6 +270,7 @@ function Dashboard({ data, loading, role, canSwitch, onView, clients, caid, onCl
         <div className={`ep-dash${loading && !first ? " is-busy" : ""}`}>
             {/* ---------- profile ---------- */}
             <section className="ep-profile">
+                {picker}
                 {first ? <span className="sk ep-sk-profile" /> : (
                     <>
                         <Avatar name={e.name} photo={e.photo} size={120} />
@@ -316,16 +339,16 @@ function Dashboard({ data, loading, role, canSwitch, onView, clients, caid, onCl
             </section>
 
             <section className="card ep-panel ep-hourly">
-                <header><h5>Entries per hour</h5><small className="ep-note">% of all entries made in each hour</small></header>
+                <header><h5>Entries per {per}</h5><small className="ep-note">% of all entries made in each {per}</small></header>
                 <div className="ep-chart-body">
                     {first ? <span className="sk ep-sk-chart" /> : !hourly.length ? <div className="ep-chart-empty">No entries in this period.</div> : (
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={hourly} margin={{ top: 18, right: 4, left: -12, bottom: 0 }}>
                                 <CartesianGrid vertical={false} stroke="var(--line)" />
-                                <XAxis dataKey="h" tickFormatter={hourText} interval={0} {...axis} />
+                                <XAxis dataKey="label" interval={0} {...axis} />
                                 <YAxis tickFormatter={(v) => `${v}%`} width={44} {...axis} />
                                 <Tooltip contentStyle={tipStyle} cursor={{ fill: "var(--card-2)" }}
-                                    labelFormatter={(h) => `${clock(`${h}:00`)} – ${clock(`${h}:59`)}`}
+                                    labelFormatter={(_l, p) => p?.[0]?.payload?.tip || _l}
                                     formatter={(v, _n, p) => [`${v}% · ${n0(p.payload.entries)} entries`, "Share"]} />
                                 <Bar dataKey="pct" name="Share" fill={C.brand} radius={[4, 4, 0, 0]} maxBarSize={28}
                                     label={{ position: "top", fontSize: 10, fill: "var(--muted)", formatter: (v) => (v ? `${v}%` : "") }} />
@@ -363,9 +386,7 @@ function Dashboard({ data, loading, role, canSwitch, onView, clients, caid, onCl
                             {first && <tr><td colSpan={11}><span className="sk ep-sk-row" /></td></tr>}
                             {!first && !clients.length && <tr><td colSpan={11} className="ep-empty">No assigned clients.</td></tr>}
                             {!first && clients.map((c) => (
-                                <tr key={c.id} className={`ep-click${String(c.id) === caid ? " is-on" : ""}`}
-                                    onClick={() => onClient(String(c.id) === caid ? "" : String(c.id))} tabIndex={0}
-                                    onKeyDown={(ev) => ev.key === "Enter" && onClient(String(c.id) === caid ? "" : String(c.id))}>
+                                <tr key={c.id}>
                                     <td>
                                         <strong className="ep-trunc" title={c.trade_name}>{c.trade_name || c.client_name || "—"}</strong>
                                         <small className="ep-sub">{[c.branch_code, c.client_name, c.status].filter(Boolean).join(" · ")}</small>
@@ -473,6 +494,127 @@ function Dashboard({ data, loading, role, canSwitch, onView, clients, caid, onCl
                                     <td className="mono">{x.document_no || "—"}</td>
                                     <td>{x.type}</td>
                                     <td>{x.remarks?.length ? <ul className="ep-remarks">{x.remarks.map((m, k) => <li key={k}>{m}</li>)}</ul> : "—"}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    );
+}
+
+/* =========================================================
+   leaderboard (every DA / auditor for the period)
+   ========================================================= */
+const BOARDS = {
+    da: {
+        title: "Data analysts",
+        sorts: [["total", "Entries"], ["efficiency", "Efficiency"]],
+        val: (r, k) => (k === "efficiency" ? r.da.efficiency ?? -1 : r.da.total),
+        cols: [
+            ["Entries", (r) => n0(r.da.total)],
+            ["Reverted", (r) => (r.da.reverted ? <span className="ep-red">{n0(r.da.reverted)}</span> : "—")],
+            ["Efficiency", (r) => (r.da.efficiency == null ? "—" : `${num1(r.da.efficiency)}%`)],
+            ["Clients", (r) => n0(r.da.clients)],
+        ],
+        main: (r, k) => (k === "efficiency" ? (r.da.efficiency == null ? "—" : `${num1(r.da.efficiency)}%`) : n0(r.da.total)),
+    },
+    au: {
+        title: "Auditors",
+        sorts: [["actions", "Audits"], ["completion", "Completion"]],
+        val: (r, k) => (k === "completion" ? r.au.completion ?? -1 : r.au.actions),
+        cols: [
+            ["Audits", (r) => n0(r.au.actions)],
+            ["Audited", (r) => n0(r.au.audited)],
+            ["Reverted", (r) => (r.au.reverted ? <span className="ep-red">{n0(r.au.reverted)}</span> : "—")],
+            ["Pending", (r) => n0(r.au.pending)],
+            ["Completion", (r) => (r.au.completion == null ? "—" : `${num1(r.au.completion)}%`)],
+            ["Clients", (r) => n0(r.au.clients)],
+        ],
+        main: (r, k) => (k === "completion" ? (r.au.completion == null ? "—" : `${num1(r.au.completion)}%`) : n0(r.au.actions)),
+    },
+};
+
+function Leaderboard({ period, onPick }) {
+    const [rows, setRows] = useState(null);
+    const [error, setError] = useState("");
+    const [board, setBoard] = useState("da");
+    const [sort, setSort] = useState({ da: "total", au: "actions" });
+
+    useEffect(() => {
+        let alive = true;
+        setRows(null);
+        setError("");
+        apiFetch(`/monitoring/performance?${new URLSearchParams({ from: period.from, to: period.to })}`)
+            .then((r) => alive && setRows(r.rows || []))
+            .catch((e) => alive && setError(e.message || "Couldn't load the leaderboard."));
+        return () => { alive = false; };
+    }, [period.from, period.to]);
+
+    const B = BOARDS[board];
+    const k = sort[board];
+    const list = useMemo(() => (rows || [])
+        .filter((r) => r.role === (board === "da" ? "da" : "auditor"))
+        .sort((a, b) => B.val(b, k) - B.val(a, k) || a.name.localeCompare(b.name)), [rows, board, k, B]);
+    const top = list.slice(0, 3);
+    const label = B.sorts.find(([s]) => s === k)?.[1];
+
+    return (
+        <div className="lb">
+            <section className="card lb-bar">
+                <div className="ep-seg" role="tablist" aria-label="Board">
+                    {Object.entries(BOARDS).map(([b, x]) => (
+                        <button key={b} type="button" role="tab" aria-selected={board === b} className={board === b ? "is-on" : ""} onClick={() => setBoard(b)}>{x.title}</button>
+                    ))}
+                </div>
+                <div className="lb-sort">
+                    <span className="ep-note">Rank by</span>
+                    <div className="ep-seg" role="tablist" aria-label="Rank by">
+                        {B.sorts.map(([s, l]) => (
+                            <button key={s} type="button" role="tab" aria-selected={k === s} className={k === s ? "is-on" : ""} onClick={() => setSort((x) => ({ ...x, [board]: s }))}>{l}</button>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {error && <div className="alert-error" role="alert">{error}</div>}
+
+            {/* top 3 */}
+            <div className="lb-podium">
+                {!rows && !error && [0, 1, 2].map((i) => <div key={i} className="card lb-place"><span className="sk ep-sk-kpi" /></div>)}
+                {rows && [1, 0, 2].map((i) => top[i] && (
+                    <button key={top[i].id} type="button" className={`card lb-place is-${i + 1}`} onClick={() => onPick(top[i].id)}>
+                        <span className="lb-medal">{i + 1}</span>
+                        <Avatar name={top[i].name} photo={top[i].photo} size={i === 0 ? 84 : 68} />
+                        <b className="lb-name" title={top[i].name}>{top[i].name}</b>
+                        <strong className="lb-score">{B.main(top[i], k)}</strong>
+                        <small className="ep-note">{label}</small>
+                    </button>
+                ))}
+            </div>
+
+            {/* everybody */}
+            <section className="card ep-panel">
+                <header><h5>{B.title} · ranked by {label?.toLowerCase()}</h5><span className="ep-count">{n0(list.length)}</span></header>
+                <div className="ep-scroll">
+                    <table className="ep-table">
+                        <thead>
+                            <tr><th className="c">#</th><th>Employee</th>{B.cols.map(([l]) => <th key={l} className="r">{l}</th>)}</tr>
+                        </thead>
+                        <tbody>
+                            {!rows && !error && <tr><td colSpan={B.cols.length + 2}><span className="sk ep-sk-row" /></td></tr>}
+                            {rows && !list.length && <tr><td colSpan={B.cols.length + 2} className="ep-empty">Nobody in this period.</td></tr>}
+                            {list.map((r, i) => (
+                                <tr key={r.id} className="ep-click" tabIndex={0} onClick={() => onPick(r.id)} onKeyDown={(e) => e.key === "Enter" && onPick(r.id)}>
+                                    <td className="c"><span className={`lb-rank${i < 3 ? ` is-${i + 1}` : ""}`}>{i + 1}</span></td>
+                                    <td>
+                                        <span className="lb-who">
+                                            <Avatar name={r.name} photo={r.photo} size={32} />
+                                            <span><strong className="ep-trunc" title={r.name}>{r.name}</strong><small className="ep-sub">{r.company || r.designation}</small></span>
+                                        </span>
+                                    </td>
+                                    {B.cols.map(([l, fn]) => <td key={l} className="r">{fn(r)}</td>)}
                                 </tr>
                             ))}
                         </tbody>

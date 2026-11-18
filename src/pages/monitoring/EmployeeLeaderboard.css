@@ -1,0 +1,159 @@
+/* Employee Performance → Leaderboard tab */
+.lb {
+    display: grid;
+    gap: 14px;
+}
+
+.lb-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+}
+
+.lb-sort {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lb-podium {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    align-items: end;
+}
+
+.lb-place {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 18px 12px 16px;
+    border: 1px solid var(--line);
+    text-align: center;
+    cursor: pointer;
+    font: inherit;
+    color: var(--ink);
+}
+
+.lb-place:hover {
+    border-color: var(--brand);
+}
+
+.lb-place.is-1 {
+    padding-top: 26px;
+    border-top: 4px solid #eab308;
+}
+
+.lb-place.is-2 {
+    border-top: 4px solid #94a3b8;
+}
+
+.lb-place.is-3 {
+    border-top: 4px solid #c2410c;
+}
+
+.lb-medal {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.lb-place.is-1 .lb-medal {
+    background: #eab308;
+}
+
+.lb-place.is-2 .lb-medal {
+    background: #94a3b8;
+}
+
+.lb-place.is-3 .lb-medal {
+    background: #c2410c;
+}
+
+.lb-name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lb-score {
+    font-size: 24px;
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+}
+
+.lb-place.is-1 .lb-score {
+    font-size: 30px;
+}
+
+.lb-rank {
+    display: inline-grid;
+    place-items: center;
+    min-width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.lb-rank.is-1 {
+    background: #eab308;
+    color: #fff;
+}
+
+.lb-rank.is-2 {
+    background: #94a3b8;
+    color: #fff;
+}
+
+.lb-rank.is-3 {
+    background: #c2410c;
+    color: #fff;
+}
+
+.lb-who {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.lb-who>span:last-child {
+    min-width: 0;
+    display: grid;
+}
+
+@media (max-width: 760px) {
+    .lb-podium {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* employee ‹ dropdown › on top of the profile card */
+.ep-profile .ep-profile-pick {
+    width: 100%;
+    margin-bottom: 14px;
+    color: var(--ink);
+    text-align: left;
+}
+
+.ep-profile .ep-profile-pick> :not(.ep-step) {
+    flex: 1;
+    min-width: 0;
+}
