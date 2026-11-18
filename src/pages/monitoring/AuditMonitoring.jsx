@@ -4,10 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../../components/Modal";
 import { apiFetch } from "../../context/AuthContext";
 import "./AuditMonitoring.css";
+import "./AuditMonitoringTabs.css";
 
 const now = new Date();
 const THIS_MONTH = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 const monthLabel = (ym) => (ym ? new Date(`${ym}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "");
+const shiftMonth = (ym, n) => {
+    const [y, m] = ym.split("-").map(Number);
+    const d = new Date(y, m - 1 + n, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+const AUDIT_TABS = [["", "All", "all"], ["pending", "Pending", "pending"], ["audited", "Audited", "audited"], ["reverted", "Reverted", "reverted"]];
 const dayLabel = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
 
 export default function AuditMonitoring() {
@@ -15,6 +22,7 @@ export default function AuditMonitoring() {
     const [month, setMonth] = useState(THIS_MONTH);
     const [statusId, setStatusId] = useState("0");
     const [auditorId, setAuditorId] = useState("0");
+    const [auditStatus, setAuditStatus] = useState("");   // "" all · pending · audited · reverted
     const [data, setData] = useState(null); // { month, days, rows }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -31,7 +39,7 @@ export default function AuditMonitoring() {
         setLoading(true);
         setError("");
         try {
-            const p = new URLSearchParams({ month, status_id: statusId, auditor_id: auditorId });
+            const p = new URLSearchParams({ month, status_id: statusId, auditor_id: auditorId, audit_status: auditStatus });
             const res = await apiFetch(`/monitoring/audit?${p}`);
             if (id === reqId.current) setData(res);
         } catch (e) {
@@ -39,7 +47,7 @@ export default function AuditMonitoring() {
         } finally {
             if (id === reqId.current) setLoading(false);
         }
-    }, [month, statusId, auditorId]);
+    }, [month, statusId, auditorId, auditStatus]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -67,7 +75,11 @@ export default function AuditMonitoring() {
                 </div>
                 <label className="aum-field">
                     <span className="field-label">Date</span>
-                    <input type="month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} />
+                    <div className="aum-month">
+                        <button type="button" className="btn aum-mbtn" onClick={() => setMonth((m) => shiftMonth(m || THIS_MONTH, -1))} aria-label="Previous month">‹</button>
+                        <input type="month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} />
+                        <button type="button" className="btn aum-mbtn" onClick={() => setMonth((m) => shiftMonth(m || THIS_MONTH, 1))} aria-label="Next month">›</button>
+                    </div>
                 </label>
                 <label className="aum-field">
                     <span className="field-label">Status</span>
@@ -86,6 +98,13 @@ export default function AuditMonitoring() {
                     </label>
                 )}
                 <button type="button" className="btn btn-primary" onClick={load} disabled={loading}>{loading ? "Loading…" : "Search"}</button>
+                <div className="aum-seg" role="tablist" aria-label="Audit status">
+                    {AUDIT_TABS.map(([v, l, k]) => (
+                        <button key={k} type="button" role="tab" aria-selected={auditStatus === v} className={auditStatus === v ? "is-on" : ""} onClick={() => setAuditStatus(v)}>
+                            {l} <span className="aum-n">{data?.audit_counts?.[k] ?? 0}</span>
+                        </button>
+                    ))}
+                </div>
             </section>
 
             <section className="card aum-body">
@@ -150,7 +169,7 @@ export default function AuditMonitoring() {
             </section>
 
             {detail && (
-                <DayDetail row={detail.row} day={detail.day} auditorId={auditorId} onClose={() => setDetail(null)} />
+                <DayDetail row={detail.row} day={detail.day} auditorId={auditorId} auditStatus={auditStatus} onClose={() => setDetail(null)} />
             )}
         </div>
     );
@@ -162,18 +181,18 @@ function Names({ list }) {
 }
 
 /* the day's audits per trade name (old modal_Day_Summary) */
-function DayDetail({ row, day, auditorId, onClose }) {
+function DayDetail({ row, day, auditorId, auditStatus, onClose }) {
     const [items, setItems] = useState(null);
     const [error, setError] = useState("");
 
     useEffect(() => {
         let alive = true;
-        const p = new URLSearchParams({ date: day, client_num: row.client_num, auditor_id: auditorId });
+        const p = new URLSearchParams({ date: day, client_num: row.client_num, auditor_id: auditorId, audit_status: auditStatus });
         apiFetch(`/monitoring/audit/detail?${p}`)
             .then((r) => alive && setItems(r.rows))
             .catch((e) => alive && setError(e.message || "Couldn't load the day summary."));
         return () => { alive = false; };
-    }, [day, row.client_num, auditorId]);
+    }, [day, row.client_num, auditorId, auditStatus]);
 
     return (
         <Modal title={`${row.name} - ${dayLabel(day)}`} onClose={onClose} size="lg"

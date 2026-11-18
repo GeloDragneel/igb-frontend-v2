@@ -1,0 +1,70 @@
+/* Audit Monitoring: month ‹ › + Audit status tabs (same look as User Access) */
+.aum-month {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.aum-month .input {
+    min-width: 0;
+}
+
+.aum-mbtn {
+    width: 36px;
+    padding: 0;
+    font-size: 18px;
+    line-height: 1;
+    flex: none;
+}
+
+.aum-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    align-self: flex-end;
+}
+
+.aum-seg button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.aum-seg button:hover {
+    color: var(--ink);
+}
+
+.aum-seg button.is-on {
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.aum-n {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.aum-seg button.is-on .aum-n {
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+    color: var(--brand);
+}
