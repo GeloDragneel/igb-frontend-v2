@@ -292,6 +292,10 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       {/* POS: full screen, no sidebar / top bar (opens in its own browser tab) */}
       <Route path="/pos" element={<RequireAuth><Pos /></RequireAuth>} />
+      {/* Invoice details only (no sidebar / top bar) — shown inside a popup frame (Audit Monitoring) */}
+      <Route path="/view/sales/:id" element={<RequireAuth><div className="frame-page"><SalesDetail /></div></RequireAuth>} />
+      <Route path="/view/purchases/:id" element={<RequireAuth><div className="frame-page"><PurchaseDetail /></div></RequireAuth>} />
+      <Route path="/view/expenses/:id" element={<RequireAuth><div className="frame-page"><ExpenseDetail /></div></RequireAuth>} />
       {/* Everything else needs a login */}
       <Route
         element={

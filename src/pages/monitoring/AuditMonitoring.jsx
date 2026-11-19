@@ -1,8 +1,9 @@
 // Monitoring → Audit Monitoring (old pages/Monitoring/Audit_Monitoring)
 // Audits per client per day of the month. Click a day count → that day's Expenses / Purchases / Sales per trade name.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Modal from "../../components/Modal";
-import { apiFetch } from "../../context/AuthContext";
+import { apiFetch, useAuth } from "../../context/AuthContext";
 import "./AuditMonitoring.css";
 import "./AuditMonitoringTabs.css";
 
@@ -188,12 +189,16 @@ function DayDetail({ row, day, auditorId, auditStatus, onClose }) {
     const [items, setItems] = useState(null);
     const [error, setError] = useState("");
     const [showEmpty, setShowEmpty] = useState(false);
+    const [invoices, setInvoices] = useState([]);
+    const [opening, setOpening] = useState("");
+    const [frame, setFrame] = useState(null);   // invoice shown in the popup frame
+    const { user, selectBranch } = useAuth();
 
     useEffect(() => {
         let alive = true;
         const p = new URLSearchParams({ date: day, client_num: row.client_num, auditor_id: auditorId, audit_status: auditStatus });
         apiFetch(`/monitoring/audit/detail?${p}`)
-            .then((r) => alive && setItems(r.rows))
+            .then((r) => { if (alive) { setItems(r.rows); setInvoices(r.invoices || []); } })
             .catch((e) => alive && setError(e.message || "Couldn't load the day summary."));
         return () => { alive = false; };
     }, [day, row.client_num, auditorId, auditStatus]);
@@ -210,6 +215,20 @@ function DayDetail({ row, day, auditorId, auditStatus, onClose }) {
         sum.total += s.count;
     })));
     const typeTotal = (k) => rows.reduce((a, t) => a + (t[k] || 0), 0);
+
+    // open the invoice in a popup frame: switch to its client account first (detail pages load by the selected account)
+    const openInvoice = async (v) => {
+        if (opening) return;
+        setOpening(v.invoice_no);
+        try {
+            if (v.caid && Number(user?.caid) !== Number(v.caid)) await selectBranch(v.caid);
+            setFrame(v);
+        } catch (e) {
+            setError(e.message || "Couldn't open the invoice.");
+        } finally {
+            setOpening("");
+        }
+    };
 
     return (
         <Modal title={<span className="add-title"><b>{row.name}</b><small>{dayLabel(day)} · #{row.client_num}</small></span>} onClose={onClose} size="lg"
@@ -274,8 +293,60 @@ function DayDetail({ row, day, auditorId, auditStatus, onClose }) {
                             {showEmpty ? "Hide" : "Show"} {rows.length - withWork.length} trade name{rows.length - withWork.length === 1 ? "" : "s"} with nothing this day
                         </button>
                     )}
+
+                    {invoices.length > 0 && (
+                        <div className="add-scroll add-inv">
+                            <table className="add-table">
+                                <thead>
+                                    <tr>
+                                        <th>Branch Code - Trade Name</th>
+                                        <th className="c">Declared Month</th>
+                                        <th>Document No</th>
+                                        <th className="c">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {invoices.map((v, i) => (
+                                        <tr key={`${v.invoice_no}-${v.status}-${i}`} className="add-click" tabIndex={0} title={`Open ${v.invoice_no}`}
+                                            onClick={() => openInvoice(v)} onKeyDown={(e) => e.key === "Enter" && openInvoice(v)}>
+                                            <td className="add-name" title={v.trade_name}>{v.trade_name}</td>
+                                            <td className="c">{v.declared_month || "—"}</td>
+                                            <td>{opening === v.invoice_no ? "Opening…" : (v.document_no || v.invoice_no)}</td>
+                                            <td className="c"><span className={`add-chip ${ST_TONE[v.status] || ""}`}>{v.status}</span></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </>
             )}
+            {frame && <InvoiceFrame inv={frame} onClose={() => setFrame(null)} />}
         </Modal>
+    );
+}
+
+/* the invoice details page inside a popup frame */
+function InvoiceFrame({ inv, onClose }) {
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+        const onKey = (e) => e.key === "Escape" && onClose();
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose]);
+    const src = `/view/${inv.type}/${encodeURIComponent(inv.invoice_no)}`;
+    // portal to <body> so the frame is not squeezed inside the day popup
+    return createPortal(
+        <div className="add-frame-bg" onClick={onClose}>
+            <div className="add-frame" role="dialog" aria-label={`Invoice ${inv.invoice_no}`} onClick={(e) => e.stopPropagation()}>
+                <div className="add-frame-head">
+                    <span><b>{inv.document_no || inv.invoice_no}</b><small>{inv.trade_name} · {inv.declared_month} · {inv.status}</small></span>
+                    <button type="button" className="btn" onClick={onClose}>Close</button>
+                </div>
+                {!loaded && <div className="aum-detail-empty">Loading…</div>}
+                <iframe title={`Invoice ${inv.invoice_no}`} src={src} onLoad={() => setLoaded(true)} style={loaded ? undefined : { visibility: "hidden" }} />
+            </div>
+        </div>,
+        document.body
     );
 }
