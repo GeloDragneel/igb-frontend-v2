@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import SearchCard from "../../components/SearchCard";
 import DataTable from "../../components/DataTable";
 import TableSkeleton from "../../components/TableSkeleton";
@@ -164,11 +164,35 @@ export default function Products() {
    ========================================================= */
 let unitKey = 0;
 const newUnit = () => ({ key: `n${unitKey++}`, id: null, unit_type_id: "", value: "", price: "", cost: "" });
-// default VAT accounts for new products: [field, code prefix, name match]
-const VAT_DEFAULTS = [
-  ["input_vat_account", "1", /^input\s*(tax|vat)\b/i],
-  ["output_vat_account", "2", /^output\s*(tax|vat)\b/i],
-];
+// default accounts of a new product (picked if they exist, else added to the chart of accounts on SAVE)
+//   names: what counts as the default · create: the name of the new account · sib: similar accounts (to find the header)
+const ACCT_DEFAULTS = {
+  gl_sales_account: { prefix: "4", type: "Revenue", names: (d) => [`Sales - ${d}`], create: (d) => `Sales - ${d}`, perItem: true, sib: /^sales\s*-/i, head: /sales|revenue|income/i },
+  gl_inventory_account: { prefix: "1", type: "Asset", names: (d) => [`Inventory - ${d}`], create: (d) => `Inventory - ${d}`, perItem: true, sib: /^inventor(y|ies)\s*-/i, head: /inventor/i },
+  gl_cost_of_sales_account: { prefix: "5", type: "Cost of Sales", names: (d) => [`Cost of Sales - ${d}`], create: (d) => `Cost of Sales - ${d}`, perItem: true, sib: /^cost of (sales|goods)/i, head: /cost of (sales|goods)/i },
+  input_vat_account: { prefix: "1", type: "Asset", names: () => ["Input VAT", "Input Tax"], create: () => "Input VAT", sib: /^input\s*(vat|tax)/i, head: /input|vat|tax|prepaid|other current/i },
+  output_vat_account: { prefix: "2", type: "Liability", names: () => ["Output VAT", "Output Tax"], create: () => "Output VAT", sib: /^output\s*(vat|tax)/i, head: /output|vat|tax|payable|current liab/i },
+};
+const NEW_ACCT = "new:";                         // dropdown value of an account that will be added on SAVE
+const normName = (s) => String(s || "").replace(/[\u2013\u2014]/g, "-").replace(/\s*-\s*/g, " - ").replace(/\s+/g, " ").trim().toLowerCase();
+
+// next free code under a header (same rule as the Charts of Account page)
+function nextCode(parent, chart, taken) {
+  const nums = chart.filter((a) => a.parent === parent).map((a) => Number(a.code)).filter((n) => !isNaN(n));
+  let n = nums.length ? Math.max(...nums) + 1 : /^\d+$/.test(parent || "") ? Number(parent) + 1 : NaN;
+  if (isNaN(n)) return "";
+  while (taken.has(String(n))) n++;
+  return String(n);
+}
+// header for a new default account: next to a similar account · else a matching header · else the first header of the group
+function headerFor(def, chart) {
+  const inGroup = (a) => String(a.code).startsWith(def.prefix);
+  const sib = chart.find((a) => !a.isGroup && inGroup(a) && a.parent && def.sib.test(String(a.name || "").trim()));
+  if (sib) return sib.parent;
+  const heads = chart.filter((a) => a.isGroup && inGroup(a)).sort((x, y) => String(x.code).localeCompare(String(y.code), undefined, { numeric: true }));
+  const hasPosting = (h) => chart.some((a) => a.parent === h.code && !a.isGroup);
+  return (heads.find((h) => def.head.test(h.name || "") && hasPosting(h)) || heads.find((h) => def.head.test(h.name || "")) || heads.find(hasPosting) || heads[0])?.code || null;
+}
 export function ProductForm({ record, opts: optsProp, accounts, defaultName = "", onClose, onSaved }) {
   // dropdowns: passed in (Products page) or loaded here (invoice page)
   const [opts, setOpts] = useState(optsProp || { item_classes: [], tax_types: [], unit_types: [] });
@@ -203,26 +227,18 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
-  // new product → preselect Input Tax / Input VAT and Output Tax / Output VAT
-  const vatDefaulted = useRef(false);
-  useEffect(() => {
-    if (record || vatDefaulted.current || !accounts?.length) return;
-    vatDefaulted.current = true;
-    setF((x) => {
-      const next = { ...x };
-      VAT_DEFAULTS.forEach(([key, prefix, re]) => {
-        if (next[key]) return;
-        const hit = accounts.find(
-          (a) =>
-            String(a.account_code).startsWith(prefix) &&
-            a.root_name && String(a.root_name) !== "0" &&
-            re.test(String(a.account_name || "").trim())
-        );
-        if (hit) next[key] = String(hit.account_code);
-      });
-      return next;
-    });
-  }, [accounts, record]);
+  // new product → every account follows the default until it is picked by hand
+  const [auto, setAuto] = useState(() => Object.fromEntries(Object.keys(ACCT_DEFAULTS).map((k) => [k, !record])));
+  const desc = f.description.trim();
+  const defaultFor = useCallback((key) => {
+    const def = ACCT_DEFAULTS[key];
+    if (def.perItem && !desc) return { value: "", name: "" };
+    const wanted = def.names(desc).map(normName);
+    const hit = (accounts || []).find((a) =>
+      String(a.account_code).startsWith(def.prefix) && a.root_name && String(a.root_name) !== "0" && wanted.includes(normName(a.account_name)));
+    return hit ? { value: String(hit.account_code), name: hit.account_name } : { value: NEW_ACCT + key, name: def.create(desc) };
+  }, [accounts, desc]);
+  const valueOf = (key) => (auto[key] ? defaultFor(key).value : f[key]);
   const { refresh: refreshLookups } = useLookups();
   const [newAccts, setNewAccts] = useState([]);   // accounts added from this popup (shown right away)
   const [addAcct, setAddAcct] = useState(null);   // { key, label, prefix, name }
@@ -314,6 +330,11 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
       .map((a) => ({ value: a.account_code, label: `${a.account_code} - ${a.account_name}` }));
     return [{ value: "", label: "— None —" }, ...list, ...extra];
   };
+  const optsFor = (key, prefix) => {
+    const d = defaultFor(key);
+    const base = acctOpts(prefix);
+    return d.value.startsWith(NEW_ACCT) ? [base[0], { value: d.value, label: `NEW · ${d.name}`, hint: "added to the chart of accounts on SAVE" }, ...base.slice(1)] : base;
+  };
 
   // "+ Add new account" → the Charts of Account popup; the saved account is selected here
   const accountAdded = (key, acct) => {
@@ -333,8 +354,46 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
     setErrors(e);
     if (Object.keys(e).length) return;
 
+    // accounts: the default (or the one picked); "NEW ·" ones are added to the chart of accounts first
+    const accts = Object.fromEntries(Object.keys(ACCT_DEFAULTS).map((k) => [k, valueOf(k)]));
+    const toCreate = Object.entries(accts).filter(([, v]) => String(v).startsWith(NEW_ACCT));
+    if (toCreate.length) {
+      if (!coa) { setSaveError(coaError || "The chart of accounts is still loading. Try again in a moment."); return; }
+      setSaving(true);
+      setSaveError("");
+      const chart = [...coa];
+      const taken = new Set(chart.map((a) => String(a.code)));
+      try {
+        for (const [k] of toCreate) {
+          const def = ACCT_DEFAULTS[k];
+          const name = def.create(f.description.trim());
+          const parent = headerFor(def, chart);
+          const code = nextCode(parent, chart, taken);
+          if (!parent || !code) throw new Error(`Couldn't find where to add "${name}" in the chart of accounts (no ${def.prefix}xxxx header).`);
+          const p = chart.find((a) => a.code === parent);
+          const acc = {
+            code, name, parent, description: null,
+            type: p?.type || def.type,
+            is_sales: !!p?.is_sales, is_purchases: !!p?.is_purchases, is_expenses: !!p?.is_expenses, is_for_paid: false,
+          };
+          await apiFetch("/accounts", { method: "POST", body: JSON.stringify(acc) });
+          chart.push({ ...acc, isGroup: false });
+          taken.add(code);
+          accts[k] = code;
+          setNewAccts((l) => [...l, { account_code: code, account_name: name }]);
+        }
+        refreshLookups?.();
+        loadCoa();
+      } catch (err) {
+        setSaveError(err.message || "Couldn't add the default accounts.");
+        setSaving(false);
+        return;
+      }
+    }
+
     const data = {
       ...f,
+      ...accts,
       item_code: f.item_code.trim(),
       description: f.description.trim(),
       upc_sku: f.upc_sku.trim() || null,
@@ -372,7 +431,7 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
     <Modal
       title={record ? "Update Product" : "Add Product"}
       onClose={onClose}
-      size="xlg"
+      size="lg"
       footer={
         <>
           <button className="btn" onClick={onClose} disabled={saving}>Close</button>
@@ -382,7 +441,7 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
     >
       {saveError && <div className="alert-error" role="alert">{saveError}</div>}
 
-      <div className="prod-form">
+      <div className="prod-form" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
         {/* ---------- left ---------- */}
         <div className="prod-left">
           <fieldset className="prod-box">
@@ -399,18 +458,18 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
               </div>
 
               <div className="prod-fields">
-                <Field label="Item ID" error={errors.item_code}>
+                <Field label="Item ID *" error={errors.item_code}>
                   <input className="input" value={f.item_code} onChange={(e) => set("item_code", e.target.value)} autoFocus />
                 </Field>
-                <Field label="Description" error={errors.description}>
+                <Field label="Description *" error={errors.description}>
                   <input className="input" value={f.description} onChange={(e) => set("description", e.target.value)} />
                 </Field>
                 <div className="">
-                  <Field label="UPC">
+                  <Field label="Barcode">
                     <input className="input" value={f.upc_sku} onChange={(e) => set("upc_sku", e.target.value)} />
                   </Field>
                   <div className="field">
-                    <span className="field-label">Item Class</span>
+                    <span className="field-label">Item Class *</span>
                     <SearchSelect
                       value={f.item_class_id}
                       onChange={(v) => set("item_class_id", v)}
@@ -428,9 +487,6 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
                       aria-label="Tax Type"
                     />
                   </div>
-                  <Field label="Equivalent Conversion">
-                    <input className="input ta-right" inputMode="decimal" value={f.equivalent_conversion} onChange={(e) => set("equivalent_conversion", cleanNum(e.target.value))} />
-                  </Field>
                 </div>
               </div>
             </div>
@@ -517,56 +573,7 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
           </fieldset>
         </div>
 
-        {/* ---------- right ---------- */}
-        <div className="prod-right">
-          <fieldset className="prod-box">
-            <legend>Accounting Settings</legend>
-            {[
-              ["gl_sales_account", "GL Sales Acct.", "4"],
-              ["gl_inventory_account", "GL Inventory Acct.", "1"],
-              ["gl_cost_of_sales_account", "GL Cost of Sales Acct.", "5"],
-              ["input_vat_account", "Input VAT Acct.", "1"],
-              ["output_vat_account", "Output VAT Acct.", "2"],
-            ].map(([key, label, prefix]) => (
-              <div className="field" key={key}>
-                <span className="field-label">{label}</span>
-                <SearchSelect
-                  value={f[key]}
-                  onChange={(v) => set(key, v)}
-                  options={acctOpts(prefix)}
-                  searchPlaceholder="Search account..."
-                  onAddNew={(typed) => setAddAcct({ key, label, prefix, name: typed || "" })}
-                  addNewLabel="Add new account"
-                  aria-label={label}
-                />
-              </div>
-            ))}
-          </fieldset>
-
-          {addAcct && (
-            <AddAccountPopup
-              info={addAcct}
-              accounts={coa}
-              loadError={coaError}
-              onRetry={loadCoa}
-              current={f[addAcct.key]}
-              onClose={() => setAddAcct(null)}
-              onAdded={(acct) => accountAdded(addAcct.key, acct)}
-            />
-          )}
-
-          <fieldset className="prod-box">
-            <legend>Inventory Settings</legend>
-            <div className="">
-              <Field label="Minimum Stock">
-                <input className="input ta-right" inputMode="decimal" value={f.minimum_stock} onChange={(e) => set("minimum_stock", cleanNum(e.target.value))} />
-              </Field>
-              <Field label="Reorder Quantity">
-                <input className="input ta-right" inputMode="decimal" value={f.reorder_quantity} onChange={(e) => set("reorder_quantity", cleanNum(e.target.value))} />
-              </Field>
-            </div>
-          </fieldset>
-        </div>
+        {/* Accounting Settings are hidden: the default accounts are still filled in and saved (see ACCT_DEFAULTS) */}
       </div>
     </Modal>
   );

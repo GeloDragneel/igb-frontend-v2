@@ -230,6 +230,9 @@ export function ContactForm({ userType, record, opts: optsProp, defaultName = ""
     const [saveError, setSaveError] = useState("");
     const [saving, setSaving] = useState(false);
     const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+    const isVendor = String(userType).toLowerCase() === "vendor";
+    // Vendor name: letters, numbers, spaces and . , - & ' only (shown while typing, blocks Save)
+    const badChars = isVendor ? [...new Set((f.name.match(/[^a-zA-Z0-9\s.,\-&']/g) || []))].join(" ") : "";
 
     // Sync Client: fill the form from the selected branch (old doGetSyncClient)
     const pickClient = async (caid) => {
@@ -256,9 +259,10 @@ export function ContactForm({ userType, record, opts: optsProp, defaultName = ""
     const submit = async () => {
         const e = {};
         if (!f.name.trim()) e.name = `${userType} Name is required.`;
-        else if (/[^a-zA-Z0-9\s.,\-&']/.test(f.name)) e.name = `${userType} Name contains invalid special characters.`;
-        if (!f.branch_code.trim()) e.branch_code = "Branch Code is required.";
-        if (!f.branch_type_id) e.branch_type_id = "Branch Type is required.";
+        else if (badChars) e.name = `${userType} Name has special characters not allowed: ${badChars}`;
+        // Branch Code / Branch Type: required for vendors only
+        if (isVendor && !f.branch_code.trim()) e.branch_code = "Branch Code is required.";
+        if (isVendor && !f.branch_type_id) e.branch_type_id = "Branch Type is required.";
         const mailId = socialList.find((x) => String(x.name).toLowerCase() === "email")?.id;
         const badMail = mailId && valuesOf(mailId).find((v) => v.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()));
         if (badMail) e.socials = `Not a valid email: ${badMail}`;
@@ -272,8 +276,8 @@ export function ContactForm({ userType, record, opts: optsProp, defaultName = ""
                 link_caid: f.link_caid ? Number(f.link_caid) : 0,
                 name: f.name.trim(),
                 tin: f.tin || null,
-                branch_code: f.branch_code.trim(),
-                branch_type_id: Number(f.branch_type_id),
+                branch_code: f.branch_code.trim() || null,
+                branch_type_id: f.branch_type_id ? Number(f.branch_type_id) : null,
                 tax_type_id: f.tax_type_id ? Number(f.tax_type_id) : null,
                 address: f.address.trim() || null,
                 city_country: f.city_country.trim() || null,
@@ -323,16 +327,20 @@ export function ContactForm({ userType, record, opts: optsProp, defaultName = ""
                     )}
 
                     <Field label={`${userType} Name`} error={errors.name}>
-                        <input className="input" value={f.name} onChange={(e) => set("name", e.target.value)} autoFocus />
+                        <input className="input" value={f.name} onChange={(e) => set("name", e.target.value)} autoFocus
+                            style={badChars ? { borderColor: "var(--red)" } : undefined} aria-invalid={!!badChars} />
+                        {badChars && !errors.name && (
+                            <div className="field-error" role="alert">Special characters not allowed: {badChars} (only letters, numbers, spaces and . , - &amp; ')</div>
+                        )}
                     </Field>
                     <Field label="TIN">
                         <input className="input mono" value={f.tin} onChange={(e) => set("tin", fmtTin(e.target.value))} placeholder="000-000-000" inputMode="numeric" />
                     </Field>
-                    <Field label="Branch Code" error={errors.branch_code}>
+                    <Field label={isVendor ? "Branch Code" : "Branch Code (optional)"} error={errors.branch_code}>
                         <input className="input" maxLength={10} value={f.branch_code} onChange={(e) => set("branch_code", e.target.value)} />
                     </Field>
                     <div className="field">
-                        <span className="field-label">Branch Type</span>
+                        <span className="field-label">{isVendor ? "Branch Type" : "Branch Type (optional)"}</span>
                         <SearchSelect
                             value={f.branch_type_id}
                             onChange={(v) => set("branch_type_id", v)}
