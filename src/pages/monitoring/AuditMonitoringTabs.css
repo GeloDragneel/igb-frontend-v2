@@ -484,3 +484,56 @@
 .aum-tip b {
     font-weight: 600;
 }
+
+/* Monthly | Daily switch (Aging head) */
+.aum-head-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.aum-view {
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--card);
+}
+
+.aum-view button {
+    border: 0;
+    background: none;
+    padding: 5px 14px;
+    border-radius: 999px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.aum-view button.is-on {
+    background: var(--brand, #2563eb);
+    color: #fff;
+}
+
+/* day tabs: 1 … 31 in one row (2 rows on small screens) */
+.aum-days {
+    display: grid;
+    grid-template-columns: repeat(31, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0 0 12px;
+}
+
+.aum-days>button {
+    justify-content: center;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+@media (max-width: 1100px) {
+    .aum-days {
+        grid-template-columns: repeat(16, minmax(0, 1fr));
+    }
+}

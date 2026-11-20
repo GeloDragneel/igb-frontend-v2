@@ -12,6 +12,8 @@ import "../../components/WorkReminder.css";
 const THIS_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: THIS_YEAR - 2019 }, (_, i) => THIS_YEAR - i);   // this year … 2020
 const THIS_MONTH = new Date().getMonth() + 1;
+const TODAY = new Date().getDate();
+const daysIn = (y, m) => new Date(Number(y), Number(m), 0).getDate();
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const AGE_SETS = [["pending", "Pending"], ["audited", "Audited"], ["reverted", "Reverted"]];
 const ST_TONE = { Pending: "is-pend", Confirmed: "is-pend", Audited: "is-ok", Reverted: "is-bad" };
@@ -25,6 +27,8 @@ export default function AuditMonitoring() {
     const [year, setYear] = useState(String(THIS_YEAR));   // "" = all years
     const [auditorId, setAuditorId] = useState("0");
     const [month, setMonth] = useState(String(THIS_MONTH));
+    const [view, setView] = useState("month");   // month | day
+    const [day, setDay] = useState(String(TODAY));
     const [tab, setTab] = useState("pending");
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
@@ -34,15 +38,17 @@ export default function AuditMonitoring() {
 
     const auditor = lk?.can_pick_auditor ? auditorId : "0";
     const mon = year ? month : "";
+    // Daily: one day of the picked month (a day past the month's end → its last day)
+    const dy = view === "day" && year && mon ? String(Math.min(Number(day), daysIn(year, mon))) : "";
     useEffect(() => {
         let alive = true;
         setData(null);
         setError("");
-        apiFetch(`/monitoring/audit/aging?${new URLSearchParams({ year, month: mon, auditor_id: auditor || 0 })}`)
+        apiFetch(`/monitoring/audit/aging?${new URLSearchParams({ year, month: mon, day: dy, auditor_id: auditor || 0 })}`)
             .then((r) => alive && setData(r))
             .catch((e) => alive && setError(e.status === 403 ? "Only auditors and supervisors can see the audit monitoring." : e.message || "Couldn't load the aging."));
         return () => { alive = false; };
-    }, [year, mon, auditor, reload]);
+    }, [year, mon, dy, auditor, reload]);
 
     const shiftYear = (n) => setYear((y) => String(Math.min(THIS_YEAR, Math.max(2020, Number(y || THIS_YEAR) + n))));
 
@@ -51,7 +57,7 @@ export default function AuditMonitoring() {
             <section className="card aum-bar">
                 <div className="aum-title">
                     <h4>Audit Monitoring</h4>
-                    <span>{year ? (month ? `${MONTHS[month - 1]} ${year}` : `Year ${year}`) : "All years"}</span>
+                    <span>{year ? (month ? `${MONTHS[month - 1]} ${dy ? `${dy}, ` : ""}${year}` : `Year ${year}`) : "All years"}</span>
                 </div>
                 {/* Pending · Audited · Reverted */}
                 <div className="wr-tabs aum-status" role="tablist" aria-label="Status">
@@ -89,14 +95,15 @@ export default function AuditMonitoring() {
                 </div>
             </section>
 
-            <AuditAging data={data} error={error} tab={tab} year={year} month={mon} onMonth={setMonth} auditorId={auditor} />
+            <AuditAging data={data} error={error} tab={tab} year={year} month={mon} onMonth={setMonth} auditorId={auditor}
+                view={view} onView={setView} day={dy} onDay={setDay} />
         </div>
     );
 }
 
 /* aging per client — every number opens the invoices behind it
    Auditor → own assigned clients · IT / CEO / Supervisor / Audit Supervisor → all (or the Auditor picked above) */
-function AuditAging({ data, error, tab, year, month, onMonth, auditorId }) {
+function AuditAging({ data, error, tab, year, month, onMonth, auditorId, view, onView, day, onDay }) {
     const [list, setList] = useState(null);         // { kind, bucket, caid, type, title }
     const scrollRef = useRef(null);
 
@@ -134,8 +141,16 @@ function AuditAging({ data, error, tab, year, month, onMonth, auditorId }) {
     return (
         <section className="card aum-aging" aria-busy={!data}>
             <div className="aum-aging-head">
-                <h4>Aging <small>· {data ? scopeText : <span className="sk aum-sk-text" aria-hidden="true" />}{year ? ` · ${month ? `${MONTHS[month - 1]} ` : ""}${year}` : ""}</small></h4>
-                <span className="muted small">Age = {ageNote} · click a number to see the invoices</span>
+                <h4>Aging <small>· {data ? scopeText : <span className="sk aum-sk-text" aria-hidden="true" />}{year ? ` · ${month ? `${MONTHS[month - 1]} ` : ""}${day ? `${day}, ` : ""}${year}` : ""}</small></h4>
+                <div className="aum-head-right">
+                    <span className="muted small">Age = {ageNote} · click a number to see the invoices</span>
+                    {year && (
+                        <div className="aum-view" role="group" aria-label="View">
+                            <button type="button" className={view === "month" ? "is-on" : ""} aria-pressed={view === "month"} onClick={() => onView("month")}>Monthly</button>
+                            <button type="button" className={view === "day" ? "is-on" : ""} aria-pressed={view === "day"} onClick={() => onView("day")}>Daily</button>
+                        </div>
+                    )}
+                </div>
             </div>
             {/* month tabs (default: this month) */}
             {year && (
@@ -144,6 +159,17 @@ function AuditAging({ data, error, tab, year, month, onMonth, auditorId }) {
                         const k = String(i + 1);
                         return (
                             <button key={k} role="tab" aria-selected={month === k} className={month === k ? "is-on" : ""} onClick={() => onMonth(k)}>{m}</button>
+                        );
+                    })}
+                </div>
+            )}
+            {/* Daily: day tabs of the picked month */}
+            {year && view === "day" && month && (
+                <div className="wr-tabs aum-days" role="tablist" aria-label="Day">
+                    {Array.from({ length: daysIn(year, month) }, (_, i) => {
+                        const k = String(i + 1);
+                        return (
+                            <button key={k} role="tab" aria-selected={day === k} className={day === k ? "is-on" : ""} onClick={() => onDay(k)}>{k}</button>
                         );
                     })}
                 </div>
@@ -182,13 +208,13 @@ function AuditAging({ data, error, tab, year, month, onMonth, auditorId }) {
                     )}
                 </table>
             </div>
-            {list && <AgingList q={list} year={year} month={month} auditorId={auditorId} onClose={() => setList(null)} />}
+            {list && <AgingList q={list} year={year} month={month} day={day} auditorId={auditorId} onClose={() => setList(null)} />}
         </section>
     );
 }
 
 /* the Sales / Purchases / Expenses behind a number · click one → its details in a popup frame */
-function AgingList({ q, year, month, auditorId, onClose }) {
+function AgingList({ q, year, month, day, auditorId, onClose }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
     const [type, setType] = useState(q.type || "");
@@ -198,12 +224,12 @@ function AgingList({ q, year, month, auditorId, onClose }) {
 
     useEffect(() => {
         let alive = true;
-        const p = new URLSearchParams({ kind: q.kind, bucket: q.bucket, caid: q.caid, year, month: month || "", auditor_id: auditorId || 0 });
+        const p = new URLSearchParams({ kind: q.kind, bucket: q.bucket, caid: q.caid, year, month: month || "", day: day || "", auditor_id: auditorId || 0 });
         apiFetch(`/monitoring/audit/aging/list?${p}`)
             .then((r) => alive && setData(r))
             .catch((e) => alive && setError(e.message || "Couldn't load the invoices."));
         return () => { alive = false; };
-    }, [q, year, month, auditorId]);
+    }, [q, year, month, day, auditorId]);
 
     const rows = data?.rows || [];
     const count = (t) => rows.filter((r) => !t || r.type === t).length;
