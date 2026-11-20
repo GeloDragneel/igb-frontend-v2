@@ -22,6 +22,7 @@ const COLS = [
     { key: "amount", label: "Amount received", cls: "n" },
     { key: "less", label: "Less / WH", cls: "n", noExport: true },
     { key: "col_type", label: "Col type", cls: "c" },
+    { key: "pay_type", label: "Payment type", cls: "c", noExport: true },
     { key: "service", label: "Service", cls: "c" },
     { key: "details", label: "Details", cls: "cmo-wide" },
     { key: "or_number", label: "OR#" },
