@@ -1,7 +1,7 @@
 // Monitoring → Audit Monitoring
 //   Aging per client (Pending · Audited · Reverted × 1-30 / 31-60 / 61-90 / 90+ days), filtered by year.
 //   Click any number → the Sales / Purchases / Expenses behind it → click one → its details in a popup frame.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Modal from "../../components/Modal";
 import { apiFetch, useAuth } from "../../context/AuthContext";
@@ -11,10 +11,12 @@ import "../../components/WorkReminder.css";
 
 const THIS_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: THIS_YEAR - 2019 }, (_, i) => THIS_YEAR - i);   // this year … 2020
-const AGES = [["d30", "1–30 days"], ["d60", "31–60 days"], ["d90", "61–90 days"], ["d90p", "90+ days"]];
+const THIS_MONTH = new Date().getMonth() + 1;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const AGE_SETS = [["pending", "Pending"], ["audited", "Audited"], ["reverted", "Reverted"]];
 const ST_TONE = { Pending: "is-pend", Confirmed: "is-pend", Audited: "is-ok", Reverted: "is-bad" };
 const TYPE_LABEL = { sales: "Sales", purchases: "Purchases", expenses: "Expenses" };
+const TYPES = Object.entries(TYPE_LABEL);
 const fmtN = (n) => Number(n || 0).toLocaleString();
 const fmtAmt = (n) => Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -22,8 +24,24 @@ export default function AuditMonitoring() {
     const [lk, setLk] = useState(null);             // { auditors, can_pick_auditor }
     const [year, setYear] = useState(String(THIS_YEAR));   // "" = all years
     const [auditorId, setAuditorId] = useState("0");
+    const [month, setMonth] = useState(String(THIS_MONTH));
+    const [tab, setTab] = useState("pending");
+    const [data, setData] = useState(null);
+    const [error, setError] = useState("");
 
     useEffect(() => { apiFetch("/monitoring/audit/lookups").then(setLk).catch(() => setLk({})); }, []);
+
+    const auditor = lk?.can_pick_auditor ? auditorId : "0";
+    const mon = year ? month : "";
+    useEffect(() => {
+        let alive = true;
+        setData(null);
+        setError("");
+        apiFetch(`/monitoring/audit/aging?${new URLSearchParams({ year, month: mon, auditor_id: auditor || 0 })}`)
+            .then((r) => alive && setData(r))
+            .catch((e) => alive && setError(e.status === 403 ? "Only auditors and supervisors can see the audit monitoring." : e.message || "Couldn't load the aging."));
+        return () => { alive = false; };
+    }, [year, mon, auditor]);
 
     const shiftYear = (n) => setYear((y) => String(Math.min(THIS_YEAR, Math.max(2020, Number(y || THIS_YEAR) + n))));
 
@@ -32,7 +50,15 @@ export default function AuditMonitoring() {
             <section className="card aum-bar">
                 <div className="aum-title">
                     <h4>Audit Monitoring</h4>
-                    <span>{year ? `Year ${year}` : "All years"}</span>
+                    <span>{year ? (month ? `${MONTHS[month - 1]} ${year}` : `Year ${year}`) : "All years"}</span>
+                </div>
+                {/* Pending · Audited · Reverted */}
+                <div className="wr-tabs aum-status" role="tablist" aria-label="Status">
+                    {AGE_SETS.map(([k, l]) => (
+                        <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "is-on" : ""} onClick={() => setTab(k)}>
+                            {l} {data ? <span className="wr-n">{fmtN(data[k].totals.total)}</span> : <span className="sk aum-sk-n" aria-hidden="true" />}
+                        </button>
+                    ))}
                 </div>
                 <label className="aum-field">
                     <span className="field-label">Year</span>
@@ -56,106 +82,121 @@ export default function AuditMonitoring() {
                 )}
             </section>
 
-            <AuditAging year={year} auditorId={lk?.can_pick_auditor ? auditorId : "0"} />
+            <AuditAging data={data} error={error} tab={tab} year={year} month={mon} onMonth={setMonth} auditorId={auditor} />
         </div>
     );
 }
 
 /* aging per client — every number opens the invoices behind it
-   Auditor → own assigned clients · IT / CEO / Supervisor / Audit Supervisor → all (or the Auditor picked above)
-   Pending = days since entered · Audited / Reverted = days since it was audited / reverted */
-function AuditAging({ year, auditorId }) {
-    const [data, setData] = useState(null);
-    const [error, setError] = useState("");
-    const [tab, setTab] = useState("pending");
-    const [list, setList] = useState(null);         // { kind, bucket, caid, title }
+   Auditor → own assigned clients · IT / CEO / Supervisor / Audit Supervisor → all (or the Auditor picked above) */
+function AuditAging({ data, error, tab, year, month, onMonth, auditorId }) {
+    const [list, setList] = useState(null);         // { kind, bucket, caid, type, title }
+    const scrollRef = useRef(null);
 
+    // the table fills the screen down to the bottom (no empty space under the card)
     useEffect(() => {
-        let alive = true;
-        setData(null);
-        setError("");
-        apiFetch(`/monitoring/audit/aging?${new URLSearchParams({ year, auditor_id: auditorId || 0 })}`)
-            .then((r) => alive && setData(r))
-            .catch((e) => alive && setError(e.status === 403 ? "Only auditors and supervisors can see the audit monitoring." : e.message || "Couldn't load the aging."));
-        return () => { alive = false; };
-    }, [year, auditorId]);
+        const fit = () => {
+            const el = scrollRef.current;
+            if (!el) return;
+            const top = el.getBoundingClientRect().top;
+            el.style.maxHeight = `${Math.max(240, window.innerHeight - Math.max(top, 0) - 40)}px`;
+        };
+        fit();
+        const t = setTimeout(fit, 50);
+        window.addEventListener("resize", fit);
+        window.addEventListener("scroll", fit, true);
+        return () => { clearTimeout(t); window.removeEventListener("resize", fit); window.removeEventListener("scroll", fit, true); };
+    });
 
     if (error) return <section className="card aum-aging"><div className="alert-error" role="alert">{error}</div></section>;
-    if (!data) return <section className="card aum-aging"><span className="sk" style={{ display: "block", height: 260 }} /></section>;
 
-    const cur = data[tab];
+    const cur = data?.[tab];
+    const clients = cur?.clients || [];
     const tabLabel = AGE_SETS.find(([k]) => k === tab)[1];
-    const scopeText = data.scope === "mine" ? `Your ${fmtN(data.clients)} assigned clients`
+    const scopeText = !data ? "" : data.scope === "mine" ? `Your ${fmtN(data.clients)} assigned clients`
         : data.scope === "auditor" ? `${fmtN(data.clients)} clients of the selected auditor` : "All clients";
     const ageNote = tab === "pending" ? "days since it was entered" : tab === "audited" ? "days since it was audited" : "days since it was reverted";
-    const ageLabel = (b) => AGES.find(([k]) => k === b)?.[1];
-    const open = (bucket, c) => setList({
-        kind: tab, bucket: bucket || "", caid: c?.caid || 0,
-        title: [tabLabel, bucket ? ageLabel(bucket) : "", c ? c.trade_name : "All clients"].filter(Boolean).join(" · "),
+    const open = (c, type = "") => setList({
+        kind: tab, bucket: "", caid: c?.caid || 0, type,
+        title: [tabLabel, type ? TYPE_LABEL[type] : "", c ? c.trade_name : "All clients"].filter(Boolean).join(" · "),
     });
-    const Num = ({ n, bucket, c, cls = "" }) => (n
-        ? <button type="button" className={`aum-numbtn ${cls}`} onClick={() => open(bucket, c)} title="See the invoices">{fmtN(n)}</button>
+    const Num = ({ n, c, type, cls = "" }) => (n
+        ? <button type="button" className={`aum-numbtn ${cls}`} onClick={() => open(c, type)} title="See the invoices">{fmtN(n)}</button>
         : <span className="muted">–</span>);
 
     return (
-        <section className="card aum-aging">
+        <section className="card aum-aging" aria-busy={!data}>
             <div className="aum-aging-head">
-                <h4>Aging <small>· {scopeText}{year ? ` · ${year}` : ""}</small></h4>
+                <h4>Aging <small>· {data ? scopeText : <span className="sk aum-sk-text" aria-hidden="true" />}{year ? ` · ${month ? `${MONTHS[month - 1]} ` : ""}${year}` : ""}</small></h4>
                 <span className="muted small">Age = {ageNote} · click a number to see the invoices</span>
             </div>
-            <div className="wr-tabs" role="tablist">
-                {AGE_SETS.map(([k, l]) => (
-                    <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "is-on" : ""} onClick={() => setTab(k)}>
-                        {l} <span className="wr-n">{fmtN(data[k].totals.total)}</span>
-                    </button>
-                ))}
-            </div>
-            <div className="wr-ages">
-                {AGES.map(([k, l], i) => (
-                    <button key={k} type="button" className={`wr-age is-${i} aum-agebtn`} onClick={() => cur.totals[k] && open(k)} disabled={!cur.totals[k]}>
-                        <span>{l}</span><b>{fmtN(cur.totals[k])}</b>
-                    </button>
-                ))}
-            </div>
-            <div className="wr-scroll aum-aging-scroll">
+            {/* month tabs (default: this month) */}
+            {year && (
+                <div className="wr-tabs aum-months" role="tablist" aria-label="Month">
+                    {MONTHS.map((m, i) => {
+                        const k = String(i + 1);
+                        return (
+                            <button key={k} role="tab" aria-selected={month === k} className={month === k ? "is-on" : ""} onClick={() => onMonth(k)}>{m}</button>
+                        );
+                    })}
+                </div>
+            )}
+            <div className="wr-scroll aum-aging-scroll" ref={scrollRef}>
                 <table className="table wr-table">
                     <thead>
-                        <tr><th>Client account</th>{AGES.map(([k, l]) => <th key={k} className="num">{l}</th>)}<th className="num">Total</th></tr>
+                        <tr><th>Client account</th>{TYPES.map(([k, l]) => <th key={k} className="num">{l}</th>)}<th className="num">Total</th></tr>
                     </thead>
                     <tbody>
-                        {!cur.clients.length && <tr><td colSpan={6} className="muted" style={{ textAlign: "center", padding: 20 }}>Nothing here.</td></tr>}
-                        {cur.clients.map((c) => (
+                        {/* placeholder rows: same columns as the real table */}
+                        {!data && Array.from({ length: 8 }, (_, i) => (
+                            <tr key={`sk${i}`} aria-hidden="true">
+                                <td><span className="sk aum-sk-name" style={{ width: `${55 - (i % 4) * 8}%` }} /></td>
+                                {TYPES.map(([k]) => <td key={k} className="num"><span className="sk aum-sk-num" /></td>)}
+                                <td className="num"><span className="sk aum-sk-num" /></td>
+                            </tr>
+                        ))}
+                        {data && !clients.length && <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 20 }}>Nothing here.</td></tr>}
+                        {clients.map((c) => (
                             <tr key={c.caid}>
                                 <td><b>{c.trade_name || "—"}</b>{c.branch_code ? <small className="muted"> · {c.branch_code}</small> : null}</td>
-                                {AGES.map(([k], i) => <td key={k} className="num"><Num n={c[k]} bucket={k} c={c} cls={`wr-hot is-${i}`} /></td>)}
+                                {TYPES.map(([k]) => <td key={k} className="num"><Num n={c[k]} c={c} type={k} /></td>)}
                                 <td className="num"><Num n={c.total} c={c} cls="strong" /></td>
                             </tr>
                         ))}
                     </tbody>
+                    {clients.length > 0 && (
+                        <tfoot>
+                            <tr className="aum-foot">
+                                <td><b>Total</b> <small className="muted">· {fmtN(clients.length)} client(s)</small></td>
+                                {TYPES.map(([k]) => <td key={k} className="num"><Num n={clients.reduce((n, c) => n + (c[k] || 0), 0)} type={k} cls="strong" /></td>)}
+                                <td className="num"><Num n={clients.reduce((n, c) => n + (c.total || 0), 0)} cls="strong" /></td>
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
-            {list && <AgingList q={list} year={year} auditorId={auditorId} onClose={() => setList(null)} />}
+            {list && <AgingList q={list} year={year} month={month} auditorId={auditorId} onClose={() => setList(null)} />}
         </section>
     );
 }
 
 /* the Sales / Purchases / Expenses behind a number · click one → its details in a popup frame */
-function AgingList({ q, year, auditorId, onClose }) {
+function AgingList({ q, year, month, auditorId, onClose }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
-    const [type, setType] = useState("");
+    const [type, setType] = useState(q.type || "");
     const [opening, setOpening] = useState("");
     const [frame, setFrame] = useState(null);
     const { user, selectBranch } = useAuth();
 
     useEffect(() => {
         let alive = true;
-        const p = new URLSearchParams({ kind: q.kind, bucket: q.bucket, caid: q.caid, year, auditor_id: auditorId || 0 });
+        const p = new URLSearchParams({ kind: q.kind, bucket: q.bucket, caid: q.caid, year, month: month || "", auditor_id: auditorId || 0 });
         apiFetch(`/monitoring/audit/aging/list?${p}`)
             .then((r) => alive && setData(r))
             .catch((e) => alive && setError(e.message || "Couldn't load the invoices."));
         return () => { alive = false; };
-    }, [q, year, auditorId]);
+    }, [q, year, month, auditorId]);
 
     const rows = data?.rows || [];
     const count = (t) => rows.filter((r) => !t || r.type === t).length;

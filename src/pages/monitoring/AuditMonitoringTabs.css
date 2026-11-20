@@ -334,10 +334,10 @@
 }
 
 .aum-aging-scroll {
-    max-height: calc(100vh - 430px);
     min-height: 240px;
 }
 
+/* max-height is set to the screen in AuditMonitoring.jsx */
 .aum-numbtn {
     border: 0;
     background: none;
@@ -381,4 +381,70 @@
     max-width: 300px;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* month tabs between the age boxes and the table: one row across the card */
+.aum-months {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 6px;
+    margin: 12px 0;
+}
+
+.aum-months>button {
+    justify-content: center;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .aum-months {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+}
+
+/* Total row of the client table stays at the bottom */
+.aum-aging-scroll tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: var(--card);
+    border-top: 2px solid var(--line);
+}
+
+/* status tabs in the top bar, between the title and Year */
+.aum-bar .aum-status {
+    margin: 0 auto 0 24px;
+    align-self: center;
+}
+
+/* loading placeholders shaped like the real content */
+.aum-sk-n {
+    display: inline-block;
+    width: 36px;
+    height: 12px;
+    margin-left: 6px;
+    vertical-align: middle;
+    border-radius: 6px;
+}
+
+.aum-sk-text {
+    display: inline-block;
+    width: 90px;
+    height: 11px;
+    vertical-align: middle;
+    border-radius: 6px;
+}
+
+.aum-sk-name {
+    display: block;
+    height: 14px;
+    border-radius: 6px;
+}
+
+.aum-sk-num {
+    display: inline-block;
+    width: 44px;
+    height: 14px;
+    border-radius: 6px;
 }
