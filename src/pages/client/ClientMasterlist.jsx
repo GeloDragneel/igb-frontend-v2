@@ -6,6 +6,7 @@ import { useToast } from "../../components/Toast";
 import { apiFetch } from "../../context/AuthContext";
 import { ClientPopup, AccountPopup, DeleteAccountPopup, AssignedClientPopup, isActive, isMain } from "./ClientPopups";
 import "./ClientMasterlist.css";
+import "./ClientMasterlistDoubt.css";
 
 const ENDPOINT = { clients: "/clients", accounts: "/client-accounts", assigned: "/client-accounts/assigned" };
 const val = (v) => (v === null || v === undefined || v === "" ? "—" : String(v));
@@ -83,6 +84,24 @@ export default function ClientMasterlist() {
     }, [loadClientList]);
 
     const reload = () => { load(); loadClientList(); };
+
+    // Doubtful EO / PF: saved as soon as it's ticked (m_client_account.is_doubt_eo / is_doubt_pf)
+    const [doubtBusy, setDoubtBusy] = useState("");
+    const toggleDoubt = async (a, k) => {
+        const next = Number(a[k]) === 1 ? 0 : 1;
+        const tag = `${a.id}:${k}`;
+        setDoubtBusy(tag);
+        setRows((rs) => rs.map((r) => (r.id === a.id ? { ...r, [k]: next } : r)));
+        try {
+            await apiFetch(`/client-accounts/${a.id}/doubtful`, { method: "PUT", body: JSON.stringify({ [k]: !!next }) });
+            notify(`${a.trade_name || "Account"}: ${k === "is_doubt_eo" ? "EO" : "PF"} ${next ? "marked" : "unmarked"} as doubtful.`);
+        } catch (e) {
+            setRows((rs) => rs.map((r) => (r.id === a.id ? { ...r, [k]: a[k] } : r)));   // undo
+            notify(e.message || "Couldn't save.", "error");
+        } finally {
+            setDoubtBusy("");
+        }
+    };
 
     // DA / Auditor lists: loaded once, the first time the assign popup opens
     const openAssign = (a) => {
@@ -208,11 +227,11 @@ export default function ClientMasterlist() {
                     ) : (
                         <table className="cml-table">
                             <thead>
-                                <tr><th>Client account</th><th>Nature of business</th><th>Tax reg.</th>{hasRdo && <th>RDO</th>}<th>Login</th><th>Status</th><th className="c">Active</th><th /></tr>
+                                <tr><th>Client account</th><th>Nature of business</th><th>Tax reg.</th>{hasRdo && <th>RDO</th>}<th>Login</th><th>Status</th><th className="c">Doubtful</th><th className="c">Active</th><th /></tr>
                             </thead>
                             <tbody>
-                                {loading && <SkeletonRows cols={hasRdo ? 8 : 7} rows={Math.min(perPage, perPage)} twoLine />}
-                                {!loading && rows.length === 0 && <tr><td colSpan={hasRdo ? 8 : 7} className="cml-empty">{q || clientFilter || status !== "all" ? "Nothing matches the filters." : "No client accounts yet."}</td></tr>}
+                                {loading && <SkeletonRows cols={hasRdo ? 9 : 8} rows={Math.min(perPage, perPage)} twoLine />}
+                                {!loading && rows.length === 0 && <tr><td colSpan={hasRdo ? 9 : 8} className="cml-empty">{q || clientFilter || status !== "all" ? "Nothing matches the filters." : "No client accounts yet."}</td></tr>}
                                 {!loading && rows.map((a) => (
                                     <tr key={a.id} className={`cml-row${isActive(a) ? "" : " is-off"}`} tabIndex={0} onClick={() => setOpenAccount(a)}
                                         onKeyDown={(e) => e.key === "Enter" && setOpenAccount(a)}>
@@ -230,6 +249,21 @@ export default function ClientMasterlist() {
                                         {hasRdo && <td className="mono">{a.rdo || "—"}</td>}
                                         <td className={`mono${a.login && a.login.is_active === false ? " cml-login-off" : ""}`}>{a.login?.username || "—"}</td>
                                         <td>{a.status_label || "—"}</td>
+                                        <td className="c" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                                            <div className="cml-doubt" role="group" aria-label={`Doubtful – ${a.trade_name}`}>
+                                                {[["is_doubt_eo", "EO"], ["is_doubt_pf", "PF"]].map(([k, l]) => {
+                                                    const on = Number(a[k]) === 1;
+                                                    return (
+                                                        <button key={k} type="button" className={on ? "is-on" : ""} aria-pressed={on}
+                                                            disabled={doubtBusy === `${a.id}:${k}`} onClick={() => toggleDoubt(a, k)}
+                                                            title={`${on ? "Unmark" : "Mark"} ${l} as doubtful`}>
+                                                            {on && <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg>}
+                                                            {l}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </td>
                                         <td className="c"><span className={`tm-status ${isActive(a) ? "is-on" : ""}`}><span className="tm-dot" aria-hidden="true" />{isActive(a) ? "Yes" : "No"}</span></td>
                                         <td className="c" onClick={(e) => e.stopPropagation()}>
                                             <button className="tm-icon tm-icon-danger" onClick={() => setDelAccount(a)} aria-label={`Delete ${a.trade_name}`} title="Delete">

@@ -235,7 +235,7 @@ function ResultModal({ result, onClose }) {
 // m_transaction_type id → m_service_type id (1 RETURN → 3 RETURNS · 2 EO → 2 EO · 3 PF → 4 PF)
 const SER_TYPE_BY_TRANS = { 1: 3, 2: 2, 3: 4 };
 
-const blankLine = () => ({ key: Math.random().toString(36).slice(2), ser_list_id: "", ser_fee_id: null, prep_target_date: plusDays(5), service_fee: "", qty: "1" });
+const blankLine = () => ({ key: Math.random().toString(36).slice(2), ser_list_id: "", ser_fee_id: null, prep_target_date: plusDays(5), service_fee: "", qty: "1", document_fee: "" });
 
 // old "GENERATE MANUAL BILLING": one account, picked services → SOA (R / EO / PF) + services + sales invoices
 export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
@@ -290,12 +290,17 @@ export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
         // drop services that don't belong to the new transaction type
         lines: x.lines.map((l) => {
             const s = services.find((z) => String(z.id) === String(l.ser_list_id));
-            return s && Number(s.ser_type_id) === SER_TYPE_BY_TRANS[Number(v)]
-                ? l : { ...l, ser_list_id: "", ser_fee_id: null, service_fee: "" };
+            const keep = s && Number(s.ser_type_id) === SER_TYPE_BY_TRANS[Number(v)];
+            const docFee = Number(v) === 2 ? l.document_fee : "";          // Document fee is for EO only
+            return keep ? { ...l, document_fee: docFee } : { ...l, ser_list_id: "", ser_fee_id: null, service_fee: "", document_fee: docFee };
         }),
     }));
 
-    const grand = f.lines.reduce((t, l) => t + num(l.service_fee) * num(l.qty), 0);
+    // EO only: Document fee per service (saved on its own, not added to the total)
+    const isEo = Number(f.trans_type_id) === 2;
+    const lineTotal = (l) => num(l.service_fee) * num(l.qty);
+    const grand = f.lines.reduce((t, l) => t + lineTotal(l), 0);
+    const cols = isEo ? 8 : 7;
 
     const save = async () => {
         setError("");
@@ -313,7 +318,7 @@ export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
                 method: "POST",
                 body: JSON.stringify({
                     ca_id: Number(f.ca_id), trans_type_id: Number(f.trans_type_id), service_period: f.service_period, eo_version: lk?.eo_version,
-                    lines: f.lines.map((l) => ({ ser_list_id: Number(l.ser_list_id), ser_fee_id: l.ser_fee_id || null, prep_target_date: l.prep_target_date, service_fee: num(l.service_fee), qty: num(l.qty) })),
+                    lines: f.lines.map((l) => ({ ser_list_id: Number(l.ser_list_id), ser_fee_id: l.ser_fee_id || null, prep_target_date: l.prep_target_date, service_fee: num(l.service_fee), qty: num(l.qty), document_fee: isEo ? num(l.document_fee) : 0 })),
                 }),
             });
             onSaved(res, f.ca_id);
@@ -365,14 +370,14 @@ export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
                     {/* Excel-like grid: gridlines, cells you type straight into · Enter = next row (adds one at the end) */}
                     <div className="mb-sheet">
                         <table className="mb-grid">
-                            <colgroup><col className="w-n" /><col /><col className="w-d" /><col className="w-p" /><col className="w-q" /><col className="w-t" /><col className="w-x" /></colgroup>
+                            <colgroup><col className="w-n" /><col /><col className="w-d" /><col className="w-p" /><col className="w-q" />{isEo && <col className="w-p" />}<col className="w-t" /><col className="w-x" /></colgroup>
                             <thead>
-                                <tr><th className="c">#</th><th>Service <i>*</i></th><th>Due date <i>*</i></th><th className="n">Unit price <i>*</i></th><th className="n">Qty <i>*</i></th><th className="n">Total</th><th /></tr>
+                                <tr><th className="c">#</th><th>Service <i>*</i></th><th>Due date <i>*</i></th><th className="n">Unit price <i>*</i></th><th className="n">Qty <i>*</i></th>{isEo && <th className="n">Document fee</th>}<th className="n">Total</th><th /></tr>
                             </thead>
                             <tbody>
-                                {f.lines.length === 0 && <tr><td colSpan={7} className="mb-empty">No services yet – click <b>+ Add row</b>.</td></tr>}
+                                {f.lines.length === 0 && <tr><td colSpan={cols} className="mb-empty">No services yet – click <b>+ Add row</b>.</td></tr>}
                                 {f.lines.map((l, i) => {
-                                    const total = num(l.service_fee) * num(l.qty);
+                                    const total = lineTotal(l);
                                     const nextOrAdd = (e) => {
                                         if (e.key !== "Enter") return;
                                         e.preventDefault();
@@ -394,6 +399,10 @@ export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
                                                 onFocus={(e) => e.target.select()} onChange={(e) => setLine(l.key, { service_fee: cleanNum(e.target.value) })} aria-label={`Unit price row ${i + 1}`} /></td>
                                             <td><input className="mb-cell n" inputMode="decimal" data-col="qty" value={l.qty} onKeyDown={nextOrAdd}
                                                 onFocus={(e) => e.target.select()} onChange={(e) => setLine(l.key, { qty: cleanNum(e.target.value) })} aria-label={`Qty row ${i + 1}`} /></td>
+                                            {isEo && (
+                                                <td><input className="mb-cell n" inputMode="decimal" data-col="docfee" value={l.document_fee} placeholder="0.00" onKeyDown={nextOrAdd}
+                                                    onFocus={(e) => e.target.select()} onChange={(e) => setLine(l.key, { document_fee: cleanNum(e.target.value) })} aria-label={`Document fee row ${i + 1}`} /></td>
+                                            )}
                                             <td className="n mb-total">{total ? n2(total) : "-"}</td>
                                             <td className="c"><button type="button" className="mb-del" onClick={() => set("lines", f.lines.filter((x) => x.key !== l.key))} aria-label={`Remove row ${i + 1}`} title="Remove row">✕</button></td>
                                         </tr>
@@ -401,7 +410,7 @@ export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
                                 })}
                                 <tr className="mb-addrow">
                                     <td className="c">+</td>
-                                    <td colSpan={6}><button type="button" onClick={() => set("lines", [...f.lines, blankLine()])}>Add row</button></td>
+                                    <td colSpan={cols - 1}><button type="button" onClick={() => set("lines", [...f.lines, blankLine()])}>Add row</button></td>
                                 </tr>
                             </tbody>
                             <tfoot>
@@ -409,6 +418,7 @@ export function ManualBillModal({ onClose, onSaved, initialCaId = "" }) {
                                     <td />
                                     <td>{f.lines.length} service{f.lines.length === 1 ? "" : "s"}</td>
                                     <td /><td />
+                                    {isEo && <td />}
                                     <td className="n">Total ₱</td>
                                     <td className="n mb-grand">{n2(grand)}</td>
                                     <td />

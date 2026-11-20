@@ -9,12 +9,14 @@ import {
     Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import Modal from "../components/Modal";
+import Badge from "../components/Badge";
 import HRDashboard from "./hr/HrDashboard";
 import { apiFetch } from "../context/AuthContext";
 import { exportCsv } from "../utils/exportRows";
 import "./Dashboard.css";
 import "./DashboardRoles.css";
 import "./DashboardLoading.css";
+import "./DashboardDoubtful.css";
 
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n0 = (v) => (Number(v) || 0).toLocaleString("en-PH");
@@ -26,6 +28,16 @@ const monthShort = (m) => (m ? new Date(`${m}-01T00:00:00`).toLocaleString("en-P
 const monthTitle = (m) => (m ? new Date(`${m}-01T00:00:00`).toLocaleString("en-PH", { month: "long", year: "numeric" }) : "");
 const sumBy = (rows, k) => (rows || []).reduce((s, r) => s + (Number(r[k]) || 0), 0);
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+// bill status from the amounts: nothing left → Paid · some collected → Partial · nothing collected → Unpaid
+const billStatus = (r) => {
+    const billed = Number(r.amount) || 0;
+    const paid = Number(r.collected) || 0;
+    const bal = Number(r.balance ?? billed - paid) || 0;
+    if (billed > 0 && bal <= 0.005) return "Paid";
+    if (paid > 0.005) return "Partial";
+    return "Unpaid";
+};
+const STATUS_TONE = { Paid: "green", Partial: "orange", Unpaid: "red" };
 
 // series colors live in Dashboard.css (--dsh-1 … --dsh-5)
 const S = (i) => `var(--dsh-${i})`;
@@ -212,11 +224,12 @@ function BillingTab({ b, busy, period, tilesLoading }) {
     return (
         <>
             <div className="dsh-kpis">
-                {kpi("billed", "Total billed", sm?.billed, `${n0(sm?.billed_count)} PF / EO bill(s)`)}
+                {kpi("billed", "Total billed", sm?.billed, `${n0(sm?.billed_count)} PF / EO bill(s) · excl. doubtful`)}
                 {kpi("collected", "Collected", sm?.collected, `${n0(sm?.collected_count)} payment(s) on those bills`)}
                 {kpi("deposited", "Deposited", sm?.deposited, `${depPct}% of collected`)}
-                {kpi("outstanding", "Outstanding", sm?.outstanding, `billed − collected · ${n0(sm?.outstanding_count)} bill(s)`)}
+                {kpi("outstanding", "Outstanding", sm?.outstanding, `unpaid on billed · ${n0(sm?.outstanding_count)} bill(s)`)}
                 {kpi("arrears", "Total arrears", sm?.arrears, `${n0(sm?.arrears_count)} unpaid bill(s) · ${n0(sm?.arrears_clients)} client(s)`)}
+                {kpi("doubtful", "Doubtful (all periods)", sm?.doubtful, `EO ${n2(sm?.doubtful_eo)} · PF ${n2(sm?.doubtful_pf)} · ${n0(sm?.doubtful_clients)} client(s)`)}
             </div>
             {open && <KpiPopup kpi={open} period={period} onClose={() => setOpen(null)} />}
 
@@ -674,11 +687,12 @@ function Kpi({ label, value, sub, onClick, loading = false }) {
 
 /* popup behind a Billing tile */
 const KPI_INFO = {
-    billed: { title: "Total billed", note: "PF bills of the period's months + EO bills of its years (void bills left out).", sumKey: "amount" },
+    billed: { title: "Total billed", note: "PF bills of the period's months + EO bills of its years (void bills and doubtful accounts left out).", sumKey: "amount" },
     collected: { title: "Collected", note: "Payments made on the period's PF / EO bills.", sumKey: "amount" },
     deposited: { title: "Deposited", note: "Payments on the period's PF / EO bills that are deposited.", sumKey: "amount" },
-    outstanding: { title: "Outstanding", note: "Total billed − collected: the period's PF / EO bills with a balance.", sumKey: "balance" },
+    outstanding: { title: "Outstanding", note: "The period's PF / EO bills that still have a balance (doubtful accounts left out).", sumKey: "balance" },
     arrears: { title: "Total arrears", note: "PF / EO bills from before the period with no payment at all on their SOA (none for All data).", sumKey: "amount" },
+    doubtful: { title: "Doubtful", note: "All unpaid bills (any period) of accounts marked doubtful in Client → Masterlist: EO bills of accounts ticked EO, PF bills of accounts ticked PF.", sumKey: "balance", allTime: true },
 };
 const BILL_COLS = [
     CLIENT,
@@ -690,7 +704,7 @@ const BILL_COLS = [
     { key: "amount", label: "Billed", cls: "n", money: true, sum: true },
     { key: "collected", label: "Collected", cls: "n", money: true, sum: true },
     { key: "balance", label: "Balance", cls: "n", money: true, sum: true },
-    { key: "status", label: "Status", cls: "c" },
+    { key: "status", label: "Status", cls: "c", kind: "status" },
 ];
 const COLLECTED_COLS = [
     CLIENT,
@@ -727,7 +741,19 @@ const ARREARS_COLS = [
     { key: "months_unpaid", label: "Months unpaid", cls: "n" },
     { key: "amount", label: "Amount due", cls: "n", money: true, sum: true },
 ];
-const KPI_COLS = { billed: BILL_COLS, outstanding: BILL_COLS, collected: COLLECTED_COLS, deposited: DEPOSITED_COLS, arrears: ARREARS_COLS };
+const DOUBT_COLS = [
+    CLIENT,
+    { key: "type", label: "Type", cls: "c" },
+    { key: "service", label: "Service", cls: "dsh-wide" },
+    { key: "period", label: "Period" },
+    { key: "trans_number", label: "SOA #" },
+    { key: "date_billed", label: "Date billed" },
+    { key: "amount", label: "Billed", cls: "n", money: true, sum: true },
+    { key: "collected", label: "Collected", cls: "n", money: true, sum: true },
+    { key: "balance", label: "Balance", cls: "n", money: true, sum: true },
+    { key: "status", label: "Status", cls: "c", kind: "status" },
+];
+const KPI_COLS = { billed: BILL_COLS, outstanding: BILL_COLS, collected: COLLECTED_COLS, deposited: DEPOSITED_COLS, arrears: ARREARS_COLS, doubtful: DOUBT_COLS };
 
 function KpiPopup({ kpi, period, onClose }) {
     const [data, setData] = useState(null);
@@ -748,6 +774,7 @@ function KpiPopup({ kpi, period, onClose }) {
     const rows = useMemo(() => {
         const term = q.trim().toLowerCase();
         return (data?.rows || [])
+            .map((r) => (cols.some((c) => c.kind === "status") ? { ...r, status: billStatus(r) } : r))
             .filter((r) => type === "All" || r.type === type)
             .filter((r) => !term || [...cols.map((c) => r[c.key]), r.branch].some((v) => String(v ?? "").toLowerCase().includes(term)));
     }, [data, q, type, cols]);
@@ -755,7 +782,7 @@ function KpiPopup({ kpi, period, onClose }) {
     const filters = [{ type: "All", amount: sumBy(all, info.sumKey), count: all.length }, ...(data?.by_type || [])];
 
     return (
-        <Modal title={`${info.title} · ${period.label}`} onClose={onClose} size="xxlg"
+        <Modal title={`${info.title} · ${info.allTime ? "All periods" : period.label}`} onClose={onClose} size="xxlg"
             footer={(
                 <>
                     <button type="button" className="btn" disabled={!rows.length}
@@ -862,8 +889,18 @@ function Table({ cols, rows, busy, rowKey }) {
                         <tr key={r[rowKey] ?? i}>
                             <td className="c">{i + 1}</td>
                             {cols.map((c) => (c.kind === "client"
-                                ? <td key={c.key} className="dsh-client"><b>{r.client_name || "—"}</b><span>{r.branch || "—"}</span></td>
-                                : <td key={c.key} className={c.cls} title={c.cls === "dsh-wide" ? r[c.key] : undefined}>{fmt(c, r[c.key])}</td>))}
+                                ? (
+                                    <td key={c.key} className="dsh-client">
+                                        <b>{r.client_name || "—"}</b>
+                                        <span>{r.branch || "—"}</span>
+                                        {(r.doubt_eo || r.doubt_pf) && (
+                                            <span className="dsh-doubt">Doubtful {[r.doubt_eo && "EO", r.doubt_pf && "PF"].filter(Boolean).join(" · ")}</span>
+                                        )}
+                                    </td>
+                                )
+                                : c.kind === "status"
+                                    ? <td key={c.key} className={c.cls}>{r[c.key] ? <Badge tone={STATUS_TONE[r[c.key]] || "blue"}>{r[c.key]}</Badge> : "—"}</td>
+                                    : <td key={c.key} className={c.cls} title={c.cls === "dsh-wide" ? r[c.key] : undefined}>{fmt(c, r[c.key])}</td>))}
                         </tr>
                     ))}
                 </tbody>

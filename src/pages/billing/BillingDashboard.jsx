@@ -40,11 +40,12 @@ let accountsCache = null;
 
 // what a service's Total is made of: fee total + VAT − withholding − discount (Option)
 const breakdownNote = (s) => [
+  Number(s.document_fee) > 0 && `Doc. Fee : ${n2(s.document_fee)}`,
   Number(s.inherited_vat) > 0 && `incl. VAT ${n2(s.inherited_vat)}`,
   Number(s.inherited_wh) > 0 && `less WH ${n2(s.inherited_wh)}`,
   Number(s.inherited_discount_amount) > 0 && `less disc. ${n2(s.inherited_discount_amount)}`,
 ].filter(Boolean).join(" · ");
-const breakdownTitle = (s) => `Service total ${n2(s.total_service_fee)}`
+const breakdownTitle = (s) => `Service total ${n2(s.total_service_fee)}${Number(s.document_fee) > 0 ? ` · Document fee ${n2(s.document_fee)}` : ""}`
   + (Number(s.inherited_vat) > 0 ? ` + VAT 12% ${n2(s.inherited_vat)}` : "")
   + (Number(s.inherited_wh) > 0 ? ` − withholding 5% ${n2(s.inherited_wh)}` : "")
   + (Number(s.inherited_discount_amount) > 0 ? ` − discount ${n2(s.inherited_discount_amount)}` : "")
@@ -268,7 +269,7 @@ export default function BillingDashboard() {
 
   const addRow = () => {
     if (!t) return notify("Pick an account and a service period to add to its SOA", "error");
-    if (tab === "services") setServiceForm({ id: null, trans_number: t.trans_number, ser_list_id: "", ser_fee_id: null, prep_target_date: today(), service_fee: "", qty: "1", less: "", surcharge: "", orig_fee: null });
+    if (tab === "services") setServiceForm({ id: null, trans_number: t.trans_number, ser_list_id: "", ser_fee_id: null, prep_target_date: today(), service_fee: "", qty: "1", less: "", surcharge: "", document_fee: "", orig_fee: null });
     else setPaymentForm({ id: null, trans_number: t.trans_number, service_id: "", payment_date: today(), payment_type_id: "", cheque_type_id: "", cheque_type_date: "", details1: "", details2: "", amount: "", payment_col_type_id: "", receipt_type_id: "", receipt_no: "" });
   };
 
@@ -298,6 +299,7 @@ export default function BillingDashboard() {
   const editService = (s, dead) => setServiceForm({
     id: s.id, trans_number: s.trans_number, ser_list_id: String(s.ser_list_id || ""), ser_fee_id: s.ser_fee_id, prep_target_date: s.prep_target_date || today(),
     service_fee: String(s.service_fee), qty: String(s.qty), less: s.less ? String(s.less) : "", surcharge: s.surcharge ? String(s.surcharge) : "",
+    document_fee: Number(s.document_fee) ? String(Number(s.document_fee)) : "",
     orig_fee: s.service_fee, locked: dead,
     // Option flags (VAT / withholding / discount) – the popup shows the same Total as the list
     flags: { d_vat: s.d_vat, d_witholding: s.d_witholding, d_less_sc: s.d_less_sc, d_less_sp: s.d_less_sp, d_less_pwd: s.d_less_pwd, d_less_others: s.d_less_others, less_other_percentage: s.less_other_percentage },
@@ -490,7 +492,7 @@ export default function BillingDashboard() {
                       <td className="n">{fmtDay(s.prep_target_date)}</td>
                       <td className="n strong bd-net-cell" title={breakdownTitle(s)}>
                         {n2(s.net)}
-                        {breakdownNote(s) && <small className="bd-net-note">{breakdownNote(s)}</small>}
+                        {breakdownNote(s) && <small className="bd-net-note" style={{ whiteSpace: "nowrap", overflow: "visible", textOverflow: "clip", maxWidth: "none" }}>{breakdownNote(s)}</small>}
                       </td>
                       <td className="n">{dead ? "" : n2(s.paid || 0)}</td>
                       {(() => {
@@ -664,6 +666,9 @@ export function ServiceModal({ initial, lk, transNumber, onClose, onSaved, onNee
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const opts = [{ value: "", label: "— Select service —" }, ...lk.services.map((s) => ({ value: String(s.id), label: s.name }))];
 
+  // EO service (m_service_type 2) → Document fee (shown under the total, not added to it)
+  const picked = lk.services.find((x) => String(x.id) === String(f.ser_list_id));
+  const isEo = Number(picked?.ser_type_id) === 2 || num(f.document_fee) > 0;
   const gross = num(f.service_fee) * num(f.qty);
   const total = gross - num(f.less) + gross * (num(f.surcharge) / 100);
   const opt = optionAmounts(Math.round(total * 100) / 100, f.flags);
@@ -682,6 +687,7 @@ export function ServiceModal({ initial, lk, transNumber, onClose, onSaved, onNee
     const body = {
       ser_list_id: Number(f.ser_list_id), ser_fee_id: f.ser_fee_id || null, prep_target_date: f.prep_target_date,
       service_fee: num(f.service_fee), qty: num(f.qty), less: num(f.less), surcharge: num(f.surcharge),
+      ...(isEo ? { document_fee: num(f.document_fee) } : {}),
     };
     // editing the unit price needs a supervisor
     if (!freePrice && f.id && Math.abs(num(f.service_fee) - Number(f.orig_fee)) > 0.004) return onNeedOverride(body);
@@ -711,6 +717,7 @@ export function ServiceModal({ initial, lk, transNumber, onClose, onSaved, onNee
         <Field label="Qty"><input className="input ta-right" inputMode="decimal" value={f.qty} onChange={(e) => set("qty", cleanNum(e.target.value))} /></Field>
         <Field label="Less"><input className="input ta-right" inputMode="decimal" value={f.less} onChange={(e) => set("less", cleanNum(e.target.value))} placeholder="0.00" /></Field>
         <Field label="Surcharge (%)"><input className="input ta-right" inputMode="decimal" value={f.surcharge} onChange={(e) => set("surcharge", cleanNum(e.target.value))} placeholder="0" /></Field>
+        {isEo && <Field label="Document fee"><input className="input ta-right" inputMode="decimal" value={f.document_fee || ""} onChange={(e) => set("document_fee", cleanNum(e.target.value))} placeholder="0.00" /></Field>}
         <Field label={hasOpt ? "Service total" : "Total"}><input className="input ta-right strong" disabled value={n2(total)} /></Field>
       </div>
       {hasOpt && (

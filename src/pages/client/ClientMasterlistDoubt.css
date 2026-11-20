@@ -1,0 +1,65 @@
+/* Masterlist → Client accounts → Doubtful: one small [ EO | PF ] toggle */
+.cml-doubt {
+    display: inline-flex;
+    vertical-align: middle;
+    border: 1px solid var(--line, #e5e7eb);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--card, #fff);
+}
+
+.cml-doubt button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 42px;
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    line-height: 1;
+    color: var(--muted, #9ca3af);
+    cursor: pointer;
+    transition: background .12s, color .12s;
+}
+
+.cml-doubt button+button {
+    border-left: 1px solid var(--line, #e5e7eb);
+}
+
+.cml-doubt button:hover:not(:disabled) {
+    background: var(--hover, rgba(0, 0, 0, .04));
+    color: var(--text, #374151);
+}
+
+.cml-doubt button.is-on {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.cml-doubt button.is-on:hover:not(:disabled) {
+    background: #fde68a;
+    color: #92400e;
+}
+
+.cml-doubt button:focus-visible {
+    outline: 2px solid var(--brand, #2563eb);
+    outline-offset: -2px;
+}
+
+.cml-doubt button:disabled {
+    opacity: .6;
+    cursor: progress;
+}
+
+/* keep the Active badge on one line */
+.cml-table .tm-status {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}

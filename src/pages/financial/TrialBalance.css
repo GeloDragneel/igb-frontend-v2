@@ -48,7 +48,7 @@
     background: #525659;
 }
 
-/* ADD to TrialBalance.css – the "Not balanced" bar under the table */
+/* the "Not balanced" bar above the table */
 .tb-off {
     display: flex;
     align-items: center;
@@ -66,4 +66,41 @@
 
 .tb-off b {
     color: #dc2626;
+}
+
+/* table borders (detailed and comparative) */
+.tb-table {
+    border-collapse: collapse;
+    border: 1px solid var(--line, #d6dbe3);
+}
+
+.tb-table th,
+.tb-table td {
+    border: 1px solid var(--line, #d6dbe3);
+}
+
+/* keep the Total row in view: the table scrolls inside the page */
+.tb-scroll {
+    overflow: auto;
+}
+
+.tb-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.tb-table thead th {
+    background: var(--card);
+}
+
+.tb-table tfoot {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+}
+
+.tb-table tfoot td {
+    background: var(--card);
+    font-weight: 700;
 }
