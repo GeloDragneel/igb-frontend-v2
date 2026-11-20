@@ -27,6 +27,7 @@ const COLS = [
     { key: "gross_profit_rate", label: "Gross Profit Rate", pct: true },
     { key: "expenses", label: "Total Expenses" },
     { key: "income_subject", label: "Income Subject to Income Tax", tone: "net" },
+    { key: "tax_payable", label: "Income Tax Payable (excess)", strong: true },
 ];
 
 function download(name, rows) {
