@@ -252,7 +252,7 @@ function AgingList({ q, year, month, day, auditorId, onClose }) {
     };
 
     return (
-        <Modal title={q.title} onClose={onClose} size="xlg" footer={<button className="btn" onClick={onClose}>Close</button>}>
+        <Modal title={q.title} onClose={onClose} size="xxlg" footer={<button className="btn" onClick={onClose}>Close</button>}>
             {error && <div className="alert-error" role="alert">{error}</div>}
             {!data && !error && <div className="aum-detail-empty">Loading…</div>}
             {data && (
@@ -269,11 +269,11 @@ function AgingList({ q, year, month, day, auditorId, onClose }) {
                             <thead>
                                 <tr>
                                     <th className="num">#</th>{!q.caid && <th>Branch Code - Trade Name</th>}<th>Type</th><th>Document No</th><th>Declared Month</th>
-                                    <th>{dateLabel}</th><th className="num">Days</th><th className="num">Amount</th><th>Status</th>{withRemarks && <th>Remarks</th>}
+                                    <th>{dateLabel}</th><th className="num">Days</th><th className="num">Amount</th><th>Status</th>{withRemarks && <><th>{dateLabel} by</th><th>Remarks</th></>}
                                 </tr>
                             </thead>
                             <tbody>
-                                {!shown.length && <tr><td colSpan={(q.caid ? 8 : 9) + (withRemarks ? 1 : 0)} className="muted" style={{ textAlign: "center", padding: 20 }}>Nothing here.</td></tr>}
+                                {!shown.length && <tr><td colSpan={(q.caid ? 8 : 9) + (withRemarks ? 2 : 0)} className="muted" style={{ textAlign: "center", padding: 20 }}>Nothing here.</td></tr>}
                                 {shown.map((v, i) => (
                                     <tr key={`${v.invoice_no}-${i}`} className="add-click" tabIndex={0} title={`Open ${v.invoice_no}`}
                                         onClick={() => openInvoice(v)} onKeyDown={(e) => e.key === "Enter" && openInvoice(v)}>
@@ -286,8 +286,9 @@ function AgingList({ q, year, month, day, auditorId, onClose }) {
                                         <td className="num">{fmtN(v.days)}</td>
                                         <td className="num">{fmtAmt(v.amount)}</td>
                                         <td><span className={`add-chip ${ST_TONE[v.status] || ""}`}>{v.status}</span></td>
+                                        {withRemarks && <td>{v.remarks_by || <span className="muted">—</span>}</td>}
                                         {withRemarks && (
-                                            <td className="aum-list-remarks" onMouseEnter={(e) => (v.remarks || v.remarks_by) && setTip({ el: e.currentTarget, v })} onMouseLeave={() => setTip(null)}>
+                                            <td className="aum-list-remarks" onMouseEnter={(e) => v.remarks && setTip({ el: e.currentTarget, v })} onMouseLeave={() => setTip(null)}>
                                                 {v.remarks || <span className="muted">—</span>}
                                             </td>
                                         )}
@@ -300,13 +301,13 @@ function AgingList({ q, year, month, day, auditorId, onClose }) {
                 </>
             )}
             {frame && <InvoiceFrame inv={frame} onClose={() => setFrame(null)} />}
-            {tip && <RemarkTip anchor={tip.el} at={tip.v.remarks_at || tip.v.since} by={tip.v.remarks_by} byLabel={dateLabel} remarks={tip.v.remarks} />}
+            {tip && <RemarkTip anchor={tip.el} remarks={tip.v.remarks} />}
         </Modal>
     );
 }
 
-/* hover tooltip on a remark: Date modified + Remarks (portal, so the table scroll doesn't cut it) */
-function RemarkTip({ anchor, at, by, byLabel, remarks }) {
+/* hover tooltip on a remark: the full remarks (portal, so the table scroll doesn't cut it) */
+function RemarkTip({ anchor, remarks }) {
     const r = anchor.getBoundingClientRect();
     const w = 320;
     const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
@@ -314,9 +315,7 @@ function RemarkTip({ anchor, at, by, byLabel, remarks }) {
     const style = below ? { left, top: r.bottom + 6, width: w } : { left, bottom: window.innerHeight - r.top + 6, width: w };
     return createPortal(
         <div className="aum-tip" role="tooltip" style={style}>
-            <div><span>Date modified:</span> <b>{at || "—"}</b></div>
-            <div><span>{byLabel} by:</span> <b>{by || "—"}</b></div>
-            <div><span>Remarks :</span> <b>{remarks || "—"}</b></div>
+            <div><span>Remarks :</span> <b>{remarks}</b></div>
         </div>,
         document.body
     );
