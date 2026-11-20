@@ -28,6 +28,7 @@ export default function AuditMonitoring() {
     const [tab, setTab] = useState("pending");
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
+    const [reload, setReload] = useState(0);
 
     useEffect(() => { apiFetch("/monitoring/audit/lookups").then(setLk).catch(() => setLk({})); }, []);
 
@@ -41,7 +42,7 @@ export default function AuditMonitoring() {
             .then((r) => alive && setData(r))
             .catch((e) => alive && setError(e.status === 403 ? "Only auditors and supervisors can see the audit monitoring." : e.message || "Couldn't load the aging."));
         return () => { alive = false; };
-    }, [year, mon, auditor]);
+    }, [year, mon, auditor, reload]);
 
     const shiftYear = (n) => setYear((y) => String(Math.min(THIS_YEAR, Math.max(2020, Number(y || THIS_YEAR) + n))));
 
@@ -80,6 +81,12 @@ export default function AuditMonitoring() {
                         </select>
                     </label>
                 )}
+                <div className="aum-field">
+                    <span className="field-label">&nbsp;</span>
+                    <button type="button" className="btn btn-primary" onClick={() => setReload((n) => n + 1)} disabled={!data && !error}>
+                        {!data && !error ? "Loading…" : "Refresh"}
+                    </button>
+                </div>
             </section>
 
             <AuditAging data={data} error={error} tab={tab} year={year} month={mon} onMonth={setMonth} auditorId={auditor} />
@@ -202,6 +209,8 @@ function AgingList({ q, year, month, auditorId, onClose }) {
     const count = (t) => rows.filter((r) => !t || r.type === t).length;
     const shown = type ? rows.filter((r) => r.type === type) : rows;
     const dateLabel = q.kind === "pending" ? "Entered" : q.kind === "audited" ? "Audited" : "Reverted";
+    const withRemarks = q.kind !== "pending";   // audited / reverted → the auditor's remarks
+    const [tip, setTip] = useState(null);       // { el, v } — remarks tooltip
 
     const openInvoice = async (v) => {
         if (opening) return;
@@ -234,11 +243,11 @@ function AgingList({ q, year, month, auditorId, onClose }) {
                             <thead>
                                 <tr>
                                     <th className="num">#</th>{!q.caid && <th>Branch Code - Trade Name</th>}<th>Type</th><th>Document No</th><th>Declared Month</th>
-                                    <th>{dateLabel}</th><th className="num">Days</th><th className="num">Amount</th><th>Status</th>
+                                    <th>{dateLabel}</th><th className="num">Days</th><th className="num">Amount</th><th>Status</th>{withRemarks && <th>Remarks</th>}
                                 </tr>
                             </thead>
                             <tbody>
-                                {!shown.length && <tr><td colSpan={q.caid ? 8 : 9} className="muted" style={{ textAlign: "center", padding: 20 }}>Nothing here.</td></tr>}
+                                {!shown.length && <tr><td colSpan={(q.caid ? 8 : 9) + (withRemarks ? 1 : 0)} className="muted" style={{ textAlign: "center", padding: 20 }}>Nothing here.</td></tr>}
                                 {shown.map((v, i) => (
                                     <tr key={`${v.invoice_no}-${i}`} className="add-click" tabIndex={0} title={`Open ${v.invoice_no}`}
                                         onClick={() => openInvoice(v)} onKeyDown={(e) => e.key === "Enter" && openInvoice(v)}>
@@ -251,6 +260,11 @@ function AgingList({ q, year, month, auditorId, onClose }) {
                                         <td className="num">{fmtN(v.days)}</td>
                                         <td className="num">{fmtAmt(v.amount)}</td>
                                         <td><span className={`add-chip ${ST_TONE[v.status] || ""}`}>{v.status}</span></td>
+                                        {withRemarks && (
+                                            <td className="aum-list-remarks" onMouseEnter={(e) => (v.remarks || v.remarks_by) && setTip({ el: e.currentTarget, v })} onMouseLeave={() => setTip(null)}>
+                                                {v.remarks || <span className="muted">—</span>}
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -260,7 +274,25 @@ function AgingList({ q, year, month, auditorId, onClose }) {
                 </>
             )}
             {frame && <InvoiceFrame inv={frame} onClose={() => setFrame(null)} />}
+            {tip && <RemarkTip anchor={tip.el} at={tip.v.remarks_at || tip.v.since} by={tip.v.remarks_by} byLabel={dateLabel} remarks={tip.v.remarks} />}
         </Modal>
+    );
+}
+
+/* hover tooltip on a remark: Date modified + Remarks (portal, so the table scroll doesn't cut it) */
+function RemarkTip({ anchor, at, by, byLabel, remarks }) {
+    const r = anchor.getBoundingClientRect();
+    const w = 320;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    const below = r.bottom + 6 + 120 < window.innerHeight;
+    const style = below ? { left, top: r.bottom + 6, width: w } : { left, bottom: window.innerHeight - r.top + 6, width: w };
+    return createPortal(
+        <div className="aum-tip" role="tooltip" style={style}>
+            <div><span>Date modified:</span> <b>{at || "—"}</b></div>
+            <div><span>{byLabel} by:</span> <b>{by || "—"}</b></div>
+            <div><span>Remarks :</span> <b>{remarks || "—"}</b></div>
+        </div>,
+        document.body
     );
 }
 

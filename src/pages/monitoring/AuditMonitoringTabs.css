@@ -448,3 +448,39 @@
     height: 14px;
     border-radius: 6px;
 }
+
+/* remarks column in the invoice list (audited / reverted) */
+.aum-list-remarks {
+    max-width: 280px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* remarks tooltip */
+.aum-list-remarks {
+    cursor: help;
+}
+
+.aum-tip {
+    position: fixed;
+    z-index: 3000;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #1f2937;
+    color: #fff;
+    font-size: 12.5px;
+    line-height: 1.5;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+    pointer-events: none;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.aum-tip span {
+    color: #cbd5e1;
+}
+
+.aum-tip b {
+    font-weight: 600;
+}
