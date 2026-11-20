@@ -1,0 +1,83 @@
+/* Dashboard tile popup: clickable rows + Billing popup frame */
+.dsh-row-click {
+    cursor: pointer;
+}
+
+.dsh-row-click:hover td {
+    background: var(--hover, rgba(37, 99, 235, .06));
+}
+
+.dsh-frame-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, .45);
+}
+
+.dsh-frame {
+    display: flex;
+    flex-direction: column;
+    width: min(1500px, 100%);
+    height: min(92dvh, 100%);
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--card);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+}
+
+.dsh-frame-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.dsh-frame-head span {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.dsh-frame-head small {
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dsh-frame iframe {
+    flex: 1;
+    width: 100%;
+    border: 0;
+}
+
+/* Billing (SOA dashboard) inside the popup frame: fill the frame, no empty space at the bottom */
+.frame-page>.bd {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 16px);
+    min-height: 0;
+}
+
+.frame-page>.bd>.bd-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.frame-page>.bd>.bd-body>.bd-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+}
+
+.frame-page>.bd>.bd-foot {
+    flex: 0 0 auto;
+}

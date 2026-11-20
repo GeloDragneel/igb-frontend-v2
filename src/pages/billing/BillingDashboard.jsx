@@ -140,7 +140,7 @@ export default function BillingDashboard() {
     setGroups((p.get("groups") || "").split(",").filter((g) => TYPE_OPTS.some(([v]) => v === g)));
     setStatus(p.get("status") || "");
     setQuery(p.get("q") || "");
-    setTab("services");
+    setTab(p.get("tab") === "payments" ? "payments" : "services");
     navigate(location.pathname, { replace: true });   // clean address: a refresh doesn't fill it again
   }, [location.search]); // eslint-disable-line react-hooks/exhaustive-deps
 

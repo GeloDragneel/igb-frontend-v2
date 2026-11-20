@@ -5,6 +5,7 @@
 //   Liaison Officer · Billing & Collection Officer → Billing
 //   anything else → nothing
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
     Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
@@ -17,6 +18,7 @@ import "./Dashboard.css";
 import "./DashboardRoles.css";
 import "./DashboardLoading.css";
 import "./DashboardDoubtful.css";
+import "./DashboardFrame.css";
 
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n0 = (v) => (Number(v) || 0).toLocaleString("en-PH");
@@ -760,6 +762,7 @@ function KpiPopup({ kpi, period, onClose }) {
     const [error, setError] = useState("");
     const [q, setQ] = useState("");
     const [type, setType] = useState("All"); // All | PF | EO
+    const [frame, setFrame] = useState(null); // row opened in Billing → SOA dashboard
     const info = KPI_INFO[kpi];
     const cols = KPI_COLS[kpi];
 
@@ -807,10 +810,36 @@ function KpiPopup({ kpi, period, onClose }) {
                     </div>
                     <input className="input dsh-pop-search" type="search" placeholder="Search client, trade name, SOA #, OR #…" value={q}
                         onChange={(e) => setQ(e.target.value)} aria-label="Search" />
-                    <Table cols={cols} rows={rows} busy={false} rowKey="id" />
+                    <Table cols={cols} rows={rows} busy={false} rowKey="id" onRow={(r) => r.ca_id && setFrame(r)} />
                 </>
             )}
+            {frame && <BillingFrame row={frame} payments={kpi === "collected" || kpi === "deposited"} onClose={() => setFrame(null)} />}
         </Modal>
+    );
+}
+
+/* Billing → SOA dashboard of that account / SOA in a popup frame */
+function BillingFrame({ row, payments, onClose }) {
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+        const onKey = (e) => e.key === "Escape" && onClose();
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose]);
+    const qs = new URLSearchParams({ ca_id: row.ca_id, ...(row.trans_number ? { trans_number: row.trans_number } : {}), ...(payments ? { tab: "payments" } : {}) });
+    const src = `/view/billing?${qs}`;
+    return createPortal(
+        <div className="dsh-frame-bg" onClick={onClose}>
+            <div className="dsh-frame" role="dialog" aria-label={`SOA ${row.trans_number || ""}`} onClick={(e) => e.stopPropagation()}>
+                <div className="dsh-frame-head">
+                    <span><b>{row.trans_number || "SOA"}</b><small>{row.client_name}{row.branch ? ` · ${row.branch}` : ""}{row.service ? ` · ${row.service}` : ""}</small></span>
+                    <button type="button" className="btn" onClick={onClose}>Close</button>
+                </div>
+                {!loaded && <p className="dsh-plot-msg">Loading…</p>}
+                <iframe title="Billing" src={src} onLoad={() => setLoaded(true)} style={loaded ? undefined : { visibility: "hidden" }} />
+            </div>
+        </div>,
+        document.body
     );
 }
 
@@ -870,7 +899,7 @@ function TableSection({ title, sub, cols, rows = [], busy, rowKey, file }) {
     );
 }
 
-function Table({ cols, rows, busy, rowKey }) {
+function Table({ cols, rows, busy, rowKey, onRow }) {
     const totals = useMemo(() => Object.fromEntries(cols.filter((c) => c.sum).map((c) => [c.key, sumBy(rows, c.key)])), [cols, rows]);
     const fmt = (c, v) => (c.money ? n2(v) : c.sum ? n0(v) : v || "—");
     return (
@@ -886,7 +915,8 @@ function Table({ cols, rows, busy, rowKey }) {
                     {busy && <tr><td className="dsh-empty" colSpan={cols.length + 1}>Loading…</td></tr>}
                     {!busy && !rows.length && <tr><td className="dsh-empty" colSpan={cols.length + 1}>No record found.</td></tr>}
                     {!busy && rows.map((r, i) => (
-                        <tr key={r[rowKey] ?? i}>
+                        <tr key={r[rowKey] ?? i} className={onRow && r.ca_id ? "dsh-row-click" : undefined}
+                            onClick={onRow ? () => onRow(r) : undefined} title={onRow && r.ca_id ? `Open ${r.trans_number || "the SOA"} in Billing` : undefined}>
                             <td className="c">{i + 1}</td>
                             {cols.map((c) => (c.kind === "client"
                                 ? (

@@ -296,6 +296,8 @@ export default function App() {
       <Route path="/view/sales/:id" element={<RequireAuth><div className="frame-page"><SalesDetail /></div></RequireAuth>} />
       <Route path="/view/purchases/:id" element={<RequireAuth><div className="frame-page"><PurchaseDetail /></div></RequireAuth>} />
       <Route path="/view/expenses/:id" element={<RequireAuth><div className="frame-page"><ExpenseDetail /></div></RequireAuth>} />
+      {/* Billing → SOA dashboard only — shown inside a popup frame (Dashboard tile popups) */}
+      <Route path="/view/billing" element={<RequireAuth><div className="frame-page"><BillingDashboard /></div></RequireAuth>} />
       {/* Everything else needs a login */}
       <Route
         element={
