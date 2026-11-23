@@ -1,0 +1,313 @@
+/* Lending → investment popup: transaction type pills */
+.ln-txn {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--muted, #64748b) 14%, transparent);
+    color: var(--ink, #111827);
+}
+
+.ln-txn.is-deposit {
+    background: color-mix(in srgb, #2563eb 14%, transparent);
+    color: #1d4ed8;
+}
+
+.ln-txn.is-top_up {
+    background: color-mix(in srgb, #16a34a 14%, transparent);
+    color: #15803d;
+}
+
+.ln-txn.is-interest {
+    background: color-mix(in srgb, #d97706 16%, transparent);
+    color: #b45309;
+}
+
+.ln-txn.is-cashout_interest,
+.ln-txn.is-cashout_principal {
+    background: color-mix(in srgb, #dc2626 13%, transparent);
+    color: #b91c1c;
+}
+
+/* Lending → Dashboard tab (IGBLending Excel dashboard) */
+.ln-page {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+}
+
+.ln-page-side,
+.ln-page-main {
+    min-width: 0;
+}
+
+.ln-page-main {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+@media (max-width: 900px) {
+    .ln-page {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.ln-dash {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ln-dash-asof {
+    font-size: 12px;
+    color: var(--muted, #64748b);
+}
+
+.ln-dash-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--muted, #64748b);
+}
+
+.ln-dash-tiles {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+}
+
+.ln-dash-tile {
+    --c: #2563eb;
+    border: 1px solid var(--line, #e5e7eb);
+    border-top: 4px solid var(--c);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--card, #fff);
+}
+
+.ln-dash-tile.is-blue {
+    --c: #2563eb;
+}
+
+.ln-dash-tile.is-teal {
+    --c: #0d9488;
+}
+
+.ln-dash-tile.is-orange {
+    --c: #d97706;
+}
+
+.ln-dash-tile.is-green {
+    --c: #16a34a;
+}
+
+.ln-dash-tile.is-red {
+    --c: #dc2626;
+}
+
+.ln-dash-tile.is-purple {
+    --c: #7c3aed;
+}
+
+.ln-dash-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--muted, #64748b);
+}
+
+.ln-dash-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--c);
+    margin: 4px 0 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+.ln-dash-sub {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted, #64748b);
+    border-top: 1px dashed var(--line, #e5e7eb);
+    padding-top: 4px;
+    margin-top: 4px;
+}
+
+.ln-dash-sub b {
+    color: var(--ink, #111827);
+    font-variant-numeric: tabular-nums;
+}
+
+.ln-dash-lists {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ln-dash-list {
+    --c: #dc2626;
+    border: 1px solid var(--line, #e5e7eb);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card, #fff);
+}
+
+.ln-dash-list.is-orange {
+    --c: #d97706;
+}
+
+.ln-dash-list-head {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--c);
+    color: #fff;
+    font-weight: 700;
+}
+
+.ln-dash-list-body {
+    max-height: 300px;
+    overflow: auto;
+}
+
+.ln-dash-ref {
+    display: block;
+    font-size: 11px;
+    color: var(--muted, #64748b);
+}
+
+.ln-dash-list table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.ln-dash-list th {
+    position: sticky;
+    top: 0;
+    background: var(--head, #f8fafc);
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line, #e5e7eb);
+    font-weight: 600;
+}
+
+.ln-dash-list td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line, #e5e7eb);
+}
+
+.ln-dash-list td small {
+    color: var(--muted, #64748b);
+}
+
+.ln-dash-list .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ln-dash-none {
+    text-align: center;
+    color: var(--muted, #64748b);
+}
+
+/* Lending → Loans: status filter colors */
+.ln-chips .ln-st {
+    --st: #2563eb;
+    color: var(--st);
+}
+
+.ln-chips .ln-st.is-all {
+    --st: #2563eb;
+}
+
+.ln-chips .ln-st.is-pending {
+    --st: #d97706;
+}
+
+.ln-chips .ln-st.is-approved {
+    --st: #0891b2;
+}
+
+.ln-chips .ln-st.is-released {
+    --st: #16a34a;
+}
+
+.ln-chips .ln-st.is-paid {
+    --st: #7c3aed;
+}
+
+.ln-chips .ln-st.is-rejected {
+    --st: #dc2626;
+}
+
+.ln-chips .ln-st.is-cancelled {
+    --st: #64748b;
+}
+
+.ln-chips .ln-st:not(.is-all)::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--st);
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.ln-chips .ln-st:hover {
+    background: color-mix(in srgb, var(--st) 10%, transparent);
+}
+
+.ln-chips .ln-st.is-on {
+    background: var(--st);
+    color: #fff;
+}
+
+.ln-chips .ln-st.is-on::before {
+    background: #fff;
+}
+
+/* Lending → loan status pills (same colors as the status filter) */
+.ln-lst {
+    --st: #64748b;
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--st);
+    background: color-mix(in srgb, var(--st) 14%, transparent);
+}
+
+.ln-lst.is-pending {
+    --st: #d97706;
+}
+
+.ln-lst.is-approved {
+    --st: #0891b2;
+}
+
+.ln-lst.is-released {
+    --st: #16a34a;
+}
+
+.ln-lst.is-paid {
+    --st: #7c3aed;
+}
+
+.ln-lst.is-rejected {
+    --st: #dc2626;
+}
+
+.ln-lst.is-cancelled {
+    --st: #64748b;
+}

@@ -1,53 +1,154 @@
 // Lending: investments (invest / top up / cash out anytime), loans (apply → approve → release → pay), members, settings
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 import SearchSelect from "../../components/SearchSelect";
-import { Badge, DataTable, EmployeeSelect, Field, Pager, Stat, Tabs, api, fmtDate, n2, pct, todayPH, useForm, usePaged } from "./HRShared";
+import { Badge, DataTable, EmployeeSelect, Field, Pager, Tabs, api, fmtDate, n2, pct, todayPH, useForm, usePaged } from "./HRShared";
 import "./Lending.css";
+import "./LendingInvest.css";
 
-const RATE_LABEL = { per_day: "per day", per_month: "per month", fixed: "fixed" };
-const rateText = (r) => (r.interest_type === "fixed" ? `${n2(r.fixed_interest)} fixed` : `${pct(r.interest_rate, 3)} ${RATE_LABEL[r.interest_type]}`);
+const RATE_LABEL = { per_day: "per day", per_month: "per month", fixed: "fixed", flat: "per due · flat" };
+const rateText = (r) => (r.interest_type === "fixed" ? `${n2(r.fixed_interest)} fixed` : `${pct(r.interest_rate, 3)} ${RATE_LABEL[r.interest_type] || ""}`);
+// how often the dues fall
+const FREQ_LABEL = { semi_monthly: "every 15th / end", monthly: "monthly", weekly: "weekly" };
+// Excel penalty: 5% a month on the overdue due = 0.05 / 30 a day
+const EXCEL_PENALTY = 0.001667;
+const termText = (r) => (r.interest_type === "flat"
+  ? `${r.dues || r.term_months} dues · ${FREQ_LABEL[r.due_frequency] || r.due_frequency}`
+  : `${r.term_months} mo · ${r.due_frequency === "semi_monthly" ? "every cut-off" : FREQ_LABEL[r.due_frequency] || "monthly"}`);
 
 export default function Lending() {
   const notify = useToast();
   const [tab, setTab] = useState("investments");
-  const [summary, setSummary] = useState(null);
   const [lk, setLk] = useState({ members: [], settings: [] });
   const [tick, setTick] = useState(0);
   const refresh = () => setTick((t) => t + 1);
 
   useEffect(() => {
-    api.get("/lending/summary").then(setSummary).catch(() => { });
     Promise.all([api.get("/lending/members"), api.get("/hr/lookups")])
       .then(([members, l]) => setLk({ members, settings: l.lending })).catch(() => { });
   }, [tick]);
 
   const ctx = { notify, lk, refresh, tick };
+  const mainRef = useFitTable();
   return (
     <div className="hr">
-      <div className="hr-stats">
-        <Stat label="Active investments" value={n2(summary?.active_investments)} />
-        <Stat label="Interest owed to investors" value={n2(summary?.interest_owed_to_investors)} tone="is-orange" />
-        <Stat label="Loans outstanding" value={n2(summary?.loans_outstanding)} tone="is-red" />
-        <Stat label="Loan interest earned" value={n2(summary?.loan_interest_earned)} tone="is-green" />
-        <Stat label="Cash on hand" value={n2(summary?.cash_on_hand)} sub="invested − cashed out − released + collected" />
+      <div className="ln-page">
+        <aside className="ln-page-side"><Dashboard {...ctx} /></aside>
+        <div className="ln-page-main" ref={mainRef}>
+          <Tabs value={tab} onChange={setTab} tabs={[["investments", "Investments"], ["loans", "Loans"], ["dues", "Over Due / Due Today"], ["members", "Members"], ["settings", "Settings"]]} />
+          {tab === "investments" && <Investments {...ctx} />}
+          {tab === "loans" && <Loans {...ctx} />}
+          {tab === "dues" && <Dues {...ctx} />}
+          {tab === "members" && <Members {...ctx} />}
+          {tab === "settings" && <Settings {...ctx} />}
+        </div>
       </div>
-      <Tabs value={tab} onChange={setTab} tabs={[["investments", "Investments"], ["loans", "Loans"], ["members", "Members"], ["settings", "Settings"]]} />
-      {tab === "investments" && <Investments {...ctx} />}
-      {tab === "loans" && <Loans {...ctx} />}
-      {tab === "members" && <Members {...ctx} />}
-      {tab === "settings" && <Settings {...ctx} />}
     </div>
   );
 }
 
+/* Dashboard — same tiles as the IGBLending Excel dashboard */
+function Dashboard({ tick }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+  useEffect(() => { setD(null); setErr(""); api.get("/lending/dashboard").then(setD).catch((e) => { setErr(e?.message || ""); setD(false); }); }, [tick]);
+  if (d === false) return <div className="ln-dash-empty">Couldn't load the dashboard.{err && <><br /><small>{err}</small></>}</div>;
+  const v = (k) => (d ? n2(d[k]) : "…");
+  const Tile = ({ label, k, tone, subs = [] }) => (
+    <div className={`ln-dash-tile ${tone || ""}`}>
+      <div className="ln-dash-label">{label}</div>
+      <div className="ln-dash-value">{v(k)}</div>
+      {subs.map(([l, sk]) => (
+        <div className="ln-dash-sub" key={sk}><span>{l}</span><b>{v(sk)}</b></div>
+      ))}
+    </div>
+  );
+  return (
+    <div className="ln-dash">
+      <div className="ln-dash-asof">As of {d ? fmtDate(d.as_of) : "…"}</div>
+      <div className="ln-dash-tiles">
+        <Tile label="Capital" k="capital" tone="is-blue" subs={[["Total Investment", "total_investment"]]} />
+        <Tile label="Cash Balance" k="cash_balance" tone="is-teal" subs={[["Withdrawal", "withdrawal"]]} />
+        <Tile label="Total Lent" k="total_lent" tone="is-orange" />
+        <Tile label="Total Collected" k="total_collected" tone="is-green" subs={[["Principal", "collected_principal"]]} />
+        <Tile label="Total Receivable" k="total_receivable" tone="is-red" subs={[["Outstanding Principal", "outstanding_principal"], ["Future Interest", "future_interest"]]} />
+        <Tile label="Net Profit" k="net_profit" tone="is-purple" />
+      </div>
+    </div>
+  );
+}
+
+/* Over Due / Due Today — unpaid dues of released loans */
+function Dues({ tick }) {
+  const [d, setD] = useState(null);
+  const [show, setShow] = useState("overdue");
+  const [q, setQ] = useState("");
+  useEffect(() => { setD(null); api.get("/lending/dashboard").then(setD).catch(() => setD({ overdue: [], due_today: [] })); }, [tick]);
+  const rows = useMemo(() => matches(d?.[show] || null, q, (r) => [r.name, r.code, r.reference_no]), [d, show, q]);
+  return (
+    <section className="card hr-section">
+      <SectionBar>
+        <Chips label="Show" value={show} onChange={setShow}
+          options={[["overdue", "Over Due", d?.overdue?.length], ["due_today", "Due Today", d?.due_today?.length]]} />
+        <input className="input ln-search" type="search" placeholder="Search LN #, borrower, ID…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search dues" />
+      </SectionBar>
+      <DataTable loading={!d} rows={rows || []} totals={["amount"]} empty={q ? "No due matches the search." : "None"}
+        cols={[
+          { key: "name", label: "Borrower", render: (r) => <><b>{r.name}</b>{r.code && <span className="hr-sub">{r.code}</span>}</> },
+          { key: "reference_no", label: "Loan #" },
+          { key: "due_no", label: "Due #", cls: "c" },
+          { key: "due_date", label: "Due date", render: (r) => fmtDate(r.due_date) },
+          ...(show === "overdue" ? [{ key: "days_late", label: "Days late", cls: "n" }] : []),
+          { key: "deduction_mode", label: "Pay by", render: (r) => (r.deduction_mode === "payroll" ? "Payroll" : "Manual") },
+          { key: "amount", label: "Amount", cls: "n", money: true },
+        ]} />
+    </section>
+  );
+}
+
+/** stretch the table's scroll box down to the bottom of the screen (no empty space under it) */
+function useFitTable() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return undefined;
+    let raf = 0;
+    const fit = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const box = [...root.querySelectorAll("*")].find((el) => {
+          const o = getComputedStyle(el).overflowY;
+          return (o === "auto" || o === "scroll") && el.querySelector("table");
+        });
+        if (!box) return;
+        const sec = box.closest("section") || root;
+        const below = sec.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom;
+        box.style.maxHeight = `${Math.max(240, window.innerHeight - box.getBoundingClientRect().top - below - 16)}px`;
+      });
+    };
+    const mo = new MutationObserver(fit);
+    mo.observe(root, { childList: true, subtree: true });
+    window.addEventListener("resize", fit);
+    fit();
+    return () => { cancelAnimationFrame(raf); mo.disconnect(); window.removeEventListener("resize", fit); };
+  }, []);
+  return ref;
+}
+
 const fail = (notify) => (e) => notify(e.message || "Couldn't save.", "error");
+
+/** rows whose fields contain the search text (ref #, name, borrower ID …) */
+const matches = (rows, q, pick) => {
+  const term = q.trim().toLowerCase();
+  if (!term || !rows) return rows;
+  return rows.filter((r) => pick(r).some((v) => String(v ?? "").toLowerCase().includes(term)));
+};
 
 /* members + active employees (an employee becomes a member on his first investment / loan) · value = row.key ("m12" member, "e34" employee) */
 function MemberSelect({ members, value, onChange }) {
   const options = members.filter((m) => m.is_active).map((m) => ({
-    value: m.key, label: `${m.name} · ${m.member_type === "employee" ? "Employee" : "Outside"}`,
+    value: m.key, label: `${m.code ? `${m.code} · ` : ""}${m.name} · ${m.member_type === "employee" ? "Employee" : "Outside"}`,
   }));
   return <SearchSelect value={value} onChange={(v) => onChange(v ? String(v) : "")} options={options} searchPlaceholder="Search employee or member..." aria-label="Member" />;
 }
@@ -59,11 +160,11 @@ function SectionBar({ children }) {
 }
 
 /** filter chips: [[value, label, count?]] */
-function Chips({ value, onChange, options, label }) {
+function Chips({ value, onChange, options, label, tones }) {
   return (
     <div className="ln-chips" role="radiogroup" aria-label={label}>
       {options.map(([v, l, n]) => (
-        <button key={l} type="button" role="radio" aria-checked={value === v} className={value === v ? "is-on" : ""} onClick={() => onChange(v)}>
+        <button key={l} type="button" role="radio" aria-checked={value === v} className={`${value === v ? "is-on" : ""}${tones ? ` ln-st is-${v || "all"}` : ""}`} onClick={() => onChange(v)}>
           {l}{n !== undefined && <em>{n}</em>}
         </button>
       ))}
@@ -78,6 +179,8 @@ function Investments({ notify, lk, refresh, tick }) {
   const [status, setStatus] = useState("active");
   const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(null);
+  const [q, setQ] = useState("");
+  const shown = useMemo(() => matches(rows, q, (r) => [r.reference_no, r.member?.name, r.member?.code]), [rows, q]);
   useEffect(() => { setRows(null); api.get(`/lending/investments${status ? `?status=${status}` : ""}`).then(setRows).catch(() => setRows([])); }, [status, tick]);
   const done = (msg) => { notify(msg); setModal(null); refresh(); };
 
@@ -85,9 +188,10 @@ function Investments({ notify, lk, refresh, tick }) {
     <section className="card hr-section">
       <SectionBar>
         <Chips label="Status" value={status} onChange={setStatus} options={[["active", "Active"], ["closed", "Closed"], ["", "All"]]} />
+        <input className="input ln-search" type="search" placeholder="Search ref #, investor, ID…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search investments" />
         <button type="button" className="btn btn-primary btn-sm" onClick={() => setModal({ type: "invest" })}>New investment</button>
       </SectionBar>
-      <DataTable loading={!rows} rows={rows || []} onRow={(r) => setModal({ type: "view", id: r.id })}
+      <DataTable loading={!rows} rows={shown || []} empty={q ? "No investment matches the search." : undefined} onRow={(r) => setModal({ type: "view", id: r.id })}
         cols={[
           { key: "reference_no", label: "Ref #", render: (r) => <><b>{r.reference_no}</b><span className="hr-sub">{fmtDate(r.date_invested)}</span></> },
           { key: "member", label: "Investor", render: (r) => r.member?.name },
@@ -148,83 +252,118 @@ function InvestModal({ lk, onClose, onDone, onFail }) {
   );
 }
 
+const TXN_LABEL = { deposit: "Deposit", top_up: "Top-up", interest: "Interest", cashout_interest: "Cash-out · interest", cashout_principal: "Cash-out · principal" };
+
 function InvestmentView({ id, notify, onClose, onChanged }) {
   const [asOf, setAsOf] = useState(todayPH());
   const [data, setData] = useState(null);
   const [mode, setMode] = useState(null); // top-up | cashout
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(todayPH());
+  const [busy, setBusy] = useState(false);
   const load = useCallback(() => { api.get(`/lending/investments/${id}?as_of=${asOf}`).then(setData).catch(() => setData(false)); }, [id, asOf]);
   useEffect(() => { load(); }, [load]);
 
   const submit = () => {
     const url = `/lending/investments/${id}/${mode === "top-up" ? "top-up" : "cashout"}`;
+    setBusy(true);
     api.post(url, { amount: amount === "" ? null : Number(amount), date })
       .then((r) => { notify(r.message); setMode(null); setAmount(""); load(); onChanged(); })
-      .catch(fail(notify));
+      .catch(fail(notify))
+      .finally(() => setBusy(false));
   };
   const inv = data?.investment;
   const p = data?.preview;
+  const txns = inv?.transactions || [];
+  const active = inv?.status === "active";
+
   return (
-    <Modal title={inv ? `${inv.reference_no} · ${inv.member?.name}` : "Investment"} onClose={onClose} size="xl"
-      footer={<button className="btn btn-primary" onClick={onClose}>Close</button>}>
-      {!data && <p className="hr-muted">Loading…</p>}
+    <Modal title={inv ? `Investment ${inv.reference_no}` : "Investment"} onClose={onClose} size="lg"
+      footer={<button className="btn" onClick={onClose}>Close</button>}>
+      {data === null && <p className="hr-muted">Loading…</p>}
+      {data === false && <p className="hr-muted">Couldn't load this investment.</p>}
       {inv && (
-        <>
-          <div className="hr-kv">
-            <div><span>Interest</span><b>{rateText(inv)}</b></div>
-            <div><span>Invested since</span><b>{fmtDate(inv.date_invested)}</b></div>
-            <div><span>Total put in</span><b>{n2(inv.total_invested)}</b></div>
-            <div><span>Total cashed out</span><b>{n2(inv.total_cashed_out)}</b></div>
-            <div><span>Principal now</span><b>{n2(inv.principal_balance)}</b></div>
-            <div><span>Status</span><b><Badge status={inv.status} /></b></div>
+        <div className="ln-view">
+          {/* who + value */}
+          <section className="ln-hero">
+            <div className="ln-hero-who">
+              <small>Investor</small>
+              <b>{inv.member?.name || "—"}</b>
+              <div className="ln-hero-tags">
+                <Badge status={inv.status} />
+                {inv.member?.code && <span>{inv.member.code}</span>}
+                <span>{rateText(inv)}</span>
+                <span>since {fmtDate(inv.date_invested)}</span>
+              </div>
+            </div>
+            <div className="ln-hero-bal">
+              <small>{active ? `Cash-out value · ${fmtDate(asOf)}` : "Total cashed out"}</small>
+              <b>{n2(active && p ? p.cashout_value : inv.total_cashed_out)}</b>
+              {active && p && <span>{n2(inv.principal_balance)} principal + {n2(p.interest_earned)} interest</span>}
+            </div>
+          </section>
+
+          {/* the numbers */}
+          <div className="ln-tiles">
+            <div><small>Total put in</small><b>{n2(inv.total_invested)}</b><span>{txns.length} deposit / top-up{txns.length === 1 ? "" : "s"}</span></div>
+            <div><small>Principal now</small><b>{n2(inv.principal_balance)}</b><span>still invested</span></div>
+            <div><small>Interest earned</small><b>{n2(active && p ? p.interest_earned : inv.total_interest_earned)}</b><span>{active && p ? `${p.days_invested} day(s) invested` : ""}</span></div>
+            <div><small>Cashed out</small><b>{n2(inv.total_cashed_out)}</b><span>{inv.closed_at ? `closed ${fmtDate(inv.closed_at)}` : "so far"}</span></div>
           </div>
 
-          {inv.status === "active" && p && (
-            <>
-              <div className="hr-form">
-                <Field label="If cashed out on"><input type="date" className="input" value={asOf} min={String(inv.last_accrual_date).slice(0, 10)} onChange={(e) => setAsOf(e.target.value)} /></Field>
-              </div>
-              <div className="hr-kv">
-                <div><span>Days invested</span><b>{p.days_invested}</b></div>
-                <div><span>Interest earned</span><b>{n2(p.interest_earned)}</b></div>
-                <div className="is-big"><span>Cash-out value</span><b>{n2(p.cashout_value)}</b></div>
-              </div>
-              {p.in_lock_in && <p className="hr-note is-warn">Still in the lock-in until {fmtDate(p.lock_in_ends)}: cashing out now pays the principal only.</p>}
-
-              {!mode && (
-                <div className="hr-actions">
-                  <button type="button" className="btn" onClick={() => { setMode("top-up"); setDate(todayPH()); }}>Top up</button>
-                  <button type="button" className="btn btn-primary" onClick={() => { setMode("cashout"); setDate(asOf); }}>Cash out</button>
+          {/* what to do now */}
+          {active && p && (
+            <section className="ln-act">
+              <header>
+                <b>{mode === "top-up" ? "Add a top-up" : mode === "cashout" ? "Cash out" : "Top up or cash out"}</b>
+                <span>{mode === "cashout" ? "Leave the amount empty to cash out everything and close the investment." : "Interest is counted to the day."}</span>
+              </header>
+              {!mode ? (
+                <div className="ln-act-row">
+                  <Field label="Value if cashed out on">
+                    <input type="date" className="input" value={asOf} min={String(inv.last_accrual_date).slice(0, 10)} onChange={(e) => setAsOf(e.target.value)} />
+                  </Field>
+                  <div className="ln-act-btns">
+                    <button type="button" className="btn" onClick={() => { setMode("top-up"); setDate(todayPH()); }}>Top up</button>
+                    <button type="button" className="btn btn-primary" onClick={() => { setMode("cashout"); setDate(asOf); }}>Cash out</button>
+                  </div>
                 </div>
-              )}
-              {mode && (
-                <div className="hr-form">
-                  <Field label={mode === "top-up" ? "Top-up amount" : "Cash-out amount"} hint={mode === "cashout" ? "Empty = everything (closes the investment)" : ""}>
-                    <input type="number" min="0.01" className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              ) : (
+                <div className="ln-act-row is-pay">
+                  <Field label={mode === "top-up" ? "Top-up amount" : "Cash-out amount"}>
+                    <input type="number" min="0.01" step="0.01" className="input" value={amount} onChange={(e) => setAmount(e.target.value)}
+                      placeholder={mode === "cashout" ? `All · ${n2(p.cashout_value)}` : "0.00"} autoFocus />
                   </Field>
                   <Field label="Date"><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-                  <div className="hr-actions">
-                    <button type="button" className="btn" onClick={() => setMode(null)}>Back</button>
-                    <button type="button" className="btn btn-primary" onClick={submit} disabled={mode === "top-up" && !(Number(amount) > 0)}>
+                  <div className="ln-act-btns">
+                    <button type="button" className="btn" onClick={() => { setMode(null); setAmount(""); }} disabled={busy}>Back</button>
+                    <button type="button" className="btn btn-primary" onClick={submit} disabled={busy || (mode === "top-up" && !(Number(amount) > 0))}>
                       {mode === "top-up" ? "Save top-up" : amount ? `Cash out ${n2(amount)}` : "Cash out everything"}
                     </button>
                   </div>
                 </div>
               )}
-            </>
+              {p.in_lock_in && <p className="hr-note is-warn">Still in the lock-in until {fmtDate(p.lock_in_ends)}: cashing out now pays the principal only.</p>}
+            </section>
           )}
 
-          <h6 className="hr-muted">Statement</h6>
-          <DataTable rows={inv.transactions || []} cols={[
-            { key: "txn_date", label: "Date", render: (t) => fmtDate(t.txn_date) },
-            { key: "txn_type", label: "Type", render: (t) => t.txn_type.replace(/_/g, " ") },
-            { key: "remarks", label: "Details", cls: "wrap", render: (t) => <>{t.remarks}{t.days ? <span className="hr-sub">{t.days} day(s)</span> : null}</> },
-            { key: "amount", label: "Amount", cls: "n", money: true },
-            { key: "principal_after", label: "Principal", cls: "n", money: true },
-            { key: "interest_after", label: "Interest", cls: "n", money: true },
-          ]} />
-        </>
+          {/* statement */}
+          <div className="ln-lists">
+            <div className="ln-seg" role="tablist">
+              <button type="button" className="is-on">Statement ({txns.length})</button>
+            </div>
+            {!txns.length ? <p className="ln-none">No transaction yet.</p> : (
+              <DataTable rows={txns} totals={["amount"]} cols={[
+                { key: "txn_date", label: "Date", render: (t) => fmtDate(t.txn_date) },
+                { key: "txn_type", label: "Type", render: (t) => <span className={`ln-txn is-${t.txn_type}`}>{TXN_LABEL[t.txn_type] || t.txn_type.replace(/_/g, " ")}</span> },
+                { key: "remarks", label: "Reference", cls: "wrap", render: (t) => <>{String(t.remarks || "—").split(" · ")[0]}{t.days ? <span className="hr-sub">{t.days} day(s)</span> : null}</> },
+                { key: "amount", label: "Amount", cls: "n", money: true },
+                { key: "principal_after", label: "Principal after", cls: "n", money: true },
+                { key: "interest_after", label: "Interest after", cls: "n", money: true },
+              ]} />
+            )}
+          </div>
+        </div>
       )}
     </Modal>
   );
@@ -237,29 +376,32 @@ function Loans({ notify, lk, refresh, tick }) {
   const [status, setStatus] = useState("");
   const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(null);
+  const [q, setQ] = useState("");
+  const shown = useMemo(() => matches(rows, q, (r) => [r.reference_no, r.member?.name, r.member?.code, r.purpose, r.co_maker, r.collection_method]), [rows, q]);
   useEffect(() => { setRows(null); api.get(`/lending/loans${status ? `?status=${status}` : ""}`).then(setRows).catch(() => setRows([])); }, [status, tick]);
   const done = (msg) => { notify(msg); setModal(null); refresh(); };
 
   return (
     <section className="card hr-section">
       <SectionBar>
-        <Chips label="Status" value={status} onChange={setStatus}
+        <Chips label="Status" value={status} onChange={setStatus} tones
           options={[["", "All"], ["pending", "Pending"], ["approved", "Approved"], ["released", "Released"], ["paid", "Paid"], ["rejected", "Rejected"], ["cancelled", "Cancelled"]]} />
+        <input className="input ln-search" type="search" placeholder="Search LN #, borrower, ID…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search loans" />
         <button type="button" className="btn btn-primary btn-sm" onClick={() => setModal({ type: "apply" })}>New loan</button>
       </SectionBar>
-      <DataTable loading={!rows} rows={rows || []} onRow={(r) => setModal({ type: "view", id: r.id })} totals={["principal", "total_payable", "total_paid", "balance"]}
+      <DataTable loading={!rows} rows={shown || []} empty={q ? "No loan matches the search." : undefined} onRow={(r) => setModal({ type: "view", id: r.id })} totals={["principal", "total_payable", "total_paid", "balance"]}
         cols={[
           { key: "reference_no", label: "Ref #", render: (r) => <><b>{r.reference_no}</b><span className="hr-sub">{r.date_released ? fmtDate(r.date_released) : "not released"}</span></> },
           { key: "member", label: "Borrower", render: (r) => r.member?.name },
           { key: "rate", label: "Interest", render: rateText },
-          { key: "term", label: "Term", render: (r) => `${r.term_months} mo · ${r.due_frequency === "semi_monthly" ? "every cut-off" : "monthly"}` },
+          { key: "term", label: "Term", render: termText },
           { key: "principal", label: "Principal", cls: "n", money: true },
           { key: "total_payable", label: "Payable", cls: "n", money: true },
           { key: "amount_per_due", label: "Per due", cls: "n", money: true },
           { key: "total_paid", label: "Paid", cls: "n", money: true },
           { key: "balance", label: "Balance", cls: "n", money: true },
           { key: "deduction_mode", label: "Pay by", render: (r) => (r.deduction_mode === "payroll" ? "Payroll" : "Manual") },
-          { key: "status", label: "Status", render: (r) => <Badge status={r.status} /> },
+          { key: "status", label: "Status", render: (r) => <LoanStatus status={r.status} /> },
         ]} />
       {modal?.type === "apply" && <LoanApply lk={lk} onClose={() => setModal(null)} onDone={done} onFail={fail(notify)} />}
       {modal?.type === "view" && <LoanView id={modal.id} notify={notify} onClose={() => setModal(null)} onChanged={refresh} />}
@@ -267,21 +409,35 @@ function Loans({ notify, lk, refresh, tick }) {
   );
 }
 
+/** loan status pill — same colors as the status filter */
+const LoanStatus = ({ status }) => <span className={`ln-lst is-${status}`}>{String(status || "").replace(/^\w/, (c) => c.toUpperCase())}</span>;
+
 function LoanApply({ lk, onClose, onDone, onFail }) {
   const settings = lk.settings.filter((s) => s.applies_to === "loan" && s.is_active);
   const def = settings.find((s) => s.is_default) || settings[0];
   const [f, set, setF] = useForm({
     member_id: "", lending_setting_id: def ? String(def.id) : "", principal: "", term_months: 6,
-    interest_type: def?.interest_type || "per_month", interest_rate: def?.interest_rate ?? 0.02, fixed_interest: def?.fixed_interest ?? 0,
-    penalty_rate_per_day: def?.penalty_rate_per_day ?? 0, due_frequency: "monthly", deduction_mode: "payroll", date_released: todayPH(), purpose: "",
+    interest_type: def?.interest_type || "flat", interest_rate: def?.interest_rate ?? 0.025, fixed_interest: def?.fixed_interest ?? 0,
+    penalty_rate_per_day: def?.penalty_rate_per_day ?? EXCEL_PENALTY,
+    due_frequency: (def?.interest_type || "flat") === "flat" ? "semi_monthly" : "monthly",
+    deduction_mode: "payroll", date_released: todayPH(), purpose: "", co_maker: "", collection_method: "Salary Deduction",
   });
+  const flat = f.interest_type === "flat";
   const [preview, setPreview] = useState(null);
   const member = lk.members.find((m) => m.key === f.member_id);
   const pick = (id) => {
     const s = settings.find((x) => String(x.id) === id);
-    setF((p) => ({ ...p, lending_setting_id: id, ...(s && { interest_type: s.interest_type, interest_rate: s.interest_rate, fixed_interest: s.fixed_interest, penalty_rate_per_day: s.penalty_rate_per_day }) }));
+    setF((p) => ({
+      ...p, lending_setting_id: id, ...(s && {
+        interest_type: s.interest_type, interest_rate: s.interest_rate, fixed_interest: s.fixed_interest, penalty_rate_per_day: s.penalty_rate_per_day,
+        due_frequency: s.interest_type === "flat" ? (p.due_frequency || "semi_monthly") : p.due_frequency === "weekly" ? "monthly" : p.due_frequency
+      })
+    }));
   };
-  const body = { ...f, ...who(f.member_id), lending_setting_id: f.lending_setting_id ? Number(f.lending_setting_id) : null, term_months: Number(f.term_months), principal: Number(f.principal) };
+  const body = {
+    ...f, ...who(f.member_id), lending_setting_id: f.lending_setting_id ? Number(f.lending_setting_id) : null, term_months: Number(f.term_months), principal: Number(f.principal),
+    deduction_mode: f.collection_method === "Salary Deduction" ? "payroll" : "manual"
+  };
 
   useEffect(() => {
     if (!(Number(f.principal) > 0) || !(Number(f.term_months) > 0)) { setPreview(null); return undefined; }
@@ -314,7 +470,7 @@ function LoanApply({ lk, onClose, onDone, onFail }) {
             <legend>Amount</legend>
             <div className="ln-row is-3">
               <Field label="Principal"><input type="number" min="1" className="input" value={f.principal} onChange={set("principal")} placeholder="0.00" autoFocus /></Field>
-              <Field label="Term (months)"><input type="number" min="1" className="input" value={f.term_months} onChange={set("term_months")} /></Field>
+              <Field label={flat ? "Terms (number of dues)" : "Term (months)"}><input type="number" min="1" className="input" value={f.term_months} onChange={set("term_months")} /></Field>
               <Field label="Release date"><input type="date" className="input" value={f.date_released} onChange={set("date_released")} /></Field>
             </div>
           </fieldset>
@@ -323,13 +479,14 @@ function LoanApply({ lk, onClose, onDone, onFail }) {
             <legend>Interest & penalty</legend>
             <div className="ln-row is-3">
               <Field label="Interest">
-                <select className="input" value={f.interest_type} onChange={set("interest_type")}>
+                <select className="input" value={f.interest_type} onChange={(e) => setF((p) => ({ ...p, interest_type: e.target.value, due_frequency: e.target.value !== "flat" && p.due_frequency === "weekly" ? "monthly" : p.due_frequency }))}>
+                  <option value="flat">Flat · rate per due</option>
                   <option value="per_month">Per month</option><option value="per_day">Per day</option><option value="fixed">Fixed amount</option>
                 </select>
               </Field>
               {f.interest_type === "fixed"
                 ? <Field label="Fixed interest"><input type="number" min="0" step="0.01" className="input" value={f.fixed_interest} onChange={set("fixed_interest")} /></Field>
-                : <Field label={`Rate (% ${f.interest_type === "per_day" ? "per day" : "per month"})`}><input type="number" step="0.01" min="0" className="input" value={asPct(f.interest_rate)} onChange={fromPct("interest_rate")} /></Field>}
+                : <Field label={`Rate (% ${flat ? "per due" : f.interest_type === "per_day" ? "per day" : "per month"})`}><input type="number" step="0.01" min="0" className="input" value={asPct(f.interest_rate)} onChange={fromPct("interest_rate")} /></Field>}
               <Field label="Penalty (% per day)" hint="on the overdue amount"><input type="number" step="0.01" min="0" className="input" value={asPct(f.penalty_rate_per_day)} onChange={fromPct("penalty_rate_per_day")} /></Field>
             </div>
           </fieldset>
@@ -339,18 +496,25 @@ function LoanApply({ lk, onClose, onDone, onFail }) {
             <div className="ln-row is-2">
               <Field label="Dues">
                 <select className="input" value={f.due_frequency} onChange={set("due_frequency")}>
-                  <option value="monthly">Monthly</option><option value="semi_monthly">Every cut-off (15th / end)</option>
+                  <option value="semi_monthly">Twice a month (15th / end)</option><option value="monthly">Monthly</option>
+                  {flat && <option value="weekly">Weekly</option>}
                 </select>
               </Field>
-              <Field label="Pay by" hint={outside ? "Outside members pay manually" : ""}>
-                <select className="input" value={outside ? "manual" : f.deduction_mode} onChange={set("deduction_mode")} disabled={outside}>
-                  <option value="payroll">Payroll deduction</option><option value="manual">Manual payment</option>
-                </select>
+              <Field label="Pay by" hint={outside ? "Outside members pay manually" : "follows Collection below"}>
+                <input className="input" value={outside || f.collection_method !== "Salary Deduction" ? "Manual payment" : "Payroll deduction"} disabled />
               </Field>
             </div>
           </fieldset>
 
-          <Field label="Purpose"><input className="input" value={f.purpose} onChange={set("purpose")} placeholder="e.g. Tuition, house repair" /></Field>
+          <div className="ln-row is-3">
+            <Field label="Purpose"><input className="input" value={f.purpose} onChange={set("purpose")} placeholder="e.g. Tuition, house repair" /></Field>
+            <Field label="Co-maker"><input className="input" value={f.co_maker} onChange={set("co_maker")} /></Field>
+            <Field label="Collection">
+              <select className="input" value={f.collection_method} onChange={set("collection_method")}>
+                <option>Salary Deduction</option><option>OTC</option><option>Fund Transfer</option>
+              </select>
+            </Field>
+          </div>
         </div>
 
         {/* summary + schedule */}
@@ -433,8 +597,11 @@ function LoanView({ id, notify, onClose, onChanged }) {
               <small>Borrower</small>
               <b>{loan.member?.name || "—"}</b>
               <div className="ln-hero-tags">
-                <Badge status={loan.status} />
+                <LoanStatus status={loan.status} />
                 <span>{loan.deduction_mode === "payroll" ? "Payroll deduction" : "Manual payment"}</span>
+                {loan.member?.code && <span>{loan.member.code}</span>}
+                {loan.collection_method && <span>{loan.collection_method}</span>}
+                {loan.co_maker && <span>Co-maker: {loan.co_maker}</span>}
                 {loan.purpose && <span>{loan.purpose}</span>}
               </div>
             </div>
@@ -450,7 +617,7 @@ function LoanView({ id, notify, onClose, onChanged }) {
           <div className="ln-tiles">
             <div><small>Principal</small><b>{n2(loan.principal)}</b></div>
             <div><small>Interest</small><b>{n2(interest)}</b><span>{rateText(loan)}</span></div>
-            <div><small>Term</small><b>{loan.term_months ? `${loan.term_months} mo.` : "—"}</b><span>{loan.due_frequency === "semi_monthly" ? "every cut-off" : "monthly dues"}</span></div>
+            <div><small>Term</small><b>{loan.interest_type === "flat" ? `${loan.dues || loan.term_months} dues` : loan.term_months ? `${loan.term_months} mo.` : "—"}</b><span>{FREQ_LABEL[loan.due_frequency] || loan.due_frequency}</span></div>
             <div><small>{nextDue ? "Next due" : "Released"}</small><b>{nextDue ? n2(nextDue.amount_due) : loan.date_released ? fmtDate(loan.date_released) : "Not yet"}</b><span>{nextDue ? fmtDate(nextDue.due_date) : ""}</span></div>
           </div>
 
@@ -509,11 +676,13 @@ function LoanView({ id, notify, onClose, onChanged }) {
             {list === "payments" && (!loan.payments?.length
               ? <p className="ln-none">No payment yet.</p>
               : (
-                <DataTable rows={loan.payments} totals={["amount", "penalty_paid"]} cols={[
+                <DataTable rows={loan.payments} totals={["amount", "principal_paid", "interest_paid", "penalty_paid"]} cols={[
                   { key: "payment_date", label: "Date", render: (p) => fmtDate(p.payment_date) },
-                  { key: "source", label: "From", render: (p) => (p.source === "payroll" ? "Payroll" : "Manual") },
-                  { key: "or_number", label: "OR #", render: (p) => p.or_number || "—" },
+                  { key: "source", label: "From", render: (p) => <>{p.source === "payroll" ? "Payroll" : "Manual"}{p.payment_type && <span className="hr-sub">{p.payment_type}</span>}</> },
+                  { key: "or_number", label: "AR / OR #", render: (p) => p.or_number || "—" },
                   { key: "amount", label: "Amount", cls: "n", money: true },
+                  { key: "principal_paid", label: "Principal", cls: "n", money: true },
+                  { key: "interest_paid", label: "Interest", cls: "n", money: true },
                   { key: "penalty_paid", label: "Penalty", cls: "n", money: true },
                   { key: "remarks", label: "Remarks", cls: "wrap" },
                 ]} />
@@ -536,7 +705,7 @@ function Members({ notify, lk, refresh }) {
     const term = q.trim().toLowerCase();
     return lk.members
       .filter((m) => (show === "members" ? m.is_member : show === "employees" ? m.member_type === "employee" : show === "outside" ? m.member_type === "outside" : true))
-      .filter((m) => !term || [m.name, m.contact_no, m.email].some((v) => String(v || "").toLowerCase().includes(term)));
+      .filter((m) => !term || [m.name, m.code, m.contact_no, m.email].some((v) => String(v || "").toLowerCase().includes(term)));
   }, [lk.members, show, q]);
   const paged = usePaged(rows, `${show}|${q}`);
   const count = useMemo(() => ({
@@ -555,7 +724,7 @@ function Members({ notify, lk, refresh }) {
         <button type="button" className="btn btn-primary btn-sm" onClick={() => setModal({ member_type: "outside" })}>New outside member</button>
       </SectionBar>
       <DataTable rows={paged.pageRows} rowKey="key" onRow={(m) => setModal(m)} empty="No employee or member found." cols={[
-        { key: "name", label: "Name", render: (m) => <><b>{m.name}</b><span className="hr-sub">{m.member_type === "employee" ? "Employee" : "Outside"}</span></> },
+        { key: "name", label: "Name", render: (m) => <><b>{m.name}</b><span className="hr-sub">{m.code ? `${m.code} · ` : ""}{m.member_type === "employee" ? "Employee" : "Outside"}</span></> },
         { key: "is_member", label: "Member", render: (m) => (m.is_member ? <Badge status="active" /> : <span className="hr-muted">Not yet</span>) },
         { key: "contact_no", label: "Contact", render: (m) => <>{m.contact_no || "—"}<span className="hr-sub">{m.email}</span></> },
         { key: "bank", label: "Bank", render: (m) => (m.bank_name ? `${m.bank_name} ${m.account_no || ""}` : "—") },
@@ -572,12 +741,12 @@ function Members({ notify, lk, refresh }) {
 
 function MemberModal({ row, onClose, onDone, onFail }) {
   const [f, set] = useForm({
-    member_type: row?.member_type || "employee", employee_id: row?.employee_id ? String(row.employee_id) : "", name: row?.name || "",
+    member_type: row?.member_type || "employee", employee_id: row?.employee_id ? String(row.employee_id) : "", name: row?.name || "", code: row?.code || "",
     contact_no: row?.contact_no || "", email: row?.email || "", address: row?.address || "", bank_name: row?.bank_name || "",
     account_no: row?.account_no || "", is_active: row?.is_active ?? true,
   });
   const save = () => {
-    const body = { ...f, employee_id: f.employee_id ? Number(f.employee_id) : null };
+    const body = { ...f, employee_id: f.employee_id ? Number(f.employee_id) : null, code: f.code || null };
     (row?.id ? api.put(`/lending/members/${row.id}`, body) : api.post("/lending/members", body)).then((r) => onDone(r.message)).catch(onFail);
   };
   return (
@@ -594,6 +763,7 @@ function MemberModal({ row, onClose, onDone, onFail }) {
             ? <Field label="Employee" wide><input className="input" value={row.name} disabled /></Field>
             : <div className="hr-field is-wide"><span className="field-label">Employee</span><EmployeeSelect value={f.employee_id} onChange={(v) => set("employee_id", v)} /></div>)
           : <Field label="Name" wide><input className="input" value={f.name} onChange={set("name")} /></Field>}
+        <Field label="Borrower ID" hint="e.g. B0064"><input className="input" value={f.code} maxLength={10} onChange={set("code")} /></Field>
         <Field label="Contact no."><input className="input" value={f.contact_no} onChange={set("contact_no")} /></Field>
         <Field label="Email"><input type="email" className="input" value={f.email} onChange={set("email")} /></Field>
         <Field label="Address" wide><input className="input" value={f.address} onChange={set("address")} /></Field>
@@ -617,7 +787,7 @@ function Settings({ notify, lk, refresh }) {
         { key: "applies_to", label: "For" },
         { key: "rate", label: "Interest", render: rateText },
         { key: "amount", label: "Amount", render: (s) => `${n2(s.min_amount)} – ${s.max_amount ? n2(s.max_amount) : "no limit"}` },
-        { key: "max_term_months", label: "Max term", render: (s) => (s.max_term_months ? `${s.max_term_months} mo` : "—") },
+        { key: "max_term_months", label: "Max term", render: (s) => (s.max_term_months ? `${s.max_term_months} ${s.interest_type === "flat" ? "dues" : "mo"}` : "—") },
         { key: "penalty", label: "Penalty / day", render: (s) => (Number(s.penalty_rate_per_day) ? pct(s.penalty_rate_per_day, 3) : "—") },
         { key: "lock_in_days", label: "Lock-in", render: (s) => (s.lock_in_days ? `${s.lock_in_days} days` : "—") },
         { key: "is_active", label: "", render: (s) => (!s.is_active ? <Badge status="cancelled" /> : null) },
@@ -648,18 +818,19 @@ function SettingModal({ row, onClose, onDone, onFail }) {
         </Field>
         <Field label="Interest">
           <select className="input" value={f.interest_type} onChange={set("interest_type")}>
+            {f.applies_to === "loan" && <option value="flat">Flat · rate per due</option>}
             <option value="per_month">Per month</option><option value="per_day">Per day</option><option value="fixed">Fixed amount</option>
           </select>
         </Field>
         {f.interest_type === "fixed"
           ? <Field label="Fixed interest"><input type="number" min="0" className="input" value={f.fixed_interest} onChange={set("fixed_interest")} /></Field>
-          : <Field label="Rate" hint="0.02 = 2%"><input type="number" step="0.0001" min="0" className="input" value={f.interest_rate} onChange={set("interest_rate")} /></Field>}
+          : <Field label="Rate" hint={f.interest_type === "flat" ? "per due · 0.025 = 2.5%" : "0.02 = 2%"}><input type="number" step="0.0001" min="0" className="input" value={f.interest_rate} onChange={set("interest_rate")} /></Field>}
         <Field label="Minimum amount"><input type="number" min="0" className="input" value={f.min_amount} onChange={set("min_amount")} /></Field>
         <Field label="Maximum amount"><input type="number" min="0" className="input" value={f.max_amount} onChange={set("max_amount")} placeholder="no limit" /></Field>
         {f.applies_to === "loan" ? (
           <>
-            <Field label="Longest term (months)"><input type="number" min="1" className="input" value={f.max_term_months} onChange={set("max_term_months")} /></Field>
-            <Field label="Penalty per day" hint="0.001 = 0.1% of the overdue amount"><input type="number" step="0.0001" min="0" className="input" value={f.penalty_rate_per_day} onChange={set("penalty_rate_per_day")} /></Field>
+            <Field label={f.interest_type === "flat" ? "Most dues" : "Longest term (months)"}><input type="number" min="1" className="input" value={f.max_term_months} onChange={set("max_term_months")} /></Field>
+            <Field label="Penalty per day" hint="0.001667 = 5% a month on the overdue due"><input type="number" step="0.0001" min="0" className="input" value={f.penalty_rate_per_day} onChange={set("penalty_rate_per_day")} /></Field>
             <label className="hr-check"><input type="checkbox" checked={f.payroll_deductible} onChange={set("payroll_deductible")} /> Can be deducted in payroll</label>
           </>
         ) : (
