@@ -37,7 +37,7 @@ export default function Lending() {
         <aside className="ln-page-side"><Dashboard {...ctx} /></aside>
         <div className="ln-page-main" ref={mainRef}>
           <div className="ln-tabbar">
-            <Tabs value={tab} onChange={setTab} tabs={[["investments", "Investments"], ["loans", "Loans"], ["dues", "Over Due / Due Today"], ["members", "Members"], ["settings", "Settings"]]} />
+            <Tabs value={tab} onChange={setTab} tabs={[["investments", "Investments"], ["loans", "Loans"], ["dues", "Over Due / Due Today"], ["cashout", "Cash-out"], ["members", "Members"], ["settings", "Settings"]]} />
             <button type="button" className="btn btn-sm ln-refresh" onClick={refresh} title="Reload the dashboard and the list">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
@@ -48,6 +48,7 @@ export default function Lending() {
           {tab === "investments" && <Investments {...ctx} />}
           {tab === "loans" && <Loans {...ctx} />}
           {tab === "dues" && <Dues {...ctx} />}
+          {tab === "cashout" && <CashoutSheet {...ctx} />}
           {tab === "members" && <Members {...ctx} />}
           {tab === "settings" && <Settings {...ctx} />}
         </div>
@@ -115,15 +116,168 @@ function Dues({ tick }) {
   );
 }
 
-/** clickable column header: 1st click ↓ (high → low / Z → A), 2nd ↑, 3rd = default order · sorting is done by the server */
+/** default order of the Investments / Loans tables: reference # newest first */
+const DEFAULT_SORT = { key: "reference_no", dir: "desc" };
+
+/** clickable column header: 1st click ↓ (high → low / Z → A), 2nd ↑, 3rd = back to Ref # ↓ · sorting is done by the server
+    (Ref # itself just switches ↓ / ↑) */
 function SortHead({ k, label, sort, setSort, right }) {
   const on = sort.key === k;
-  const next = () => setSort(!on ? { key: k, dir: "desc" } : sort.dir === "desc" ? { key: k, dir: "asc" } : { key: "", dir: "desc" });
+  const next = () => setSort(!on ? { key: k, dir: "desc" }
+    : sort.dir === "desc" ? { key: k, dir: "asc" }
+      : k === DEFAULT_SORT.key ? { key: k, dir: "desc" } : DEFAULT_SORT);
   return (
     <button type="button" className={`ln-sort${on ? " is-on" : ""}${right ? " is-right" : ""}`} onClick={next}
       aria-label={`Sort by ${label}`} title={`Sort by ${label}`}>
       {label}<i aria-hidden="true">{on ? (sort.dir === "desc" ? "▼" : "▲") : "↕"}</i>
     </button>
+  );
+}
+
+/* Cash-out: every active investor · capital + interest by the capital-share formula (like the Excel sheet) */
+function CashoutSheet({ notify, tick, refresh }) {
+  const [asOf, setAsOf] = useState(todayPH());
+  const [period, setPeriod] = useState(11);
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState(DEFAULT_SORT);
+  const [open, setOpen] = useState(null);
+  const [batch, setBatch] = useState(false);
+  const pg = useServerPage("/lending/cashout-sheet", { as_of: asOf, period: Number(period) || 11, q, sort: sort.key, dir: sort.dir }, tick);
+  const t = pg.data?.totals;
+  const head = (key, label, right) => <SortHead k={key} label={label} sort={sort} setSort={setSort} right={right} />;
+  return (
+    <section className="card hr-section">
+      <SectionBar>
+        <label className="ln-inline">As of <input type="date" className="input" value={asOf} onChange={(e) => e.target.value && setAsOf(e.target.value)} /></label>
+        <label className="ln-inline">Period <input type="number" min="1" step="0.5" className="input ln-num" value={period} onChange={(e) => setPeriod(e.target.value)} /> mo</label>
+        <input className="input ln-search" type="search" placeholder="Search ref #, investor, ID…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search investors" />
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => setBatch(true)}>Cashout</button>
+      </SectionBar>
+      {t && (
+        <div className="ln-co-sum">
+          <div><small>Total capital</small><b>{n2(t.total_capital)}</b></div>
+          <div><small>Net profit</small><b>{n2(t.profit)}</b></div>
+          <div><small>Capital + profit</small><b>{n2(t.pool)}</b></div>
+          <div className="is-blue"><small>For shareholders{q ? " (shown)" : ""}</small><b>{n2(t.capital_interest)}</b></div>
+          {t.for_management !== null && <div className="is-green"><small>For management</small><b>{n2(t.for_management)}</b></div>}
+        </div>
+      )}
+      <DataTable loading={pg.loading} rows={pg.rows} totals={["capital", "share_full", "interest", "capital_interest", "cashed_out"]} onRow={(r) => setOpen(r.id)}
+        empty={q ? "No investor matches the search." : "No active investment."}
+        cols={[
+          { key: "reference_no", label: head("reference_no", "Ref #"), render: (r) => <><b>{r.reference_no}</b><span className="hr-sub">{fmtDate(r.date_invested)}{r.deposits > 1 ? ` · ${r.deposits} deposits` : ""}</span></> },
+          { key: "name", label: head("name", "Investor"), render: (r) => <>{r.name}{r.code && <span className="hr-sub">{r.code}</span>}</> },
+          { key: "capital", label: head("capital", "Capital", true), cls: "n", money: true },
+          { key: "share_pct", label: head("share_pct", "Share %", true), cls: "n", render: (r) => Number(r.share_pct).toFixed(4) },
+          { key: "share_full", label: "Profit share", cls: "n", money: true },
+          { key: "months", label: head("months", "Months", true), cls: "n", render: (r) => `${r.months} · ${Number(r.months_pct).toFixed(2)}%` },
+          { key: "interest", label: head("interest", "Interest earned", true), cls: "n", money: true },
+          { key: "capital_interest", label: head("capital_interest", "Capital + interest", true), cls: "n", render: (r) => <b>{n2(r.capital_interest)}</b> },
+          { key: "cashed_out", label: head("cashed_out", "Cashed out", true), cls: "n", money: true },
+        ]} />
+      <Pager {...pg.pager} label="investor(s)" />
+      {open && <InvestmentView id={open} notify={notify} onClose={() => setOpen(null)} onChanged={refresh} />}
+      {batch && <CashoutBatch asOf={asOf} period={Number(period) || 11} notify={notify} onClose={() => setBatch(false)}
+        onDone={(msg) => { notify(msg); setBatch(false); refresh(); }} />}
+    </section>
+  );
+}
+
+/* Cashout popup: every active investor · check who cashes out · Retain capital (only the interest is paid)
+   · Retain interest (that % of the interest stays in the fund as capital — default from Settings) */
+function CashoutBatch({ asOf, period, notify, onClose, onDone }) {
+  const [rows, setRows] = useState(null);
+  const [pick, setPick] = useState({});
+  const [defPct, setDefPct] = useState(30);
+  const [headPct, setHeadPct] = useState("30"); // header % → every row
+  const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    Promise.all([api.get(`/lending/cashout-sheet?all=1&as_of=${asOf}&period=${period}&sort=name&dir=asc`), api.get("/lending/config").catch(() => ({ retain_interest_pct: 30 }))])
+      .then(([sheet, cfg]) => {
+        const pct = Number(cfg.retain_interest_pct ?? 30);
+        setDefPct(pct);
+        setHeadPct(String(pct));
+        setRows(sheet.rows);
+        setPick(Object.fromEntries(sheet.rows.map((r) => [r.id, { on: false, cap: false, int: false, pct }])));
+      })
+      .catch(() => setRows([]));
+  }, [asOf, period]);
+  const set = (id, patch) => setPick((p) => ({ ...p, [id]: { ...p[id], ...patch } }));
+  const calc = (r) => {
+    const x = pick[r.id] || {};
+    const interest = Math.max(0, Number(r.capital_interest) - Number(r.capital));
+    const retained = x.int ? Math.round(interest * Number(x.pct || 0)) / 100 : 0;
+    const payInt = interest - retained;
+    const payCap = x.cap ? 0 : Number(r.capital);
+    return { interest, retained, pay: payInt + payCap, left: (x.cap ? Number(r.capital) : 0) + retained };
+  };
+  const shown = (rows || []).filter((r) => !q.trim() || [r.name, r.code, r.reference_no].some((v) => String(v || "").toLowerCase().includes(q.trim().toLowerCase())));
+  const chosen = (rows || []).filter((r) => pick[r.id]?.on);
+  const sum = chosen.reduce((a, r) => { const c = calc(r); return { pay: a.pay + c.pay, retained: a.retained + c.retained, left: a.left + c.left }; }, { pay: 0, retained: 0, left: 0 });
+  const allOn = shown.length > 0 && shown.every((r) => pick[r.id]?.on);
+  const allCap = shown.length > 0 && shown.every((r) => pick[r.id]?.cap);
+  const allInt = shown.length > 0 && shown.every((r) => pick[r.id]?.int);
+  // check all: the rows shown (after the search) · retain boxes also select the row
+  const setAll = (patch) => setPick((p) => ({ ...p, ...Object.fromEntries(shown.map((r) => [r.id, { ...p[r.id], ...patch }])) }));
+  const save = () => {
+    setBusy(true);
+    api.post("/lending/cashout-batch", {
+      date: asOf, period,
+      items: chosen.map((r) => ({ investment_id: r.id, retain_capital: !!pick[r.id].cap, retain_interest: !!pick[r.id].int, retain_pct: Number(pick[r.id].pct || 0) })),
+    }).then((r) => onDone(r.message)).catch(fail(notify)).finally(() => setBusy(false));
+  };
+  return (
+    <Modal title={`Cashout · ${fmtDate(asOf)} · period ${period} mo`} onClose={onClose} size="xxlg"
+      footer={<>
+        <span className="ln-cb-sum">{chosen.length} selected · pay <b>{n2(sum.pay)}</b> · retained interest <b>{n2(sum.retained)}</b> · stays invested <b>{n2(sum.left)}</b></span>
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" disabled={busy || !chosen.length} onClick={save}>{busy ? "Saving…" : `Cash out ${n2(sum.pay)}`}</button>
+      </>}>
+      <SectionBar>
+        <input className="input ln-search" type="search" placeholder="Search investor, ID, ref #…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
+        <span className="hr-muted">Retain interest default: {defPct}% (Settings)</span>
+      </SectionBar>
+      <DataTable loading={!rows} rows={shown} empty="No active investment."
+        cols={[
+          {
+            key: "on", label: <input type="checkbox" checked={allOn} onChange={(e) => setAll({ on: e.target.checked })} aria-label="Select all" />, cls: "c",
+            render: (r) => <input type="checkbox" checked={!!pick[r.id]?.on} onChange={(e) => set(r.id, { on: e.target.checked })} aria-label={`Cash out ${r.name}`} />
+          },
+          { key: "name", label: "Investor", render: (r) => <><b>{r.name}</b><span className="hr-sub">{r.reference_no}{r.code ? ` · ${r.code}` : ""}</span></> },
+          { key: "capital", label: "Capital", cls: "n", money: true },
+          { key: "interest", label: "Interest", cls: "n", render: (r) => n2(calc(r).interest) },
+          {
+            key: "cap", label: <button type="button" className={`btn btn-sm${allCap ? " btn-primary" : ""}`} title={allCap ? "Click again to clear" : "Retain capital on every investor shown"}
+              onClick={() => setAll(allCap ? { cap: false } : { cap: true, on: true })}>Apply All</button>, cls: "c",
+            render: (r) => (
+              <label className="ln-cb-all">
+                <input type="checkbox" checked={!!pick[r.id]?.cap} onChange={(e) => set(r.id, { cap: e.target.checked, on: true })} /> Retain capital
+              </label>
+            )
+          },
+          {
+            key: "int", label: (
+              <span className="ln-cb-int">
+                <button type="button" className={`btn btn-sm${allInt ? " btn-primary" : ""}`} title={allInt ? "Click again to clear" : "Retain interest on every investor shown"}
+                  onClick={() => setAll(allInt ? { int: false } : { int: true, on: true })}>Apply All</button>
+                <input type="number" min="0" max="100" step="1" className="input" value={headPct} aria-label="Retain interest % for everyone"
+                  title="Changes the % of every investor shown" onChange={(e) => { setHeadPct(e.target.value); setAll({ pct: e.target.value }); }} />%
+              </span>
+            ), cls: "c",
+            render: (r) => (
+              <span className="ln-cb-int">
+                <label className="ln-cb-all"><input type="checkbox" checked={!!pick[r.id]?.int} onChange={(e) => set(r.id, { int: e.target.checked, on: true })} /> Retain interest</label>
+                <input type="number" min="0" max="100" step="1" className="input" value={pick[r.id]?.pct ?? defPct} disabled={!pick[r.id]?.int}
+                  onChange={(e) => set(r.id, { pct: e.target.value })} aria-label="Retain %" />%
+              </span>
+            )
+          },
+          { key: "retained", label: "Retained", cls: "n", render: (r) => (pick[r.id]?.on ? n2(calc(r).retained) : "—") },
+          { key: "pay", label: "To cash out", cls: "n", render: (r) => (pick[r.id]?.on ? <b>{n2(calc(r).pay)}</b> : "—") },
+          { key: "left", label: "Stays invested", cls: "n", render: (r) => (pick[r.id]?.on ? n2(calc(r).left) : "—") },
+        ]} />
+    </Modal>
   );
 }
 
@@ -216,7 +370,7 @@ function Investments({ notify, lk, refresh, tick }) {
   const [status, setStatus] = useState("active");
   const [modal, setModal] = useState(null);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState({ key: "", dir: "desc" });
+  const [sort, setSort] = useState(DEFAULT_SORT);
   const pg = useServerPage("/lending/investments", { status, q, sort: sort.key, dir: sort.key ? sort.dir : "" }, tick);
   const head = (key, label, right) => <SortHead k={key} label={label} sort={sort} setSort={setSort} right={right} />;
   const done = (msg) => { notify(msg); setModal(null); refresh(); };
@@ -302,10 +456,19 @@ function InvestmentView({ id, notify, onClose, onChanged }) {
   const load = useCallback(() => { api.get(`/lending/investments/${id}?as_of=${asOf}`).then(setData).catch(() => setData(false)); }, [id, asOf]);
   useEffect(() => { load(); }, [load]);
 
+  // cash-out = the capital-share formula (capital ÷ total capital × net profit × months ÷ period)
+  const [period, setPeriod] = useState(11);
+  const [share, setShare] = useState(null);
+  useEffect(() => {
+    if (mode !== "cashout" || !date) { setShare(null); return undefined; }
+    setShare(null);
+    const t = setTimeout(() => api.get(`/lending/investments/${id}/share?as_of=${date}&period=${Number(period) || 11}`).then(setShare).catch(() => setShare(false)), 250);
+    return () => clearTimeout(t);
+  }, [mode, date, period, id]);
   const submit = () => {
-    const url = `/lending/investments/${id}/${mode === "top-up" ? "top-up" : "cashout"}`;
+    const url = mode === "top-up" ? `/lending/investments/${id}/top-up` : `/lending/investments/${id}/cashout-share`;
     setBusy(true);
-    api.post(url, { amount: amount === "" ? null : Number(amount), date })
+    api.post(url, { amount: amount === "" ? null : Number(amount), date, ...(mode === "cashout" && { period: Number(period) || 11 }) })
       .then((r) => { notify(r.message); setMode(null); setAmount(""); load(); onChanged(); })
       .catch(fail(notify))
       .finally(() => setBusy(false));
@@ -370,22 +533,36 @@ function InvestmentView({ id, notify, onClose, onChanged }) {
                 <>
                   {mode === "cashout" && (
                     <div className="ln-co">
-                      <div><span>Capital</span><b>{n2(inv.principal_balance)}</b></div>
-                      <div><span>Interest earned{p.days_invested ? ` · ${p.days_invested} day(s)` : ""}</span><b>{n2(p.in_lock_in ? 0 : p.interest_earned)}</b></div>
-                      <div className="is-total"><span>Total cash-out · {fmtDate(date)}</span><b>{n2(p.in_lock_in ? inv.principal_balance : p.cashout_value)}</b></div>
+                      {share === null && <div><span>Computing…</span></div>}
+                      {share === false && <div><span>Couldn't compute the interest.</span></div>}
+                      {share && (
+                        <>
+                          <div><span>Capital</span><b>{n2(share.capital)}</b></div>
+                          <div><span>Capital share · {n2(share.total_invested)} ÷ {n2(share.total_capital)} total capital</span><b>{Number(share.share_pct).toFixed(4)}%</b></div>
+                          <div><span>Profit share · {Number(share.share_pct).toFixed(4)}% × {n2(share.profit)} net profit</span><b>{n2(share.share_full)}</b></div>
+                          {share.deposits.map((d, i) => (
+                            <div key={i} className="is-sub"><span>{fmtDate(d.date)} · {n2(d.amount)} · {d.months} of {share.period_months} month(s)</span><b>{Number(d.pct).toFixed(4)}%</b></div>
+                          ))}
+                          <div><span>Interest earned{share.already_credited > 0 ? ` (less ${n2(share.already_credited)} already credited)` : ""}</span><b>{n2(share.interest)}</b></div>
+                          <div className="is-total"><span>Total cash-out · {fmtDate(share.as_of)}</span><b>{n2(share.total)}</b></div>
+                        </>
+                      )}
                     </div>
                   )}
                   <div className="ln-act-row is-pay">
                     <Field label={mode === "top-up" ? "Top-up amount" : "Cash-out amount"}>
                       <input type="number" min="0.01" step="0.01" className="input" value={amount} onChange={(e) => setAmount(e.target.value)}
-                        placeholder={mode === "cashout" ? `All · ${n2(p.cashout_value)}` : "0.00"} autoFocus />
+                        placeholder={mode === "cashout" ? `All · ${n2(share?.total ?? 0)}` : "0.00"} autoFocus />
                     </Field>
+                    {mode === "cashout" && (
+                      <Field label="Period (months)"><input type="number" min="1" step="0.5" className="input" value={period} onChange={(e) => setPeriod(e.target.value)} /></Field>
+                    )}
                     <Field label="Date"><input type="date" className="input" value={date} min={mode === "cashout" ? String(inv.last_accrual_date).slice(0, 10) : undefined}
                       onChange={(e) => { setDate(e.target.value); if (mode === "cashout" && e.target.value) setAsOf(e.target.value); }} /></Field>
                     <div className="ln-act-btns">
                       <button type="button" className="btn" onClick={() => { setMode(null); setAmount(""); }} disabled={busy}>Back</button>
-                      <button type="button" className="btn btn-primary" onClick={submit} disabled={busy || (mode === "top-up" && !(Number(amount) > 0))}>
-                        {mode === "top-up" ? "Save top-up" : amount ? `Cash out ${n2(amount)}` : `Cash out ${n2(p.in_lock_in ? inv.principal_balance : p.cashout_value)}`}
+                      <button type="button" className="btn btn-primary" onClick={submit} disabled={busy || (mode === "top-up" && !(Number(amount) > 0)) || (mode === "cashout" && !share)}>
+                        {mode === "top-up" ? "Save top-up" : amount ? `Cash out ${n2(amount)}` : `Cash out ${n2(share?.total ?? 0)}`}
                       </button>
                     </div>
                   </div>
@@ -424,7 +601,7 @@ function Loans({ notify, lk, refresh, tick }) {
   const [status, setStatus] = useState("");
   const [modal, setModal] = useState(null);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState({ key: "", dir: "desc" });
+  const [sort, setSort] = useState(DEFAULT_SORT);
   const pg = useServerPage("/lending/loans", { status, q, sort: sort.key, dir: sort.key ? sort.dir : "" }, tick);
   const head = (key, label, right) => <SortHead k={key} label={label} sort={sort} setSort={setSort} right={right} />;
   const done = (msg) => { notify(msg); setModal(null); refresh(); };
@@ -826,9 +1003,16 @@ function MemberModal({ row, onClose, onDone, onFail }) {
 
 function Settings({ notify, lk, refresh }) {
   const [modal, setModal] = useState(null);
+  const [retainPct, setRetainPct] = useState("");
+  useEffect(() => { api.get("/lending/config").then((c) => setRetainPct(String(c.retain_interest_pct ?? 30))).catch(() => setRetainPct("30")); }, []);
+  const savePct = () => api.put("/lending/config", { retain_interest_pct: Number(retainPct) }).then((r) => notify(r.message)).catch(fail(notify));
   return (
     <section className="card hr-section">
       <SectionBar>
+        <label className="ln-inline">Cash-out · retain interest
+          <input type="number" min="0" max="100" step="1" className="input ln-num" value={retainPct} onChange={(e) => setRetainPct(e.target.value)} />%
+        </label>
+        <button type="button" className="btn btn-sm" onClick={savePct} disabled={retainPct === "" || Number(retainPct) < 0 || Number(retainPct) > 100}>Save</button>
         <button type="button" className="btn btn-primary btn-sm" onClick={() => setModal({})}>New setting</button>
       </SectionBar>
       <DataTable rows={lk.settings} onRow={(s) => setModal(s)} cols={[
