@@ -656,7 +656,7 @@ function LoanView({ id, notify, onClose, onChanged }) {
                 <Field label="OR #"><input className="input" value={pay.or_number} onChange={(e) => setPay({ ...pay, or_number: e.target.value })} /></Field>
                 <div className="ln-act-btns">
                   <button type="button" className="btn btn-primary" disabled={busy || !(Number(pay.amount) > 0)}
-                    onClick={() => run(api.post(`/lending/loans/${id}/payments`, { ...pay, amount: Number(pay.amount) })).then((r) => r && setPay({ ...pay, amount: "", or_number: "" }))}>
+                    onClick={() => run(api.post(`/lending/loans/${id}/payments`, { ...pay, amount: Number(pay.amount) })).then((r) => { if (r) { setPay({ ...pay, amount: "", or_number: "", remarks: "" }); setList("payments"); } })}>
                     Save payment
                   </button>
                 </div>
