@@ -311,3 +311,103 @@
 .ln-lst.is-cancelled {
     --st: #64748b;
 }
+
+/* Lending → investment cash-out: capital + interest = total */
+.ln-co {
+    display: grid;
+    gap: 6px;
+    padding: 10px 12px;
+    margin: 4px 0 10px;
+    border: 1px solid var(--line, #e5e7eb);
+    border-radius: 10px;
+    background: var(--card, #fff);
+}
+
+.ln-co>div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.ln-co span {
+    color: var(--muted, #64748b);
+}
+
+.ln-co b {
+    font-variant-numeric: tabular-nums;
+}
+
+.ln-co .is-total {
+    border-top: 1px dashed var(--line, #e5e7eb);
+    padding-top: 6px;
+    font-size: 15px;
+}
+
+.ln-co .is-total span {
+    color: var(--ink, #111827);
+    font-weight: 600;
+}
+
+.ln-co .is-total b {
+    color: #2563eb;
+    font-size: 17px;
+}
+
+/* Lending → sortable column headers */
+.ln-sort {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    white-space: nowrap;
+}
+
+.ln-sort.is-right {
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.ln-sort i {
+    font-style: normal;
+    font-size: 9px;
+    opacity: .35;
+}
+
+.ln-sort:hover i {
+    opacity: .7;
+}
+
+.ln-sort.is-on {
+    color: #2563eb;
+}
+
+.ln-sort.is-on i {
+    opacity: 1;
+}
+
+.ln-sort:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+/* Lending → refresh button beside the tabs */
+.ln-tabbar {
+    position: relative;
+}
+
+.ln-tabbar .ln-refresh {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}

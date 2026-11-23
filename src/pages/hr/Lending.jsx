@@ -36,7 +36,15 @@ export default function Lending() {
       <div className="ln-page">
         <aside className="ln-page-side"><Dashboard {...ctx} /></aside>
         <div className="ln-page-main" ref={mainRef}>
-          <Tabs value={tab} onChange={setTab} tabs={[["investments", "Investments"], ["loans", "Loans"], ["dues", "Over Due / Due Today"], ["members", "Members"], ["settings", "Settings"]]} />
+          <div className="ln-tabbar">
+            <Tabs value={tab} onChange={setTab} tabs={[["investments", "Investments"], ["loans", "Loans"], ["dues", "Over Due / Due Today"], ["members", "Members"], ["settings", "Settings"]]} />
+            <button type="button" className="btn btn-sm ln-refresh" onClick={refresh} title="Reload the dashboard and the list">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+              </svg>
+              Refresh
+            </button>
+          </div>
           {tab === "investments" && <Investments {...ctx} />}
           {tab === "loans" && <Loans {...ctx} />}
           {tab === "dues" && <Dues {...ctx} />}
@@ -81,19 +89,18 @@ function Dashboard({ tick }) {
 
 /* Over Due / Due Today — unpaid dues of released loans */
 function Dues({ tick }) {
-  const [d, setD] = useState(null);
   const [show, setShow] = useState("overdue");
   const [q, setQ] = useState("");
-  useEffect(() => { setD(null); api.get("/lending/dashboard").then(setD).catch(() => setD({ overdue: [], due_today: [] })); }, [tick]);
-  const rows = useMemo(() => matches(d?.[show] || null, q, (r) => [r.name, r.code, r.reference_no]), [d, show, q]);
+  const pg = useServerPage("/lending/dues", { type: show, q }, tick);
+  const d = pg.data;
   return (
     <section className="card hr-section">
       <SectionBar>
         <Chips label="Show" value={show} onChange={setShow}
-          options={[["overdue", "Over Due", d?.overdue?.length], ["due_today", "Due Today", d?.due_today?.length]]} />
+          options={[["overdue", "Over Due", d?.overdue_count], ["due_today", "Due Today", d?.due_today_count]]} />
         <input className="input ln-search" type="search" placeholder="Search LN #, borrower, ID…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search dues" />
       </SectionBar>
-      <DataTable loading={!d} rows={rows || []} totals={["amount"]} empty={q ? "No due matches the search." : "None"}
+      <DataTable loading={pg.loading} rows={pg.rows} totals={["amount"]} empty={q ? "No due matches the search." : "None"}
         cols={[
           { key: "name", label: "Borrower", render: (r) => <><b>{r.name}</b>{r.code && <span className="hr-sub">{r.code}</span>}</> },
           { key: "reference_no", label: "Loan #" },
@@ -103,8 +110,45 @@ function Dues({ tick }) {
           { key: "deduction_mode", label: "Pay by", render: (r) => (r.deduction_mode === "payroll" ? "Payroll" : "Manual") },
           { key: "amount", label: "Amount", cls: "n", money: true },
         ]} />
+      <Pager {...pg.pager} label="due(s)" />
     </section>
   );
+}
+
+/** clickable column header: 1st click ↓ (high → low / Z → A), 2nd ↑, 3rd = default order · sorting is done by the server */
+function SortHead({ k, label, sort, setSort, right }) {
+  const on = sort.key === k;
+  const next = () => setSort(!on ? { key: k, dir: "desc" } : sort.dir === "desc" ? { key: k, dir: "asc" } : { key: "", dir: "desc" });
+  return (
+    <button type="button" className={`ln-sort${on ? " is-on" : ""}${right ? " is-right" : ""}`} onClick={next}
+      aria-label={`Sort by ${label}`} title={`Sort by ${label}`}>
+      {label}<i aria-hidden="true">{on ? (sort.dir === "desc" ? "▼" : "▲") : "↕"}</i>
+    </button>
+  );
+}
+
+/** server pagination: only one page is read from the database · { rows, total, page, per_page } from the API */
+function useServerPage(url, params, tick, initialPerPage = 25) {
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(initialPerPage);
+  const [data, setData] = useState(null);
+  const key = JSON.stringify(params);
+  useEffect(() => { setPage(1); }, [key, perPage]);
+  useEffect(() => {
+    setData(null);
+    const t = setTimeout(() => {
+      const qs = new URLSearchParams({ page, per_page: perPage });
+      Object.entries(params).forEach(([k, v]) => { if (v !== "" && v !== null && v !== undefined) qs.set(k, String(v).trim()); });
+      api.get(`${url}?${qs}`).then(setData).catch(() => setData({ rows: [], total: 0, page: 1, per_page: perPage }));
+    }, params.q ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [url, key, page, perPage, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const total = data?.total || 0;
+  const cur = data?.page || page;
+  return {
+    data, loading: !data, rows: data?.rows || [],
+    pager: { page: cur, setPage, perPage, setPerPage, pages: Math.max(1, Math.ceil(total / perPage)), from: (cur - 1) * perPage, total },
+  };
 }
 
 /** stretch the table's scroll box down to the bottom of the screen (no empty space under it) */
@@ -138,13 +182,6 @@ function useFitTable() {
 
 const fail = (notify) => (e) => notify(e.message || "Couldn't save.", "error");
 
-/** rows whose fields contain the search text (ref #, name, borrower ID …) */
-const matches = (rows, q, pick) => {
-  const term = q.trim().toLowerCase();
-  if (!term || !rows) return rows;
-  return rows.filter((r) => pick(r).some((v) => String(v ?? "").toLowerCase().includes(term)));
-};
-
 /* members + active employees (an employee becomes a member on his first investment / loan) · value = row.key ("m12" member, "e34" employee) */
 function MemberSelect({ members, value, onChange }) {
   const options = members.filter((m) => m.is_active).map((m) => ({
@@ -177,11 +214,11 @@ function Chips({ value, onChange, options, label, tones }) {
    ===================================================================== */
 function Investments({ notify, lk, refresh, tick }) {
   const [status, setStatus] = useState("active");
-  const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(null);
   const [q, setQ] = useState("");
-  const shown = useMemo(() => matches(rows, q, (r) => [r.reference_no, r.member?.name, r.member?.code]), [rows, q]);
-  useEffect(() => { setRows(null); api.get(`/lending/investments${status ? `?status=${status}` : ""}`).then(setRows).catch(() => setRows([])); }, [status, tick]);
+  const [sort, setSort] = useState({ key: "", dir: "desc" });
+  const pg = useServerPage("/lending/investments", { status, q, sort: sort.key, dir: sort.key ? sort.dir : "" }, tick);
+  const head = (key, label, right) => <SortHead k={key} label={label} sort={sort} setSort={setSort} right={right} />;
   const done = (msg) => { notify(msg); setModal(null); refresh(); };
 
   return (
@@ -191,17 +228,18 @@ function Investments({ notify, lk, refresh, tick }) {
         <input className="input ln-search" type="search" placeholder="Search ref #, investor, ID…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search investments" />
         <button type="button" className="btn btn-primary btn-sm" onClick={() => setModal({ type: "invest" })}>New investment</button>
       </SectionBar>
-      <DataTable loading={!rows} rows={shown || []} empty={q ? "No investment matches the search." : undefined} onRow={(r) => setModal({ type: "view", id: r.id })}
+      <DataTable loading={pg.loading} rows={pg.rows} empty={q ? "No investment matches the search." : undefined} onRow={(r) => setModal({ type: "view", id: r.id })}
         cols={[
-          { key: "reference_no", label: "Ref #", render: (r) => <><b>{r.reference_no}</b><span className="hr-sub">{fmtDate(r.date_invested)}</span></> },
-          { key: "member", label: "Investor", render: (r) => r.member?.name },
-          { key: "rate", label: "Interest", render: rateText },
-          { key: "principal_balance", label: "Invested", cls: "n", money: true },
+          { key: "reference_no", label: head("reference_no", "Ref #"), render: (r) => <><b>{r.reference_no}</b><span className="hr-sub">{fmtDate(r.date_invested)}</span></> },
+          { key: "member", label: head("member", "Investor"), render: (r) => r.member?.name },
+          { key: "rate", label: head("interest", "Interest"), render: rateText },
+          { key: "principal_balance", label: head("principal_balance", "Invested", true), cls: "n", money: true },
           { key: "earned", label: "Earned to date", cls: "n", render: (r) => (r.today ? n2(r.today.interest_earned) : n2(r.total_interest_earned)) },
           { key: "value", label: "Cash-out value today", cls: "n", render: (r) => (r.today ? <b>{n2(r.today.cashout_value)}</b> : "—") },
           { key: "lock", label: "", render: (r) => (r.today?.in_lock_in ? <span className="hr-sub">lock-in until {fmtDate(r.today.lock_in_ends)}</span> : null) },
-          { key: "status", label: "Status", render: (r) => <Badge status={r.status} /> },
+          { key: "status", label: head("status", "Status"), render: (r) => <Badge status={r.status} /> },
         ]} />
+      <Pager {...pg.pager} label="investment(s)" />
       {modal?.type === "invest" && <InvestModal lk={lk} onClose={() => setModal(null)} onDone={done} onFail={fail(notify)} />}
       {modal?.type === "view" && <InvestmentView id={modal.id} notify={notify} onClose={() => setModal(null)} onChanged={refresh} />}
     </section>
@@ -329,19 +367,29 @@ function InvestmentView({ id, notify, onClose, onChanged }) {
                   </div>
                 </div>
               ) : (
-                <div className="ln-act-row is-pay">
-                  <Field label={mode === "top-up" ? "Top-up amount" : "Cash-out amount"}>
-                    <input type="number" min="0.01" step="0.01" className="input" value={amount} onChange={(e) => setAmount(e.target.value)}
-                      placeholder={mode === "cashout" ? `All · ${n2(p.cashout_value)}` : "0.00"} autoFocus />
-                  </Field>
-                  <Field label="Date"><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-                  <div className="ln-act-btns">
-                    <button type="button" className="btn" onClick={() => { setMode(null); setAmount(""); }} disabled={busy}>Back</button>
-                    <button type="button" className="btn btn-primary" onClick={submit} disabled={busy || (mode === "top-up" && !(Number(amount) > 0))}>
-                      {mode === "top-up" ? "Save top-up" : amount ? `Cash out ${n2(amount)}` : "Cash out everything"}
-                    </button>
+                <>
+                  {mode === "cashout" && (
+                    <div className="ln-co">
+                      <div><span>Capital</span><b>{n2(inv.principal_balance)}</b></div>
+                      <div><span>Interest earned{p.days_invested ? ` · ${p.days_invested} day(s)` : ""}</span><b>{n2(p.in_lock_in ? 0 : p.interest_earned)}</b></div>
+                      <div className="is-total"><span>Total cash-out · {fmtDate(date)}</span><b>{n2(p.in_lock_in ? inv.principal_balance : p.cashout_value)}</b></div>
+                    </div>
+                  )}
+                  <div className="ln-act-row is-pay">
+                    <Field label={mode === "top-up" ? "Top-up amount" : "Cash-out amount"}>
+                      <input type="number" min="0.01" step="0.01" className="input" value={amount} onChange={(e) => setAmount(e.target.value)}
+                        placeholder={mode === "cashout" ? `All · ${n2(p.cashout_value)}` : "0.00"} autoFocus />
+                    </Field>
+                    <Field label="Date"><input type="date" className="input" value={date} min={mode === "cashout" ? String(inv.last_accrual_date).slice(0, 10) : undefined}
+                      onChange={(e) => { setDate(e.target.value); if (mode === "cashout" && e.target.value) setAsOf(e.target.value); }} /></Field>
+                    <div className="ln-act-btns">
+                      <button type="button" className="btn" onClick={() => { setMode(null); setAmount(""); }} disabled={busy}>Back</button>
+                      <button type="button" className="btn btn-primary" onClick={submit} disabled={busy || (mode === "top-up" && !(Number(amount) > 0))}>
+                        {mode === "top-up" ? "Save top-up" : amount ? `Cash out ${n2(amount)}` : `Cash out ${n2(p.in_lock_in ? inv.principal_balance : p.cashout_value)}`}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </>
               )}
               {p.in_lock_in && <p className="hr-note is-warn">Still in the lock-in until {fmtDate(p.lock_in_ends)}: cashing out now pays the principal only.</p>}
             </section>
@@ -374,11 +422,11 @@ function InvestmentView({ id, notify, onClose, onChanged }) {
    ===================================================================== */
 function Loans({ notify, lk, refresh, tick }) {
   const [status, setStatus] = useState("");
-  const [rows, setRows] = useState(null);
   const [modal, setModal] = useState(null);
   const [q, setQ] = useState("");
-  const shown = useMemo(() => matches(rows, q, (r) => [r.reference_no, r.member?.name, r.member?.code, r.purpose, r.co_maker, r.collection_method]), [rows, q]);
-  useEffect(() => { setRows(null); api.get(`/lending/loans${status ? `?status=${status}` : ""}`).then(setRows).catch(() => setRows([])); }, [status, tick]);
+  const [sort, setSort] = useState({ key: "", dir: "desc" });
+  const pg = useServerPage("/lending/loans", { status, q, sort: sort.key, dir: sort.key ? sort.dir : "" }, tick);
+  const head = (key, label, right) => <SortHead k={key} label={label} sort={sort} setSort={setSort} right={right} />;
   const done = (msg) => { notify(msg); setModal(null); refresh(); };
 
   return (
@@ -389,20 +437,21 @@ function Loans({ notify, lk, refresh, tick }) {
         <input className="input ln-search" type="search" placeholder="Search LN #, borrower, ID…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search loans" />
         <button type="button" className="btn btn-primary btn-sm" onClick={() => setModal({ type: "apply" })}>New loan</button>
       </SectionBar>
-      <DataTable loading={!rows} rows={shown || []} empty={q ? "No loan matches the search." : undefined} onRow={(r) => setModal({ type: "view", id: r.id })} totals={["principal", "total_payable", "total_paid", "balance"]}
+      <DataTable loading={pg.loading} rows={pg.rows} empty={q ? "No loan matches the search." : undefined} onRow={(r) => setModal({ type: "view", id: r.id })} totals={["principal", "total_payable", "total_paid", "balance"]}
         cols={[
-          { key: "reference_no", label: "Ref #", render: (r) => <><b>{r.reference_no}</b><span className="hr-sub">{r.date_released ? fmtDate(r.date_released) : "not released"}</span></> },
-          { key: "member", label: "Borrower", render: (r) => r.member?.name },
-          { key: "rate", label: "Interest", render: rateText },
-          { key: "term", label: "Term", render: termText },
-          { key: "principal", label: "Principal", cls: "n", money: true },
-          { key: "total_payable", label: "Payable", cls: "n", money: true },
-          { key: "amount_per_due", label: "Per due", cls: "n", money: true },
-          { key: "total_paid", label: "Paid", cls: "n", money: true },
-          { key: "balance", label: "Balance", cls: "n", money: true },
-          { key: "deduction_mode", label: "Pay by", render: (r) => (r.deduction_mode === "payroll" ? "Payroll" : "Manual") },
-          { key: "status", label: "Status", render: (r) => <LoanStatus status={r.status} /> },
+          { key: "reference_no", label: head("reference_no", "Ref #"), render: (r) => <><b>{r.reference_no}</b><span className="hr-sub">{r.date_released ? fmtDate(r.date_released) : "not released"}</span></> },
+          { key: "member", label: head("member", "Borrower"), render: (r) => r.member?.name },
+          { key: "rate", label: head("interest", "Interest"), render: rateText },
+          { key: "term", label: head("term", "Term"), render: termText },
+          { key: "principal", label: head("principal", "Principal", true), cls: "n", money: true },
+          { key: "total_payable", label: head("total_payable", "Payable", true), cls: "n", money: true },
+          { key: "amount_per_due", label: head("amount_per_due", "Per due", true), cls: "n", money: true },
+          { key: "total_paid", label: head("total_paid", "Paid", true), cls: "n", money: true },
+          { key: "balance", label: head("balance", "Balance", true), cls: "n", money: true },
+          { key: "deduction_mode", label: head("deduction_mode", "Pay by"), render: (r) => (r.deduction_mode === "payroll" ? "Payroll" : "Manual") },
+          { key: "status", label: head("status", "Status"), render: (r) => <LoanStatus status={r.status} /> },
         ]} />
+      <Pager {...pg.pager} label="loan(s)" />
       {modal?.type === "apply" && <LoanApply lk={lk} onClose={() => setModal(null)} onDone={done} onFail={fail(notify)} />}
       {modal?.type === "view" && <LoanView id={modal.id} notify={notify} onClose={() => setModal(null)} onChanged={refresh} />}
     </section>
