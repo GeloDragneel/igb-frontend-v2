@@ -125,6 +125,8 @@ import UserLogs from "./pages/administration/UserLogs";
 import UserAccess from "./pages/administration/UserAccess";
 import DatabaseSettings from "./pages/administration/DatabaseSettings";
 import Archive from "./pages/administration/Archive";
+import ThirdParty from "./pages/administration/ThirdParty";
+
 import { MessengerPage } from "./components/Messenger";
 import Notifications from "./pages/Notifications";
 import HelpSupport from "./pages/HelpSupport";
@@ -133,7 +135,6 @@ import Calendar from "./pages/Calendar";
 
 import PrepareJO from "./pages/task-management/PrepareJO";
 import ActivityList from "./pages/task-management/ActivityList";
-
 import Pos from "./pages/pos/Pos";
 // Built pages. Add new ones here as you make them;
 // everything else in the sidebar shows "Coming soon".
@@ -274,6 +275,7 @@ const PAGES = {
   "/administration/user-access": UserAccess,
   "/administration/database-settings": DatabaseSettings,
   "/administration/archive": Archive,
+  "/administration/third-party": ThirdParty,
 
   "/notifications": Notifications,
   "/help": HelpSupport,

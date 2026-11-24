@@ -179,6 +179,7 @@ export const NAV = [
           { to: "/administration/database-settings", label: "Database" },
           { to: "/administration/declared-month-settings", label: "Declared Month" },
           { to: "/administration/archive", label: "Archive", icon: "layers" },
+          { to: "/administration/third-party", label: "Third Party" },
         ],
       },
     ],
