@@ -44,6 +44,7 @@ import {
   InventoryStocks, InventoryVariance, InventoryAdjustment, InventoryInternalTransfer,
   InventoryAdjustmentDetail
 } from "./pages/task/inventory/InventoryTabs";
+import InventorySettings from "./pages/task/inventory/InventorySettings";
 
 import GeneralJournal from "./pages/task/GeneralJournal";
 import FixedAssets from "./pages/task/FixedAssets";
@@ -194,6 +195,7 @@ const PAGES = {
   "/task/inventory/adjustment": InventoryAdjustment,
   "/task/inventory/internal-transfer": InventoryInternalTransfer,
   "/task/inventory/adjustment/:id": InventoryAdjustmentDetail,
+  "/task/inventory/settings": InventorySettings,
 
   "/task/general-journal": GeneralJournal,
   "/task/fixed-assets": FixedAssets,

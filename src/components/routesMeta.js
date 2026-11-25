@@ -251,6 +251,7 @@ export const INVENTORY_TABS = [
   { to: "/task/inventory/variance", label: "Variance" },
   { to: "/task/inventory/adjustment", label: "Adjustment" },
   { to: "/task/inventory/internal-transfer", label: "Internal Transfer" },
+  { to: "/task/inventory/settings", label: "Settings" },
 ];
 // Other Reports → Inventory (each tab is its own route, all open InventoryReports.jsx)
 export const INVENTORY_REPORT_TABS = [

@@ -174,6 +174,14 @@ const ACCT_DEFAULTS = {
   output_vat_account: { prefix: "2", type: "Liability", names: () => ["Output VAT", "Output Tax"], create: () => "Output VAT", sib: /^output\s*(vat|tax)/i, head: /output|vat|tax|payable|current liab/i },
 };
 const NEW_ACCT = "new:";                         // dropdown value of an account that will be added on SAVE
+// Accounting Settings fields (key → label, first digit of the account code)
+const ACCT_FIELDS = [
+  { key: "gl_sales_account", label: "Sales Account", prefix: "4" },
+  { key: "gl_inventory_account", label: "Inventory Account", prefix: "1" },
+  { key: "gl_cost_of_sales_account", label: "Cost of Sales Account", prefix: "5" },
+  { key: "input_vat_account", label: "Input VAT Account", prefix: "1" },
+  { key: "output_vat_account", label: "Output VAT Account", prefix: "2" },
+];
 const normName = (s) => String(s || "").replace(/[\u2013\u2014]/g, "-").replace(/\s*-\s*/g, " - ").replace(/\s+/g, " ").trim().toLowerCase();
 
 // next free code under a header (same rule as the Charts of Account page)
@@ -431,7 +439,7 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
     <Modal
       title={record ? "Update Product" : "Add Product"}
       onClose={onClose}
-      size="lg"
+      size="xlg"
       footer={
         <>
           <button className="btn" onClick={onClose} disabled={saving}>Close</button>
@@ -441,7 +449,7 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
     >
       {saveError && <div className="alert-error" role="alert">{saveError}</div>}
 
-      <div className="prod-form" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+      <div className="prod-form" style={{ gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
         {/* ---------- left ---------- */}
         <div className="prod-left">
           <fieldset className="prod-box">
@@ -573,8 +581,47 @@ export function ProductForm({ record, opts: optsProp, accounts, defaultName = ""
           </fieldset>
         </div>
 
-        {/* Accounting Settings are hidden: the default accounts are still filled in and saved (see ACCT_DEFAULTS) */}
+        {/* ---------- right: Accounting Settings ---------- */}
+        <div className="prod-right">
+          <fieldset className="prod-box">
+            <legend>Accounting Settings</legend>
+            {ACCT_FIELDS.map(({ key, label, prefix }) => (
+              <div className="field" key={key}>
+                <span className="field-label">{label}</span>
+                <SearchSelect
+                  value={valueOf(key)}
+                  onChange={(v) => { set(key, v); setAuto((a) => ({ ...a, [key]: false })); }}
+                  options={optsFor(key, prefix)}
+                  aria-label={label}
+                />
+                <button
+                  type="button"
+                  className="btn-link small"
+                  style={{ marginTop: 4, padding: 0, border: 0, background: "none", color: "var(--brand)", cursor: "pointer" }}
+                  onClick={() => setAddAcct({ key, label, prefix, name: ACCT_DEFAULTS[key].perItem ? ACCT_DEFAULTS[key].create(desc) : ACCT_DEFAULTS[key].create() })}
+                >
+                  + Add new account
+                </button>
+              </div>
+            ))}
+            <p className="field-hint" style={{ marginTop: 4 }}>
+              "NEW ·" accounts are added to the chart of accounts when you click {record ? "UPDATE" : "SAVE"}.
+            </p>
+          </fieldset>
+        </div>
       </div>
+
+      {addAcct && (
+        <AddAccountPopup
+          info={addAcct}
+          accounts={coa}
+          loadError={coaError}
+          onRetry={loadCoa}
+          current={f[addAcct.key]}
+          onClose={() => setAddAcct(null)}
+          onAdded={(acct) => { const k = addAcct.key; accountAdded(k, acct); setAuto((a) => ({ ...a, [k]: false })); }}
+        />
+      )}
     </Modal>
   );
 }

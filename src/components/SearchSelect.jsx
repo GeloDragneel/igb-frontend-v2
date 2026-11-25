@@ -161,11 +161,12 @@ export default function SearchSelect({
             if (pop.current?.contains(e.target)) return; // scrolling the list itself
             place();
         };
-        document.addEventListener("mousedown", onDown);
+        // capture phase: a popup (Modal) stops mousedown from bubbling up to document, so listen before it does
+        document.addEventListener("mousedown", onDown, true);
         window.addEventListener("scroll", onScroll, true);
         window.addEventListener("resize", place);
         return () => {
-            document.removeEventListener("mousedown", onDown);
+            document.removeEventListener("mousedown", onDown, true);
             window.removeEventListener("scroll", onScroll, true);
             window.removeEventListener("resize", place);
         };

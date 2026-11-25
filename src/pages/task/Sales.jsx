@@ -307,6 +307,9 @@ function JournalModal({ invoiceNo, onClose }) {
 
   const journal = data?.journal || [];
   const collection = data?.collection || [];
+  // inventory / cost of sales lines come tagged section: "cost" (shown under their own heading)
+  const salesRows = journal.filter((r) => r.section !== "cost");
+  const costRows = journal.filter((r) => r.section === "cost");
 
   // totals = invoice journal only (collection is shown, not added)
   const totalDr = journal.reduce((n, r) => n + Number(r.debit || 0), 0);
@@ -346,7 +349,16 @@ function JournalModal({ invoiceNo, onClose }) {
               <tr><td colSpan={3} className="empty">No journal entries.</td></tr>
             )}
 
-            {journal.map((r, i) => <Row key={`j${i}`} r={r} />)}
+            {salesRows.map((r, i) => <Row key={`j${i}`} r={r} />)}
+
+            {costRows.length > 0 && (
+              <>
+                <tr className="journal-section">
+                  <td colSpan={3}>INVENTORY / COST OF SALES</td>
+                </tr>
+                {costRows.map((r, i) => <Row key={`k${i}`} r={r} />)}
+              </>
+            )}
 
             {collection.length > 0 && (
               <>
