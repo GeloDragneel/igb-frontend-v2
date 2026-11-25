@@ -8,7 +8,6 @@ import Modal from "../../components/Modal";
 import { useAuth, apiFetch } from "../../context/AuthContext";
 import { usePeriod } from "../../context/PeriodContext";
 import { INVENTORY_TABS, RECEIVE_DETAIL_PATH } from "./inventory/inventoryMeta";
-
 // Task → Inventory → Receive Inventory list (old Receive_Inventory.php; same look as Sales.jsx)
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
