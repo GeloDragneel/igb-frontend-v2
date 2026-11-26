@@ -72,9 +72,10 @@ const manualRow = (type, months) => ({
 export const fromApi = (r) => ({
     sales: r.sales.map((x) => ({ ...x, uid: newUid() })),
     purchases: [manualRow("COGS", r.months), ...r.purchases.map((x) => ({ ...x, uid: newUid() }))],
+    costs: (r.costs || []).map((x) => ({ ...x, uid: newUid() })),            // cost of Stock Items sold (read only)
     expenses: [manualRow("EXP", r.months), ...r.expenses.map((x) => ({ ...x, uid: newUid() }))],
     beg: { total: r.beginning, adjustment: 0 },
-    end: { total: r.ending || 0, adjustment: 0 },   // value of the stock on hand at the end (Inventory Method)
+    end: { total: 0, adjustment: 0 },   // worked out: Beginning + Purchases − Cost of Sales
     other: { total: 0, adjustment: 0 },
     taxPrev: { total: 0, adjustment: 0 },
     cwPrev: { total: 0, adjustment: 0 },
@@ -87,6 +88,7 @@ const withNewUids = (st, months = []) => ({
     sales: (st.sales || []).map((x) => ({ ...x, uid: newUid() })),
     purchases: (st.purchases || []).map((x) => ({ ...x, uid: newUid() })),
     expenses: (st.expenses || []).map((x) => ({ ...x, uid: newUid() })),
+    costs: (st.costs || []).map((x) => ({ ...x, uid: newUid() })),
 });
 
 /* ---------- old-system save → { months, st } ----------
@@ -215,6 +217,7 @@ const parseSaved = (raw, fallbackMonths, period = []) => {
         months: months.length ? months : fallbackMonths,
         st: {
             sales: (st.sales || []).map(row), purchases: (st.purchases || []).map(row), expenses: (st.expenses || []).map(row),
+            ...(Array.isArray(st.costs) ? { costs: st.costs.map(row) } : {}),
             beg: field(st.beg), end: field(st.end), other: field(st.other),
             taxPrev: field(st.taxPrev), cwPrev: field(st.cwPrev), cw2307: field(st.cw2307),
         },
@@ -236,14 +239,31 @@ const sumRows = (rows = [], months = []) => {
 export function calc(st, months, brackets, corporate) {
     const S = sumRows(st.sales, months);
     const P = sumRows(st.purchases, months);
+    const C = sumRows(st.costs || [], months);          // cost of Stock Items sold
     const E = sumRows(st.expenses, months);
     const per = (f) => Object.fromEntries(months.map((m) => [m, f(m)]));
 
-    const cogas = { values: P.values, subtotal: P.total + st.beg.total, adjustment: P.adjustment + st.beg.adjustment };
+    // Merchandise Inventory per month: Ending = Beginning + Purchases − Cost of Sales · next month's Beginning = this Ending
+    const begVals = {}, endVals = {};
+    let run = Number(st.beg.total) || 0;
+    months.forEach((m) => {
+        begVals[m] = run;
+        endVals[m] = run + (P.values[m] || 0) - (C.values[m] || 0);
+        run = endVals[m];
+    });
+    const begFirst = Number(st.beg.total) || 0;
+    const endLast = months.length ? endVals[months[months.length - 1]] : begFirst;
+    const inv = {
+        beg: { values: begVals, subtotal: begFirst, adjustment: st.beg.adjustment, total: begFirst + st.beg.adjustment },
+        end: { values: endVals, subtotal: endLast, adjustment: st.end.adjustment, total: endLast + st.end.adjustment },
+    };
+
+    const cogas = { values: per((m) => begVals[m] + P.values[m]), subtotal: begFirst + P.total, adjustment: P.adjustment + st.beg.adjustment };
     cogas.total = cogas.subtotal + cogas.adjustment;
 
-    const gross = per((m) => S.values[m] - P.values[m]);
-    const subCOGS = P.total + st.beg.total - st.end.total;
+    const cogsVals = per((m) => begVals[m] + P.values[m] - endVals[m]);   // = cost of sales of the month
+    const gross = per((m) => S.values[m] - cogsVals[m]);
+    const subCOGS = begFirst + P.total - endLast;
     const adjCOGS = P.adjustment + st.beg.adjustment - st.end.adjustment;
     const subGross = S.total - subCOGS;
     const adjGross = S.adjustment - adjCOGS;
@@ -282,8 +302,8 @@ export function calc(st, months, brackets, corporate) {
     const grossAll = subGross + adjGross;
 
     return {
-        S, P, E, cogas,
-        totalCOGS: { values: P.values, subtotal: subCOGS, adjustment: adjCOGS, total: subCOGS + adjCOGS },
+        S, P, C, E, cogas, inv,
+        totalCOGS: { values: cogsVals, subtotal: subCOGS, adjustment: adjCOGS, total: subCOGS + adjCOGS },
         gross: { values: gross, subtotal: subGross, adjustment: adjGross, total: grossAll },
         gpr: {
             values: per((m) => (S.values[m] ? gross[m] / S.values[m] : 0)),
@@ -491,7 +511,8 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
             return;
         }
         setMonths(saved.months);
-        setSt(withNewUids(saved.st));
+        // older saves have no cost of sales rows → keep the ones on screen
+        setSt((cur) => withNewUids({ ...saved.st, costs: saved.st.costs ?? cur?.costs ?? [] }));
         setPicker(null);
         notify(`Loaded Version ${item.version} by ${item.employee}.`);
     };
@@ -533,10 +554,11 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
         st.sales.filter(keep).forEach(rowLine);
         line("sum", "TOTAL SALES", c.S.values, c.S.total, c.S.adjustment, c.S.total + c.S.adjustment);
         add("sec", ["COST OF SALES"]);
-        fieldLine("Merchandise Inventory, Beginning", st.beg);
+        calcLine("row", "Merchandise Inventory, Beginning", c.inv.beg);
         st.purchases.filter(keep).forEach(rowLine);
         calcLine("row", "Total cost of goods available for sale", c.cogas);
-        fieldLine("Merchandise Inventory, Ending", st.end);
+        (st.costs || []).forEach((r) => line("row", `Less: ${r.label}`, r.values, r.total, null, r.total));
+        calcLine("row", "Merchandise Inventory, Ending", c.inv.end);
         calcLine("bold", "TOTAL COST OF GOODS SOLD", c.totalCOGS);
         calcLine("bold", "GROSS AMOUNT", c.gross);
         calcLine("row", "Gross Profit Rate", c.gpr, true);
@@ -665,6 +687,42 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
         );
     };
 
+    // Merchandise Inventory per month; Beginning's Sub Total (first month) can be typed over, Ending is worked out
+    const invRow = (key, label, x, editable) => (
+        <tr key={key}>
+            <td className="its-label"><i>{label}</i></td>
+            {months.map((m) => <td key={m} className="ta-right mono">{n2(x.values[m])}</td>)}
+            <td>
+                {editable
+                    ? <MoneyInput value={st.beg.total} allowNegative={false} label={`${label} (first month)`} onChange={(v) => patchField("beg", { total: v })} />
+                    : <span className="its-ro mono">{n2(x.subtotal)}</span>}
+            </td>
+            <td>
+                {editable
+                    ? <MoneyInput value={st.beg.adjustment} adj label={`${label} adjustment`} onChange={(v) => patchField("beg", { adjustment: v })} />
+                    : <span className="its-ro mono">{n2(x.adjustment)}</span>}
+            </td>
+            <td className="ta-right mono strong">{n2(x.total)}</td>
+        </tr>
+    );
+
+    // cost of Stock Items sold (read only, amounts open their sales invoices)
+    const costRow = (r) => (
+        <tr key={r.uid}>
+            <td className="its-label"><i>Less: {r.label}</i></td>
+            {months.map((m) => (
+                <td key={m} className="ta-right mono">
+                    {r.values[m] && r.refs?.[m] ? (
+                        <button type="button" className="vs-link" onClick={() => openDocs(r.type, r.refs[m], `${r.label} · ${monLabel(m)}`)}>({n2(r.values[m])})</button>
+                    ) : r.values[m] ? `(${n2(r.values[m])})` : n2(0)}
+                </td>
+            ))}
+            <td className="ta-right mono">({n2(r.total)})</td>
+            <td />
+            <td className="ta-right mono strong">({n2(r.total)})</td>
+        </tr>
+    );
+
     const sumRow = (key, label, x, bold = true) =>
         calcRow(key, label, { values: x.values, subtotal: x.total, adjustment: x.adjustment, total: x.total + x.adjustment }, { bold });
 
@@ -766,10 +824,11 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
                                     {sumRow("sales-total", "TOTAL SALES", c.S)}
 
                                     {section("COST OF SALES", "purchases")}
-                                    {fieldRow("beg", "Merchandise Inventory, Beginning")}
+                                    {invRow("beg", "Merchandise Inventory, Beginning", c.inv.beg, true)}
                                     {st.purchases.map((r) => drillRow("purchases", r))}
                                     {calcRow("cogas", "Total cost of goods available for sale", c.cogas)}
-                                    {fieldRow("end", "Merchandise Inventory, Ending", { adjustable: false })}
+                                    {(st.costs || []).map(costRow)}
+                                    {invRow("end", "Merchandise Inventory, Ending", c.inv.end, false)}
                                     {calcRow("cogs", "TOTAL COST OF GOODS SOLD", c.totalCOGS, { bold: true })}
                                     {gap("g1")}
                                     {calcRow("gross", "GROSS AMOUNT", c.gross, { bold: true })}
@@ -817,22 +876,22 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
                                     const url = docUrl(d);
                                     const open = () => url && setFrame({ title: `${d.module} · ${d.ref}`, url });
                                     return (
-                                        <tr key={i}
-                                            onClick={open}
-                                            onKeyDown={(e) => e.key === "Enter" && open()}
-                                            tabIndex={url ? 0 : undefined}
-                                            title={url ? "Open details" : undefined}
-                                            style={url ? { cursor: "pointer" } : undefined}
-                                            className={url ? "its-doc-row" : undefined}>
-                                            <td className="ta-right muted mono">{i + 1}</td>
-                                            <td>
-                                                {/* long names cut with "…" (full name on hover) */}
-                                                <span className="cell-trunc" style={{ display: "inline-block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }} title={d.name}>
-                                                    {d.name || "—"}
-                                                </span>
-                                            </td><td>{d.ref}</td><td>{d.doc}</td><td>{d.date}</td><td>{d.month}</td>
-                                            <td className="ta-right mono">{n2(d.total)}</td>
-                                        </tr>
+                                    <tr key={i}
+                                        onClick={open}
+                                        onKeyDown={(e) => e.key === "Enter" && open()}
+                                        tabIndex={url ? 0 : undefined}
+                                        title={url ? "Open details" : undefined}
+                                        style={url ? { cursor: "pointer" } : undefined}
+                                        className={url ? "its-doc-row" : undefined}>
+                                        <td className="ta-right muted mono">{i + 1}</td>
+                                        <td>
+                                            {/* long names cut with "…" (full name on hover) */}
+                                            <span className="cell-trunc" style={{ display: "inline-block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }} title={d.name}>
+                                                {d.name || "—"}
+                                            </span>
+                                        </td><td>{d.ref}</td><td>{d.doc}</td><td>{d.date}</td><td>{d.month}</td>
+                                        <td className="ta-right mono">{n2(d.total)}</td>
+                                    </tr>
                                     );
                                 })}
                             </tbody>
