@@ -311,9 +311,9 @@ function JournalModal({ invoiceNo, onClose }) {
   const salesRows = journal.filter((r) => r.section !== "cost");
   const costRows = journal.filter((r) => r.section === "cost");
 
-  // totals = invoice journal only (collection is shown, not added)
-  const totalDr = journal.reduce((n, r) => n + Number(r.debit || 0), 0);
-  const totalCr = journal.reduce((n, r) => n + Number(r.credit || 0), 0);
+  // totals = invoice journal only (inventory / cost of sales and collection are shown, not added)
+  const totalDr = salesRows.reduce((n, r) => n + Number(r.debit || 0), 0);
+  const totalCr = salesRows.reduce((n, r) => n + Number(r.credit || 0), 0);
 
   const Row = ({ r }) => (
     <tr>
@@ -351,6 +351,15 @@ function JournalModal({ invoiceNo, onClose }) {
 
             {salesRows.map((r, i) => <Row key={`j${i}`} r={r} />)}
 
+            {/* total of the invoice journal only, right under its lines */}
+            {salesRows.length > 0 && (
+              <tr className="journal-total">
+                <td />
+                <td className="ta-right mono strong" style={{ borderTop: "2px solid var(--line, #e3e8f1)" }}>{fmt2(totalDr) || "0.00"}</td>
+                <td className="ta-right mono strong" style={{ borderTop: "2px solid var(--line, #e3e8f1)" }}>{fmt2(totalCr) || "0.00"}</td>
+              </tr>
+            )}
+
             {costRows.length > 0 && (
               <>
                 <tr className="journal-section">
@@ -369,15 +378,6 @@ function JournalModal({ invoiceNo, onClose }) {
               </>
             )}
           </tbody>
-          {journal.length > 0 && (
-            <tfoot>
-              <tr>
-                <td />
-                <td className="ta-right mono strong">{fmt2(totalDr) || "0.00"}</td>
-                <td className="ta-right mono strong">{fmt2(totalCr) || "0.00"}</td>
-              </tr>
-            </tfoot>
-          )}
         </table>
       </div>
       {journal.length > 0 && Math.abs(totalDr - totalCr) > 0.01 && (

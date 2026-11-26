@@ -635,7 +635,7 @@ export function ClientPopup({ clientNum, L, hasRdo, onClose, onChanged }) {
                                                 <span className="field-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                                                     <label htmlFor={`cp-${k}`}>{l}</label>
                                                     {letterKind && !isNew && (
-                                                        <button type="button" onClick={() => setLetter({ kind: letterKind, date: form[k] })} disabled={!form[k]}
+                                                        <button type="button" onClick={() => setLetter({ kind: letterKind, date: form[k] })}
                                                             title={form[k] ? `Print ${l.replace("Date of ", "")} letter` : `Set the ${l.toLowerCase()} first`}
                                                             style={{
                                                                 display: "inline-flex", alignItems: "center", gap: 5, height: 24, padding: "0 10px", borderRadius: 999,
