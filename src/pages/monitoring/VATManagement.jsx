@@ -18,6 +18,8 @@ import "../Reports/VATSummaryBulk.css";   // VAT Summary styles (pages/Reports)
 import "./VATManagement.css";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// long client names: first 24 letters + "..." (full name on hover)
+const shortName = (v, max = 24) => { const t = String(v || "").trim(); return t.length > max ? `${t.slice(0, max).trimEnd()} . . .` : t; };
 const pad = (n) => String(n).padStart(2, "0");
 const today = new Date(); // Philippine time on the user's PC
 const THIS_MONTH = `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
@@ -64,15 +66,15 @@ const COLS = [
     { key: "vatable_sales", label: "VATable Sales", group: "sales" },
     { key: "exempt_sales", label: "Exempt Sales", group: "sales" },
     { key: "zero_rated", label: "Zero Rated", group: "sales" },
-    { key: "total_sales", label: "Total Sales", group: "sales", strong: true },
+    { key: "total_sales", label: "Total Sales", group: "sales", strong: true, main: true },
     { key: "vatable_purchases", label: "VATable Purchases", group: "pe" },
     { key: "vatable_expenses", label: "VATable Expenses", group: "pe" },
     { key: "exempt_purchase_exp", label: "Exempt Purch. / Exp.", group: "pe" },
-    { key: "total_purchase_exp", label: "Total Purch. / Exp.", group: "pe", strong: true },
+    { key: "total_purchase_exp", label: "Total Purch. / Exp.", group: "pe", strong: true, main: true },
     { key: "output_vat", label: "Output VAT", group: "vat", tone: "out" },
     { key: "input_vat", label: "Input VAT", group: "vat", tone: "in" },
     { key: "creditable_wt", label: "2307 Creditable WT", group: "vat" },
-    { key: "net_vat_payable", label: "Net VAT Payable", group: "vat", tone: "net", noLink: true },
+    { key: "net_vat_payable", label: "Net VAT Payable", group: "vat", tone: "net", noLink: true, main: true },
 ];
 const GROUPS = [["sales", "Sales", 4], ["pe", "Purchases / Expenses", 4], ["vat", "VAT", 4]];
 
@@ -210,8 +212,9 @@ const touched = (via) => (via === "sales" ? ["vatable_sales", "total_sales", "ou
     : [via === "purchases" ? "vatable_purchases" : "vatable_expenses", "total_purchase_exp", "input_vat"]);
 
 /* typed money box: keeps what you type while focused */
-function MoneyBox({ value, onChange, label, className = "" }) {
+function MoneyBox({ value, onChange, label, className = "", disabled = false }) {
     const [draft, setDraft] = useState(null);
+    if (disabled) return <input className={`vm-xl vm-in is-final ${className}`} aria-label={label} value={n2(value)} readOnly tabIndex={-1} title="Final (resolved)" />;
     return (
         <input className={`vm-xl vm-in ${className}`} inputMode="decimal" aria-label={label}
             value={draft ?? n2(value)}
@@ -233,6 +236,7 @@ export default function VATManagement() {
     const { user } = useAuth();
     const isAuditor = AUDITOR_DESIGNATIONS.includes(Number(user?.designation_id));   // only an auditor can Resolve / Decline
     const [ask, setAsk] = useState(null);   // confirmation in the Manage popup: "save" | "Resolved" | "Declined"
+    const [finPick, setFinPick] = useState(null);   // Resolve: the log whose amounts become final
     const saved = useMemo(readFilters, []);
     // one Declared Month only (From = To = that month)
     const [month, setMonth] = useState(saved.month || saved.to || THIS_MONTH);
@@ -262,14 +266,22 @@ export default function VATManagement() {
     const [branches, setBranches] = useState({}); // client_num → rows | "loading"
     // zero-out per client: { via, target } – target (the Net VAT Payable you want) starts at 0
     const [zero, setZero] = useState({});
+    // Sales / Purchases-Expenses / VAT: one column by default (Total Sales · Total Purch. / Exp. · Net VAT Payable) · More shows the rest
+    const [wide, setWide] = useState({ sales: false, pe: false, vat: false });
+    const VIS = COLS.filter((c) => !(c.group in wide) || wide[c.group] || c.main);
+    const [vm, setVm] = useState({});   // { client_id: { status, logs, unread, final } } from t_vat_management_*
+    // Resolved → the amounts the auditor finalized (from the log picked on Resolve)
+    const finalOf = (r) => { const x = vm[r.client_id]; return x?.status === "Resolved" && x.final ? x.final : null; };
     const adjOf = (r) => {
+        const f = finalOf(r);
+        if (f) return { via: f.trans_type === "Sales" ? "sales" : "purchases", target: Number(f.adjusted) || 0, amount: Number(f.amount) || 0, final: true, logId: f.log_id };
         const z = zero[r.client_num] || {};
         const net0 = Number(r.net_vat_payable) || 0;
         const target = z.target ?? 0;
         const via = autoVia(net0, target);
         return { via, target, amount: amountFor(net0, via, target) };
     };
-    const setTarget = (r, target) => setZero((z) => ({ ...z, [r.client_num]: { ...(z[r.client_num] || {}), target } }));
+    const setTarget = (r, target) => !finalOf(r) && setZero((z) => ({ ...z, [r.client_num]: { ...(z[r.client_num] || {}), target } }));
     const setAmount = (r, amount) => {
         const via = adjOf(r).via;
         setTarget(r, netFor(Number(r.net_vat_payable) || 0, via, amount));
@@ -348,9 +360,8 @@ export default function VATManagement() {
 
     // dashboard metrics (from every client found) + click a card to show only those clients
     const [riskPick, setRiskPick] = useState("");   // "" all · concern · small · medium · high · ok
-    const risks = useMemo(() => Object.fromEntries(found.map((r) => [r.client_num, riskOf(r, adjOf(r))])), [found, zero]); // eslint-disable-line react-hooks/exhaustive-deps
+    const risks = useMemo(() => Object.fromEntries(found.map((r) => [r.client_num, riskOf(r, adjOf(r))])), [found, zero, vm]); // eslint-disable-line react-hooks/exhaustive-deps
     // t_vat_management_status / _logs of the month: { client_id: { status, logs } }
-    const [vm, setVm] = useState({});
     const [vmMonth, setVmMonth] = useState("");
     const loadVm = useCallback(async (m) => {
         if (!m) return;
@@ -364,6 +375,9 @@ export default function VATManagement() {
     // In Review = has adjustment logs and is not Resolved yet
     const inReview = (r) => { const x = vm[r.client_id]; return !!x && x.logs > 0 && x.status !== "Resolved"; };
     const statusOf = (r) => vm[r.client_id]?.status || "Pending";   // same as the Status column
+    // read / unread: logs other users saved that I haven't opened yet
+    const unreadOf = (r) => Number(vm[r.client_id]?.unread) || 0;
+    const totalUnread = useMemo(() => Object.values(vm).reduce((s, x) => s + (Number(x?.unread) || 0), 0), [vm]);
 
     const metrics = useMemo(() => {
         const m = { total: found.length, concern: 0, small: 0, medium: 0, high: 0, ok: 0, review: 0, reviewLogs: 0, pending: 0, resolved: 0 };
@@ -390,6 +404,8 @@ export default function VATManagement() {
         try {
             const res = await apiFetch(`/vat-management/logs?${new URLSearchParams({ client_id: r0.client_id, month: used.from })}`);
             setManage((m) => m && { ...m, status: res.status?.status || "Pending", statusInfo: res.status, logs: res.logs || [], loading: false });
+            // opening the popup reads them → clear this client's badge
+            setVm((v) => (v[r0.client_id]?.unread ? { ...v, [r0.client_id]: { ...v[r0.client_id], unread: 0 } } : v));
         } catch (e) {
             setManage((m) => m && { ...m, logs: [], loading: false, error: e.message || "Couldn't load the logs." });
         }
@@ -420,12 +436,12 @@ export default function VATManagement() {
             setManage((m) => m && { ...m, saving: false });
         }
     };
-    const setStatus = async (status) => {
+    const setStatus = async (status, logId = null) => {
         if (!isAuditor) return;
         setManage((m) => ({ ...m, saving: true }));
         try {
             await apiFetch("/vat-management/status", {
-                method: "POST", body: JSON.stringify({ client_id: manage.row.client_id, month: used.from, status }),
+                method: "POST", body: JSON.stringify({ client_id: manage.row.client_id, month: used.from, status, log_id: logId }),
             });
             notify(`${manage.row.client_name}: ${status}.`);
             await refreshManage();
@@ -435,7 +451,7 @@ export default function VATManagement() {
         }
     };
 
-    const adjusted = useMemo(() => shown.map((r) => adjustRow(r, adjOf(r))), [shown, zero]); // eslint-disable-line react-hooks/exhaustive-deps
+    const adjusted = useMemo(() => shown.map((r) => adjustRow(r, adjOf(r))), [shown, zero, vm]); // eslint-disable-line react-hooks/exhaustive-deps
     const totals = useMemo(() => {
         const t = {};
         COLS.forEach((c) => { t[c.key] = adjusted.reduce((s, r) => s + Math.round((Number(r[c.key]) || 0) * 100) / 100, 0); });
@@ -766,19 +782,19 @@ export default function VATManagement() {
                 </td>
                 <td className="vs-f1">{num}</td>
                 <td className="vs-f2">
-                    <button type="button" className="vs-client" title={`${r.client_name} — open E-BIR`} onClick={() => loadEbir(r, "initial")}>
-                        {r.client_name}
+                    <button type="button" className="vs-client" title={r.client_name} aria-label={`${r.client_name} — open E-BIR`} onClick={() => loadEbir(r, "initial")}>
+                        {shortName(r.client_name)}
                     </button>
                 </td>
-                {COLS.map((c) => {
+                {VIS.map((c) => {
                     const v = Number(r[c.key]) || 0;
                     const text = c.key === "net_vat_payable" ? paren(v) : dash(v);
                     // Net VAT Payable: type the amount you want (starts at 0) → the adjustment follows
                     if (!child && c.key === "net_vat_payable") {
                         return (
                             <td key={c.key} className="vs-num is-net vm-cell" title={`Before adjustment: ${paren(r0.net_vat_payable)}`}>
-                                <MoneyBox value={a.target} label={`Net VAT Payable of ${r.client_name}`} onChange={(t) => setTarget(r0, t)} className={a.target ? "is-set" : ""} />
-                                <small className="vm-was">was {paren(r0.net_vat_payable)}</small>
+                                <MoneyBox value={a.target} label={`Net VAT Payable of ${r.client_name}`} onChange={(t) => setTarget(r0, t)} className={a.target ? "is-set" : ""} disabled={a.final} />
+                                <small className="vm-was">{a.final && <b className="vm-final">🔒 Final</b>}was {paren(r0.net_vat_payable)}</small>
                             </td>
                         );
                     }
@@ -798,7 +814,7 @@ export default function VATManagement() {
                     )}
                 </td>
                 <td className="vs-num vm-cell">
-                    {child ? "-" : <MoneyBox value={a.amount} label={`Amount to adjust for ${r.client_name}`} onChange={(x) => setAmount(r0, x)} className={a.amount < 0 ? "is-neg" : ""} />}
+                    {child ? "-" : <MoneyBox value={a.amount} label={`Amount to adjust for ${r.client_name}`} onChange={(x) => setAmount(r0, x)} className={a.amount < 0 ? "is-neg" : ""} disabled={a.final} />}
                 </td>
                 <td className="vm-risk">
                     {child ? "-" : (() => {
@@ -813,7 +829,13 @@ export default function VATManagement() {
                     })()}
                 </td>
                 <td className="vm-act">
-                    {child ? "-" : <button type="button" className="vm-manage" onClick={() => openManage(r0, a)}>Manage</button>}
+                    {child ? "-" : (
+                        <button type="button" className="vm-manage" onClick={() => openManage(r0, a)}
+                            title={unreadOf(r0) ? `${unreadOf(r0)} unread adjustment log${unreadOf(r0) === 1 ? "" : "s"}` : undefined}>
+                            Manage
+                            {unreadOf(r0) > 0 && <span className="vm-unread">{unreadOf(r0)}</span>}
+                        </button>
+                    )}
                 </td>
             </tr>
         );
@@ -834,7 +856,7 @@ export default function VATManagement() {
                     <span>Declared Month</span>
                     <div className="vm-month">
                         <button type="button" className="vm-month-btn" onClick={() => goMonth(-1)} aria-label="Previous month" title="Previous month">‹</button>
-                        <input type="month" className="input" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Declared month" />
+                        <input type="month" className="input" value={month} onChange={(e) => { const m = e.target.value; setMonth(m); if (/^\d{4}-\d{2}$/.test(m)) load(m, m); }} aria-label="Declared month" />
                         <button type="button" className="vm-month-btn" onClick={() => goMonth(1)} aria-label="Next month" title="Next month">›</button>
                     </div>
                 </div>
@@ -850,7 +872,7 @@ export default function VATManagement() {
                     <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Client" />
                 </label>
                 <div className="vs-actions">
-                    <button type="button" className="btn btn-primary" onClick={() => load()} disabled={loading}>{loading ? "Loading…" : "Search"}</button>
+                    <button type="button" className="btn btn-primary" onClick={() => { load(); loadVm(month); }} disabled={loading}>{loading ? "Loading…" : "Refresh"}</button>
                     <div className="vs-menu-wrap">
                         <button type="button" className="btn" onClick={() => setListMenu((m) => !m)} disabled={!shown.length || printing} aria-expanded={listMenu}>
                             {printing ? "Printing…" : "Print ▾"}
@@ -896,19 +918,29 @@ export default function VATManagement() {
                     <table className="vs-table">
                         <colgroup>
                             <col className="vs-w0" /><col className="vs-w1" /><col className="vs-w2" />
-                            {COLS.map((c) => <col key={c.key} className="vs-wn" />)}
+                            {VIS.map((c) => <col key={c.key} className="vs-wn" />)}
                             <col className="vm-wv" /><col className="vm-wa" /><col className="vm-wr" /><col className="vm-wst" /><col className="vm-wact" />
                         </colgroup>
                         <thead>
                             <tr className="vs-groups">
                                 <th className="vs-f0" rowSpan={2} /><th className="vs-f1" rowSpan={2}>#</th><th className="vs-f2 vs-left" rowSpan={2}>Client</th>
-                                {GROUPS.map(([k, label, span]) => <th key={k} colSpan={span} className={`vs-group is-${k}`}>{label}</th>)}
+                                {GROUPS.map(([k, label]) => (
+                                    <th key={k} colSpan={VIS.filter((c) => c.group === k).length} className={`vs-group is-${k}`}>
+                                        {label}
+                                        {k in wide && (
+                                            <button type="button" className="vm-wide" onClick={() => setWide((w) => ({ ...w, [k]: !w[k] }))}
+                                                aria-expanded={wide[k]} title={wide[k] ? "Show the total only" : "Show more columns"}>
+                                                {wide[k] ? "Less" : "More"}
+                                            </button>
+                                        )}
+                                    </th>
+                                ))}
                                 <th colSpan={3} className="vs-group vm-group">Zero out the Net VAT Payable</th>
                                 <th rowSpan={2} className="vs-left">Status</th>
-                                <th rowSpan={2} className="vs-left vm-act-h">Action</th>
+                                <th rowSpan={2} className="vs-left vm-act-h">Action{totalUnread > 0 && <span className="vm-unread-total" title="Unread adjustment logs">{totalUnread} unread</span>}</th>
                             </tr>
                             <tr className="vs-heads">
-                                {COLS.map((c) => <th key={c.key} className={`vs-num${c.tone ? ` is-${c.tone}` : ""}`}>{c.label}</th>)}
+                                {VIS.map((c) => <th key={c.key} className={`vs-num${c.tone ? ` is-${c.tone}` : ""}`}>{c.label}</th>)}
                                 <th className="vs-left">Adjust in</th><th className="vs-num">Amount to adjust</th><th className="vs-left">Risk</th>
                             </tr>
                         </thead>
@@ -920,15 +952,15 @@ export default function VATManagement() {
                                 </Fragment>
                             ))}
                             {!shown.length && (
-                                <tr><td colSpan={COLS.length + 8} className="vs-empty">
-                                    {loading ? "Loading…" : used ? "No VAT client found for this period." : "Pick a period and press Search."}
+                                <tr><td colSpan={VIS.length + 8} className="vs-empty">
+                                    {loading ? "Loading…" : used ? "No VAT client found for this period." : "Pick a declared month."}
                                 </td></tr>
                             )}
                         </tbody>
                         <tfoot>
                             <tr>
                                 <th className="vs-f0" /><th className="vs-f1" /><th className="vs-f2 vs-left">Total · {shown.length} client{shown.length === 1 ? "" : "s"}</th>
-                                {COLS.map((c) => (
+                                {VIS.map((c) => (
                                     <th key={c.key} className={`vs-num${c.tone ? ` is-${c.tone}` : ""}`}>
                                         {c.key === "net_vat_payable" ? paren(totals[c.key]) : n2(totals[c.key])}
                                     </th>
@@ -963,8 +995,9 @@ export default function VATManagement() {
                                             <button type="button" className="btn vm-btn-decline" onClick={() => setAsk("Declined")} disabled={manage.saving || st === "Declined"}>
                                                 ✕ Decline
                                             </button>
-                                            <button type="button" className="btn vm-btn-resolve" onClick={() => setAsk("Resolved")} disabled={manage.saving || st === "Resolved"}>
-                                                {st === "Resolved" ? "✓ Resolved" : "✓ Resolve"}
+                                            <button type="button" className="btn vm-btn-resolve" onClick={() => { setFinPick(manage.logs?.[0]?.id ?? null); setAsk("Resolved"); }} disabled={manage.saving || (st === "Resolved" && a.final)}
+                                                title={st === "Resolved" && !a.final ? "Resolved before – pick the amounts to finalize" : undefined}>
+                                                {st === "Resolved" ? (a.final ? "✓ Resolved" : "✓ Finalize amounts") : "✓ Resolve"}
                                             </button>
                                         </>
                                     )}
@@ -1005,12 +1038,12 @@ export default function VATManagement() {
                                     </div>
                                     <div className="vm-m-card is-edit">
                                         <span>Adjusted Net VAT Payable</span>
-                                        <label className="vm-m-field"><i>₱</i><MoneyBox value={a.target} label="Adjusted Net VAT Payable" onChange={(t) => setTarget(row, t)} className="vm-m-big" /></label>
-                                        <small>type the amount you want · Enter ↵</small>
+                                        <label className="vm-m-field"><i>₱</i><MoneyBox value={a.target} label="Adjusted Net VAT Payable" onChange={(t) => setTarget(row, t)} className="vm-m-big" disabled={a.final} /></label>
+                                        <small>{a.final ? "🔒 final – picked on Resolve" : "type the amount you want · Enter ↵"}</small>
                                     </div>
                                     <div className="vm-m-card is-edit is-amt">
                                         <span>Amount to adjust {tt && <em className={`vm-m-tag is-${a.via}`}>{tt}</em>}</span>
-                                        <label className="vm-m-field"><i>₱</i><MoneyBox value={a.amount} label="Amount to adjust" onChange={(x) => setAmount(row, x)} className="vm-m-big" /></label>
+                                        <label className="vm-m-field"><i>₱</i><MoneyBox value={a.amount} label="Amount to adjust" onChange={(x) => setAmount(row, x)} className="vm-m-big" disabled={a.final} /></label>
                                         <small>{k.level === "ok" ? "nothing to adjust" : <span className={`vm-pill is-${k.level}`}>{RISK[k.level].label}<em>{pctText(k.pct)}</em></span>}</small>
                                     </div>
                                 </div>
@@ -1044,11 +1077,13 @@ export default function VATManagement() {
                                     {!!manage.logs?.length && (
                                         <ol className="vm-m-tl">
                                             {manage.logs.map((l) => (
-                                                <li key={l.id}>
+                                                <li key={l.id} className={`${l.is_read === false ? "is-unread" : ""}${a.final && a.logId === l.id ? " is-final" : ""}`}>
                                                     <span className={`vm-m-dot is-${String(l.trans_type).toLowerCase()}`} />
                                                     <div className="vm-m-tl-top">
                                                         <b>{l.employee || (l.employee_id ? `Employee #${l.employee_id}` : "—")}</b>
                                                         <span className={`vm-m-tag is-${l.trans_type === "Sales" ? "sales" : "purchases"}`}>{l.trans_type}</span>
+                                                        {a.final && a.logId === l.id && <span className="vm-m-fin">🔒 Final</span>}
+                                                        {l.is_read === false && <span className="vm-m-new">New</span>}
                                                         <time>{stamp(l.timestamp)}</time>
                                                     </div>
                                                     <div className="vm-m-tl-grid">
@@ -1066,12 +1101,53 @@ export default function VATManagement() {
                                 </div>
                             </div>
                         </Modal>
-                        {ask && (
+                        {ask === "Resolved" && (
+                            <div className="vm-fin-back" role="dialog" aria-modal="true" aria-label="Resolve – finalize the amounts" onClick={(e) => e.target === e.currentTarget && setAsk(null)}>
+                                <div className="vm-fin">
+                                    <div className="vm-fin-h">
+                                        <b>Resolve · finalize the amounts</b>
+                                        <small>{row.client_name} · {monthLabel(used?.from)} — pick the adjustment that will show in the table. No more logs can be saved after this.</small>
+                                    </div>
+                                    {!manage.logs?.length ? (
+                                        <div className="vm-m-empty"><b>No adjustment saved yet</b><small>Save a log first, then resolve.</small></div>
+                                    ) : (
+                                        <div className="vm-fin-list">
+                                            {manage.logs.map((l) => (
+                                                <label key={l.id} className={`vm-fin-opt${finPick === l.id ? " is-on" : ""}`}>
+                                                    <input type="radio" name="vm-fin" checked={finPick === l.id} onChange={() => setFinPick(l.id)} />
+                                                    <div className="vm-fin-body">
+                                                        <div className="vm-m-tl-top">
+                                                            <b>{l.employee || "—"}</b>
+                                                            <span className={`vm-m-tag is-${l.trans_type === "Sales" ? "sales" : "purchases"}`}>{l.trans_type}</span>
+                                                            <time>{stamp(l.timestamp)}</time>
+                                                        </div>
+                                                        <div className="vm-m-tl-grid">
+                                                            <div><span>Net VAT Payable</span><b>{Math.abs(Number(l.adjusted_net_vat_payable) || 0) < 0.005 ? "0.00" : paren(l.adjusted_net_vat_payable)}</b></div>
+                                                            <div><span>Adjust in</span><b>{l.trans_type === "Sales" ? "Sales" : "Purchases"}</b></div>
+                                                            <div><span>Amount to adjust</span><b>{n2(l.amount_to_adjust)}</b></div>
+                                                        </div>
+                                                        {l.remarks && <p>{l.remarks}</p>}
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="vm-fin-f">
+                                        <button type="button" className="btn" onClick={() => setAsk(null)}>Cancel</button>
+                                        <button type="button" className="btn vm-btn-resolve" disabled={!finPick || manage.saving}
+                                            onClick={() => { const id = finPick; setAsk(null); setStatus("Resolved", id); }}>
+                                            ✓ Resolve &amp; finalize
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {ask && ask !== "Resolved" && (
                             <ConfirmDialog
-                                title={ask === "save" ? "Save log" : ask === "Resolved" ? "Resolve" : "Decline"}
+                                title={ask === "save" ? "Save log" : "Decline"}
                                 message={ask === "save"
                                     ? `Are you sure you want to save this adjustment ? Net VAT Payable ${paren(row.net_vat_payable)} → ${Math.abs(a.target) < 0.005 ? "0.00" : paren(a.target)} (${a.amount < 0 ? "−" : "+"} ${n2(Math.abs(a.amount))} to ${tt}).`
-                                    : `Are you sure you want to mark ${row.client_name} (${monthLabel(used?.from)}) as ${ask} ?${ask === "Resolved" ? " No more logs can be saved after this." : ""}`}
+                                    : `Are you sure you want to mark ${row.client_name} (${monthLabel(used?.from)}) as ${ask} ?${st === "Resolved" ? " The finalized amounts will be removed." : ""}`}
                                 confirmLabel="Yes"
                                 onCancel={() => setAsk(null)}
                                 onConfirm={() => { const k = ask; setAsk(null); k === "save" ? saveLog() : setStatus(k); }}

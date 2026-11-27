@@ -1112,3 +1112,318 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+/* read / unread */
+.vm-unread {
+    margin-left: 6px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    font: 700 11px/20px inherit;
+    font-family: inherit;
+    cursor: pointer;
+    vertical-align: middle;
+    box-shadow: 0 0 0 2px var(--surface, #fff);
+}
+
+.vm-unread:hover {
+    background: #b91c1c;
+}
+
+.vm-unread-total {
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.vm-m-tl li.is-unread {
+    background: color-mix(in srgb, #3b82f6 6%, transparent);
+    border-radius: 10px;
+    margin: 2px -10px;
+    padding: 10px;
+}
+
+.vm-m-tl li.is-unread .vm-m-dot {
+    left: -11px;
+}
+
+.vm-m-new {
+    font-size: 10.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    margin-left: auto;
+}
+
+.vm-m-new+time {
+    margin-left: 8px !important;
+}
+
+.vm-cname {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+}
+
+.vm-cname .vm-unread {
+    margin-left: 0;
+    flex: none;
+}
+
+.vm-m-tl li.is-unread p {
+    background: var(--surface, #fff);
+}
+
+/* unread badge on the Manage button (corner) */
+.vm-manage {
+    position: relative;
+    overflow: visible;
+}
+
+.vm-manage .vm-unread {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    margin: 0;
+    display: inline-grid;
+    place-items: center;
+    pointer-events: none;
+}
+
+/* Resolve → finalize amounts */
+.vm-xl.is-final {
+    cursor: default;
+    color: #15803d;
+    font-weight: 700;
+}
+
+.vm-xl.is-final:hover,
+.vm-xl.is-final:focus {
+    background: transparent;
+    box-shadow: none;
+}
+
+.vm-final {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #15803d;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.vm-m .vm-m-field:has(.is-final) {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    box-shadow: none;
+    cursor: default;
+}
+
+.vm-m .vm-m-field input.vm-m-big.is-final {
+    color: #15803d;
+}
+
+.vm-m-fin {
+    font-size: 10.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #15803d;
+    margin-left: auto;
+}
+
+.vm-m-fin+time,
+.vm-m-fin+.vm-m-new {
+    margin-left: 8px !important;
+}
+
+.vm-m-tl li.is-final {
+    background: #f0fdf4;
+    border-radius: 10px;
+    margin: 2px -10px;
+    padding: 10px;
+}
+
+.vm-m-tl li.is-final .vm-m-dot {
+    left: -11px;
+}
+
+.vm-m-tl li.is-final p {
+    background: #fff;
+}
+
+.vm-fin-back {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, .45);
+}
+
+.vm-fin {
+    width: min(640px, 100%);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 18px;
+    background: var(--surface, #fff);
+    color: var(--ink, #1b2437);
+    box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .45);
+    overflow: hidden;
+}
+
+.vm-fin-h {
+    padding: 18px 20px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.vm-fin-h b {
+    font-size: 17px;
+}
+
+.vm-fin-h small {
+    color: var(--muted, #69738a);
+    font-size: 12.5px;
+}
+
+.vm-fin-list {
+    padding: 4px 20px 12px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.vm-fin-opt {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1.5px solid var(--line, #e3e8f1);
+    cursor: pointer;
+}
+
+.vm-fin-opt:hover {
+    border-color: #86efac;
+}
+
+.vm-fin-opt.is-on {
+    border-color: #16a34a;
+    background: #f0fdf4;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, .12);
+}
+
+.vm-fin-opt input {
+    margin-top: 3px;
+    accent-color: #16a34a;
+    width: 16px;
+    height: 16px;
+}
+
+.vm-fin-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.vm-fin-body p {
+    margin: 6px 0 0;
+    font-size: 12.5px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--bg, #f4f6fb);
+}
+
+.vm-fin-body .vm-m-tl-grid {
+    grid-template-columns: repeat(3, auto);
+}
+
+.vm-fin-f {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--line, #e3e8f1);
+}
+
+.btn.vm-btn-resolve,
+.vm-fin-f .btn.vm-btn-resolve {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+}
+
+.btn.vm-btn-resolve:hover:not(:disabled) {
+    background: #15803d;
+    border-color: #15803d;
+}
+
+.btn.vm-btn-resolve:disabled {
+    opacity: .55;
+}
+
+/* unread badge inside the Manage button (not on the corner – table cells can clip it) */
+.vm-manage {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.vm-manage .vm-unread {
+    position: static;
+    top: auto;
+    right: auto;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 10.5px;
+    line-height: 18px;
+    box-shadow: none;
+}
+
+/* Sales / Purchases-Expenses: totals only ⇄ all columns */
+.vm-wide {
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    background: transparent;
+    color: #2563eb;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.vs-group.is-pe .vm-wide {
+    color: #0d9488;
+}
+
+.vm-wide:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.vs-group.is-vat .vm-wide {
+    color: #d97706;
+}
