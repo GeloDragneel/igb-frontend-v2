@@ -320,7 +320,7 @@ export function calc(st, months, brackets, corporate) {
  * <IncomeTaxSummary embedded userIds="12,15" from="2026-01" to="2026-10" />
  *   = the same statement for one client (Reports → Income Summary popup):
  *     no From / To / Branch, scoped to those logins. Ends at Income Tax Payable (excess), like the page.
- */
+*/
 export default function IncomeTaxSummary({ embedded = false, userIds = "", from: fixedFrom = "", to: fixedTo = "" }) {
     const { user } = useAuth();
     const notify = useToast();

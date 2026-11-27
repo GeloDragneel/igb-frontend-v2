@@ -107,6 +107,7 @@ export const NAV = [
           { to: "/monitoring/scan", label: "Scan" },
           { to: "/monitoring/collection", label: "Collection" },
           { to: "/monitoring/retainers-fee", label: "Retainers Fee" },
+          { to: "/monitoring/vat-management-dashboard", label: "VAT Management Dashboard" },
         ],
       },
       {

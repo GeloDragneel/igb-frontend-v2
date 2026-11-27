@@ -103,6 +103,7 @@ import EfficiencyMonitoring from "./pages/monitoring/EfficiencyMonitoring";
 import ScanMonitoring from "./pages/monitoring/ScanMonitoring";
 import CollectionMonitoring from "./pages/monitoring/CollectionMonitoring";
 import Retainersfee from "./pages/monitoring/Retainersfee";
+import VATManagement from "./pages/monitoring/VATManagement";
 
 import HRSettings from "./pages/hr/HRSettings";
 import EmployeeHR from "./pages/hr/EmployeeHR";
@@ -255,6 +256,7 @@ const PAGES = {
   "/monitoring/scan": ScanMonitoring,
   "/monitoring/collection": CollectionMonitoring,
   "/monitoring/retainers-fee": Retainersfee,
+  "/monitoring/vat-management-dashboard": VATManagement,
 
   "/hr/attendance": Attendance,
   "/hr/payroll": Payroll,
