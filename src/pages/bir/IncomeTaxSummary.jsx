@@ -243,28 +243,22 @@ export function calc(st, months, brackets, corporate) {
     const E = sumRows(st.expenses, months);
     const per = (f) => Object.fromEntries(months.map((m) => [m, f(m)]));
 
-    // Merchandise Inventory per month: Ending = Beginning + Purchases − Cost of Sales · next month's Beginning = this Ending
-    const begVals = {}, endVals = {};
-    let run = Number(st.beg.total) || 0;
-    months.forEach((m) => {
-        begVals[m] = run;
-        endVals[m] = run + (P.values[m] || 0) - (C.values[m] || 0);
-        run = endVals[m];
-    });
-    const begFirst = Number(st.beg.total) || 0;
-    const endLast = months.length ? endVals[months[months.length - 1]] : begFirst;
+    // Merchandise Inventory, Beginning / Ending: no data (left blank, counted as 0)
+    const begVals = zeroValues(months), endVals = zeroValues(months);
+    const begFirst = 0;
+    const endLast = 0;
     const inv = {
-        beg: { values: begVals, subtotal: begFirst, adjustment: st.beg.adjustment, total: begFirst + st.beg.adjustment },
-        end: { values: endVals, subtotal: endLast, adjustment: st.end.adjustment, total: endLast + st.end.adjustment },
+        beg: { values: begVals, subtotal: 0, adjustment: 0, total: 0 },
+        end: { values: endVals, subtotal: 0, adjustment: 0, total: 0 },
     };
 
-    const cogas = { values: per((m) => begVals[m] + P.values[m]), subtotal: begFirst + P.total, adjustment: P.adjustment + st.beg.adjustment };
+    const cogas = { values: per((m) => begVals[m] + P.values[m]), subtotal: begFirst + P.total, adjustment: P.adjustment };
     cogas.total = cogas.subtotal + cogas.adjustment;
 
     const cogsVals = per((m) => begVals[m] + P.values[m] - endVals[m]);   // = cost of sales of the month
     const gross = per((m) => S.values[m] - cogsVals[m]);
     const subCOGS = begFirst + P.total - endLast;
-    const adjCOGS = P.adjustment + st.beg.adjustment - st.end.adjustment;
+    const adjCOGS = P.adjustment;
     const subGross = S.total - subCOGS;
     const adjGross = S.adjustment - adjCOGS;
     const subSubj = subGross - E.total;
@@ -554,11 +548,11 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
         st.sales.filter(keep).forEach(rowLine);
         line("sum", "TOTAL SALES", c.S.values, c.S.total, c.S.adjustment, c.S.total + c.S.adjustment);
         add("sec", ["COST OF SALES"]);
-        calcLine("row", "Merchandise Inventory, Beginning", c.inv.beg);
+        add("row", ["Merchandise Inventory, Beginning", ...blank, "", "", ""]);
         st.purchases.filter(keep).forEach(rowLine);
         calcLine("row", "Total cost of goods available for sale", c.cogas);
         (st.costs || []).forEach((r) => line("row", `Less: ${r.label}`, r.values, r.total, null, r.total));
-        calcLine("row", "Merchandise Inventory, Ending", c.inv.end);
+        add("row", ["Merchandise Inventory, Ending", ...blank, "", "", ""]);
         calcLine("bold", "TOTAL COST OF GOODS SOLD", c.totalCOGS);
         calcLine("bold", "GROSS AMOUNT", c.gross);
         calcLine("row", "Gross Profit Rate", c.gpr, true);
@@ -688,21 +682,12 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
     };
 
     // Merchandise Inventory per month; Beginning's Sub Total (first month) can be typed over, Ending is worked out
-    const invRow = (key, label, x, editable) => (
+    // Merchandise Inventory, Beginning / Ending: label only, no data
+    const invRow = (key, label) => (
         <tr key={key}>
             <td className="its-label"><i>{label}</i></td>
-            {months.map((m) => <td key={m} className="ta-right mono">{n2(x.values[m])}</td>)}
-            <td>
-                {editable
-                    ? <MoneyInput value={st.beg.total} allowNegative={false} label={`${label} (first month)`} onChange={(v) => patchField("beg", { total: v })} />
-                    : <span className="its-ro mono">{n2(x.subtotal)}</span>}
-            </td>
-            <td>
-                {editable
-                    ? <MoneyInput value={st.beg.adjustment} adj label={`${label} adjustment`} onChange={(v) => patchField("beg", { adjustment: v })} />
-                    : <span className="its-ro mono">{n2(x.adjustment)}</span>}
-            </td>
-            <td className="ta-right mono strong">{n2(x.total)}</td>
+            {empty()}
+            <td /><td /><td />
         </tr>
     );
 
@@ -824,11 +809,11 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
                                     {sumRow("sales-total", "TOTAL SALES", c.S)}
 
                                     {section("COST OF SALES", "purchases")}
-                                    {invRow("beg", "Merchandise Inventory, Beginning", c.inv.beg, true)}
+                                    {invRow("beg", "Merchandise Inventory, Beginning")}
                                     {st.purchases.map((r) => drillRow("purchases", r))}
                                     {calcRow("cogas", "Total cost of goods available for sale", c.cogas)}
                                     {(st.costs || []).map(costRow)}
-                                    {invRow("end", "Merchandise Inventory, Ending", c.inv.end, false)}
+                                    {invRow("end", "Merchandise Inventory, Ending")}
                                     {calcRow("cogs", "TOTAL COST OF GOODS SOLD", c.totalCOGS, { bold: true })}
                                     {gap("g1")}
                                     {calcRow("gross", "GROSS AMOUNT", c.gross, { bold: true })}
@@ -876,22 +861,22 @@ export default function IncomeTaxSummary({ embedded = false, userIds = "", from:
                                     const url = docUrl(d);
                                     const open = () => url && setFrame({ title: `${d.module} · ${d.ref}`, url });
                                     return (
-                                    <tr key={i}
-                                        onClick={open}
-                                        onKeyDown={(e) => e.key === "Enter" && open()}
-                                        tabIndex={url ? 0 : undefined}
-                                        title={url ? "Open details" : undefined}
-                                        style={url ? { cursor: "pointer" } : undefined}
-                                        className={url ? "its-doc-row" : undefined}>
-                                        <td className="ta-right muted mono">{i + 1}</td>
-                                        <td>
-                                            {/* long names cut with "…" (full name on hover) */}
-                                            <span className="cell-trunc" style={{ display: "inline-block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }} title={d.name}>
-                                                {d.name || "—"}
-                                            </span>
-                                        </td><td>{d.ref}</td><td>{d.doc}</td><td>{d.date}</td><td>{d.month}</td>
-                                        <td className="ta-right mono">{n2(d.total)}</td>
-                                    </tr>
+                                        <tr key={i}
+                                            onClick={open}
+                                            onKeyDown={(e) => e.key === "Enter" && open()}
+                                            tabIndex={url ? 0 : undefined}
+                                            title={url ? "Open details" : undefined}
+                                            style={url ? { cursor: "pointer" } : undefined}
+                                            className={url ? "its-doc-row" : undefined}>
+                                            <td className="ta-right muted mono">{i + 1}</td>
+                                            <td>
+                                                {/* long names cut with "…" (full name on hover) */}
+                                                <span className="cell-trunc" style={{ display: "inline-block", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }} title={d.name}>
+                                                    {d.name || "—"}
+                                                </span>
+                                            </td><td>{d.ref}</td><td>{d.doc}</td><td>{d.date}</td><td>{d.month}</td>
+                                            <td className="ta-right mono">{n2(d.total)}</td>
+                                        </tr>
                                     );
                                 })}
                             </tbody>
