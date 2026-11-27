@@ -7,11 +7,12 @@ import { usePeriod } from "../../context/PeriodContext";
 const TYPES = [["purchase", "Purchases"], ["sales", "Sales"], ["expense", "Expenses"]];
 const BLANK = "(Blanks)";
 
-// kind: text = checklist, money = min/max, date / month = from/to; line = one value per account line
+// kind: text / money = checklist of each value, date / month = from/to; line = one value per account line
+// sticky: stays on the left when scrolling sideways (w = its fixed width)
 const COLS = [
-    { key: "trans_id", label: "Transaction ID", kind: "text", sticky: true },
-    { key: "date", label: "Date", kind: "date" },
-    { key: "vendor", label: "Vendor/Customer", kind: "text", wide: true },
+    { key: "trans_id", label: "Transaction ID", kind: "text", sticky: true, w: 230 },
+    { key: "date", label: "Date", kind: "date", sticky: true, w: 110 },
+    { key: "vendor", label: "Vendor/Customer", kind: "text", sticky: true, w: 260 },
     { key: "tin", label: "TIN", kind: "text" },
     { key: "branch_code", label: "Branch Code", kind: "text" },
     { key: "tax_type", label: "Tax Type", kind: "text" },
@@ -45,15 +46,52 @@ const COLS = [
     { key: "entry_at", label: "DateTime Entry", kind: "date" },
 ];
 const COL = Object.fromEntries(COLS.map((c) => [c.key, c]));
+// left offset of each sticky column
+const STICKY = (() => {
+    let left = 0;
+    const out = {};
+    COLS.forEach((c) => { if (c.sticky) { out[c.key] = left; left += c.w; } });
+    return out;
+})();
+const LAST_STICKY = [...COLS].reverse().find((c) => c.sticky)?.key;
+const stickyStyle = (c, z = 2) => (c.sticky ? {
+    position: "sticky", left: STICKY[c.key], zIndex: z, width: c.w, minWidth: c.w, maxWidth: c.w,
+    background: "var(--surface, #fff)",
+    boxShadow: c.key === LAST_STICKY ? "6px 0 8px -6px rgba(16, 24, 40, .18)" : undefined,
+} : undefined);
+const isList = (c) => c.kind === "text" || c.kind === "money";
+// columns that belong to each account line – never merged
+const LINE_COLS = new Set(["account", "tax_for", "amount", "php", "exempt", "zero", "nonvat", "net", "vat"]);
+const docOf = (r) => r.key.slice(0, r.key.lastIndexOf("#"));
+// lines of the same transaction next to each other: the same value is shown once (merged cell, rowSpan)
+function mergeSpans(list) {
+    const spans = list.map(() => ({}));
+    let i = 0;
+    while (i < list.length) {
+        let j = i + 1;
+        while (j < list.length && docOf(list[j]) === docOf(list[i])) j++;
+        // only the 8 ATC / BIR2307 columns are merged – every other column stays one cell per line
+        TAX.forEach((key) => {
+            spans[i][key] = j - i;
+            for (let x = i + 1; x < j; x++) spans[x][key] = 0;
+        });
+        i = j;
+    }
+    return spans;
+}
 
 const n2 = (v) => (Number(v) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const fmtDate = (d) => (d ? `${d.slice(8, 10)}-${MON[+d.slice(5, 7) - 1]}-${d.slice(2, 4)}` : "");
 
 // a column's value(s) in a row, as strings (for checklists)
-const textValues = (row, col) => [String(row[col.key] ?? "") || BLANK];
+const textValues = (row, col) => (col.kind === "money"
+    ? [n2(row[col.key])]
+    : [String(row[col.key] ?? "") || BLANK]);
 // one row per account line; transaction details repeat on every line
 const MONEY = ["amount", "php", "exempt", "zero", "nonvat", "net", "vat"];
+// ATC / BIR2307 / declared month / remarks: one value per transaction (master) → always one merged cell
+const TAX = ["atc_vt", "vt2307", "vt_month", "vt_remarks", "atc_it", "it2307", "it_month", "it_remarks"];
 const flatten = (docs) =>
     docs.flatMap((d) => {
         const lines = d.lines?.length ? d.lines : [{}];
@@ -99,17 +137,16 @@ function FilterPopup({ col, rect, rows, current, onApply, onClear, onClose }) {
 
     // checklist values with counts, from rows that pass the OTHER filters
     const options = useMemo(() => {
-        if (col.kind !== "text") return [];
+        if (!isList(col)) return [];
         const counts = new Map();
         rows.forEach((r) => new Set(textValues(r, col)).forEach((v) => counts.set(v, (counts.get(v) || 0) + 1)));
-        return [...counts.entries()].sort((a, b) =>
+        const num = (v) => Number(String(v).replace(/,/g, "")) || 0;
+        return [...counts.entries()].sort((a, b) => col.kind === "money" ? num(a[0]) - num(b[0]) :
             a[0] === BLANK ? 1 : b[0] === BLANK ? -1 : a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: "base" }));
     }, [rows, col]);
 
     const [checked, setChecked] = useState(() =>
         new Set(current?.type === "list" ? current.values : options.map(([v]) => v)));
-    const [min, setMin] = useState(current?.min ?? "");
-    const [max, setMax] = useState(current?.max ?? "");
     const [from, setFrom] = useState(current?.from ?? "");
     const [to, setTo] = useState(current?.to ?? "");
 
@@ -125,21 +162,18 @@ function FilterPopup({ col, rect, rows, current, onApply, onClear, onClose }) {
     }, [onClose]);
 
     const apply = () => {
-        if (col.kind === "text") {
+        if (isList(col)) {
             // searching narrows the pick to what's visible and ticked
             const values = q ? shown.map(([v]) => v).filter((v) => checked.has(v)) : [...checked];
             if (!q && values.length === options.length) return onClear();
             onApply({ type: "list", values });
-        } else if (col.kind === "money") {
-            if (min === "" && max === "") return onClear();
-            onApply({ type: "range", min, max });
         } else {
             if (!from && !to) return onClear();
             onApply({ type: "dates", from, to });
         }
     };
 
-    const width = col.kind === "text" ? 290 : 250;
+    const width = isList(col) ? 290 : 250;
     const style = {
         top: Math.min(rect.bottom + 4, window.innerHeight - 380),
         left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
@@ -150,7 +184,7 @@ function FilterPopup({ col, rect, rows, current, onApply, onClear, onClose }) {
         <div className="tx-pop" style={style} ref={ref} role="dialog" aria-label={`Filter ${col.label}`}>
             <div className="tx-pop-title">{col.label}</div>
 
-            {col.kind === "text" && (
+            {isList(col) && (
                 <>
                     <input className="input tx-pop-search" placeholder="Search…" value={q} autoFocus
                         onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && apply()} />
@@ -178,15 +212,6 @@ function FilterPopup({ col, rect, rows, current, onApply, onClear, onClose }) {
                 </>
             )}
 
-            {col.kind === "money" && (
-                <div className="tx-pop-range">
-                    <label><span>Minimum</span><input className="input" inputMode="decimal" value={min} autoFocus
-                        onChange={(e) => setMin(e.target.value.replace(/[^\d.-]/g, ""))} onKeyDown={(e) => e.key === "Enter" && apply()} /></label>
-                    <label><span>Maximum</span><input className="input" inputMode="decimal" value={max}
-                        onChange={(e) => setMax(e.target.value.replace(/[^\d.-]/g, ""))} onKeyDown={(e) => e.key === "Enter" && apply()} /></label>
-                </div>
-            )}
-
             {(col.kind === "date" || col.kind === "month") && (
                 <div className="tx-pop-range">
                     <label><span>From</span><input className="input" type={col.kind === "month" ? "month" : "date"} value={from} onChange={(e) => setFrom(e.target.value)} /></label>
@@ -199,7 +224,7 @@ function FilterPopup({ col, rect, rows, current, onApply, onClear, onClose }) {
                 <span />
                 <button className="btn btn-sm" onClick={onClose}>Cancel</button>
                 <button className="btn btn-sm btn-primary" onClick={apply}
-                    disabled={col.kind === "text" && !(q ? shown.some(([v]) => checked.has(v)) : checked.size)}>OK</button>
+                    disabled={isList(col) && !(q ? shown.some(([v]) => checked.has(v)) : checked.size)}>OK</button>
             </div>
         </div>
     );
@@ -268,13 +293,19 @@ export default function Transactions() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [rows, filters, sort, quick]);
 
+    const spans = useMemo(() => mergeSpans(filtered), [filtered]);
+
     // rows for a column's checklist = rows passing every OTHER filter
     const rowsExcept = (key) => rows.filter((r) => quickOk(r) && Object.entries(filters).every(([k, f]) => k === key || passes(r, k, f)));
 
     const totals = useMemo(() => Object.fromEntries(
         COLS.filter((c) => c.total).map((c) => [
             c.key,
-            filtered.reduce((a, r) => a + ((c.key === "vt2307" || c.key === "it2307") && !r.first ? 0 : Number(r[c.key]) || 0), 0),
+            filtered.reduce((a, r) => {
+                // 2307 is per transaction → counted once
+                if ((c.key === "vt2307" || c.key === "it2307") && !r.first) return a;
+                return a + (Number(r[c.key]) || 0);
+            }, 0),
         ])
     ), [filtered]);
 
@@ -287,7 +318,8 @@ export default function Transactions() {
         setPrinting(true);
         try {
             const money = COLS.map((c, i) => (c.kind === "money" ? i : -1)).filter((i) => i >= 0);
-            const lines = filtered.map((r) => COLS.map((c) => {
+            const lines = filtered.map((r, idx) => COLS.map((c) => {
+                if (spans[idx]?.[c.key] === 0) return "";                // covered by the merged cell above
                 if (c.kind === "money") return Math.round((Number(r[c.key]) || 0) * 100) / 100;
                 if (c.key === "date") return fmtDate(r.date);
                 return String(r[c.key] ?? "");
@@ -295,7 +327,12 @@ export default function Transactions() {
             const total = COLS.map((c, i) => (i === 0 ? "TOTAL" : c.total ? Math.round(totals[c.key] * 100) / 100 : ""));
             const { token } = await apiFetch("/print/transactions", {
                 method: "POST",
-                body: JSON.stringify({ ...used, head: COLS.map((c) => c.label), money, rows: lines, total }),
+                body: JSON.stringify({
+                    ...used, head: COLS.map((c) => c.label), money, rows: lines, total,
+                    // ATC / BIR2307 columns: one merged cell per transaction, same as on screen
+                    merge: spans.map((sp, idx) => [idx, sp[TAX[0]] || 0]).filter(([, n]) => n > 1),
+                    merge_cols: COLS.map((c, i) => (TAX.includes(c.key) ? i : -1)).filter((i) => i >= 0),
+                }),
             });
             const blob = await apiBlob(`/print/transactions/${token}`);
             const url = URL.createObjectURL(blob);
@@ -316,7 +353,7 @@ export default function Transactions() {
         if (c.kind === "money") return n2(r[c.key]);
         if (c.key === "date") return fmtDate(r.date);
         const v = r[c.key] ?? "";
-        return c.wide ? <span className="tx-clip" title={v}>{v}</span> : v;
+        return c.wide || c.sticky ? <span className="tx-clip" title={v}>{v}</span> : v;
     };
 
     const branchOpts = [
@@ -390,7 +427,7 @@ export default function Transactions() {
                             {COLS.map((c) => {
                                 const on = !!filters[c.key];
                                 return (
-                                    <th key={c.key} className={`${c.sticky ? "tx-sticky" : ""} ${c.kind === "money" ? "ta-right" : ""} ${c.wide ? "tx-wide" : ""}`}>
+                                    <th key={c.key} style={stickyStyle(c, 4)} className={`${c.sticky ? "tx-sticky" : ""} ${c.kind === "money" ? "ta-right" : ""} ${c.wide ? "tx-wide" : ""}`}>
                                         <div className="tx-th">
                                             <button type="button" className="tx-sort" onClick={() => toggleSort(c.key)} title="Sort">
                                                 {c.label}
@@ -411,18 +448,24 @@ export default function Transactions() {
                     </thead>
                     <tbody>
                         {loading && Array.from({ length: 8 }).map((_, i) => (
-                            <tr key={i}>{COLS.map((c) => <td key={c.key} className={c.sticky ? "tx-sticky" : ""}><span className="sk sk-cell" /></td>)}</tr>
+                            <tr key={i}>{COLS.map((c) => <td key={c.key} style={stickyStyle(c)} className={c.sticky ? "tx-sticky" : ""}><span className="sk sk-cell" /></td>)}</tr>
                         ))}
                         {!loading && !filtered.length && (
                             <tr><td colSpan={COLS.length} className="empty">{rows.length ? "No transactions match the filters." : "No transactions for this period."}</td></tr>
                         )}
-                        {!loading && filtered.map((r) => (
+                        {!loading && filtered.map((r, idx) => (
                             <tr key={r.key}>
-                                {COLS.map((c) => (
-                                    <td key={c.key} className={`${c.sticky ? "tx-sticky" : ""} ${c.kind === "money" ? "ta-right mono" : ""} ${c.wide ? "tx-wide" : ""}`}>
-                                        {cell(r, c)}
-                                    </td>
-                                ))}
+                                {COLS.map((c) => {
+                                    const span = spans[idx]?.[c.key] ?? 1;
+                                    if (span === 0) return null;                          // merged into the cell above
+                                    return (
+                                        <td key={c.key} rowSpan={span > 1 ? span : undefined}
+                                            style={span > 1 ? { ...stickyStyle(c), verticalAlign: "middle" } : stickyStyle(c)}
+                                            className={`${c.sticky ? "tx-sticky" : ""} ${c.kind === "money" ? "ta-right mono" : ""} ${c.wide ? "tx-wide" : ""} ${span > 1 ? "tx-merged" : ""}`}>
+                                            {cell(r, c)}
+                                        </td>
+                                    );
+                                })}
                             </tr>
                         ))}
                     </tbody>
@@ -430,7 +473,7 @@ export default function Transactions() {
                         <tfoot>
                             <tr>
                                 {COLS.map((c, i) => (
-                                    <td key={c.key} className={`${c.sticky ? "tx-sticky" : ""} ${c.total ? "ta-right mono strong" : "muted"}`}>
+                                    <td key={c.key} style={stickyStyle(c, 3)} className={`${c.sticky ? "tx-sticky" : ""} ${c.total ? "ta-right mono strong" : "muted"}`}>
                                         {i === 0 ? <b>TOTAL</b> : c.total ? n2(totals[c.key]) : "–"}
                                     </td>
                                 ))}
